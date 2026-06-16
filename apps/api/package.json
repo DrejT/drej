@@ -9,5 +9,8 @@
   },
   "dependencies": {
     "elysia": "latest"
+  },
+  "devDependencies": {
+    "typescript": "latest"
   }
 }

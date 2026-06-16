@@ -21,11 +21,11 @@ jobs:
         run: bun install
 
       - name: Typecheck API
-        run: bun tsc --noEmit --strict
+        run: bunx tsc --noEmit --strict
         working-directory: apps/api
 
       - name: Typecheck SDK
-        run: bun tsc --noEmit --strict
+        run: bunx tsc --noEmit --strict
         working-directory: packages/sdks/typescript
 
   changeset:

@@ -1,0 +1,15 @@
+{
+  "name": "drej",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/sdks/typescript"
+  ],
+  "scripts": {
+    "dev": "bun run --cwd apps/api dev",
+    "build": "bun run --cwd apps/api build"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.31.0"
+  }
+}

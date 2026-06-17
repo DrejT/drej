@@ -1,3 +1,3 @@
-from .client import DrejClient
+from .client import DrejClient, DrejError
 
-__all__ = ["DrejClient"]
+__all__ = ["DrejClient", "DrejError"]

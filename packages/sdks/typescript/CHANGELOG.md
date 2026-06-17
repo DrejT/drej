@@ -1,5 +1,11 @@
 # drej
 
+## 0.2.1
+
+### Patch Changes
+
+- 5278aa9: Add `DrejError` and `run()` to the Python SDK, matching the TypeScript SDK's interface.
+
 ## 0.2.0
 
 ### Minor Changes

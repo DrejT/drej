@@ -1,3 +1,13 @@
+export class DrejError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message);
+    this.name = "DrejError";
+  }
+}
+
 export interface DrejClientOptions {
   baseUrl?: string;
 }
@@ -17,7 +27,7 @@ export class DrejClient {
 
   async health(): Promise<{ healthy: boolean }> {
     const res = await fetch(`${this.baseUrl}/health`);
-    if (!res.ok) throw new Error(`drej API error: ${res.status}`);
+    if (!res.ok) throw new DrejError(`drej API error`, res.status);
     return res.json();
   }
 
@@ -27,7 +37,7 @@ export class DrejClient {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ code }),
     });
-    if (!res.ok) throw new Error(`drej API error: ${res.status}`);
+    if (!res.ok) throw new DrejError(`drej API error`, res.status);
     return res.json();
   }
 }

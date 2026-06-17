@@ -1,2 +1,2 @@
-export { DrejClient } from "./client";
+export { DrejClient, DrejError } from "./client";
 export type { DrejClientOptions, SandboxRunResult } from "./client";

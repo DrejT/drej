@@ -8,9 +8,12 @@
     "build": "bun build src/index.ts --outdir dist --target bun"
   },
   "dependencies": {
+    "@drej/core": "workspace:*",
+    "@drej/opensandbox": "workspace:*",
     "elysia": "latest"
   },
   "devDependencies": {
+    "bun-types": "latest",
     "typescript": "latest"
   }
 }

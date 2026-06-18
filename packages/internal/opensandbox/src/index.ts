@@ -1,6 +1,6 @@
-export { DrejClient, DrejError } from "./client";
+export { ControlClient, OpenSandboxError } from "./control";
+export { ExecClient } from "./exec";
 export type {
-  DrejClientOptions,
   Resources,
   ImageAuth,
   ImageSpec,
@@ -12,6 +12,9 @@ export type {
   Snapshot,
   SnapshotState,
   ListSnapshotsOptions,
+  SandboxEndpoint,
+  DiagnosticLog,
+  DiagnosticEvent,
   SSEEvent,
   SSEEventType,
   CodeContext,
@@ -19,12 +22,7 @@ export type {
   ExecuteCommandOptions,
   CommandStatus,
   FileInfo,
-  DirectoryEntry,
   FileReplacement,
+  DirectoryEntry,
   Metrics,
-  DiagnosticLog,
-  DiagnosticEvent,
-  WorkflowEvent,
-  WorkflowEventKind,
-  StepDef,
-} from "./client";
+} from "./types";

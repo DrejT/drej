@@ -1,0 +1,13 @@
+{
+  "name": "@drej/opensandbox",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "bunx tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "latest"
+  }
+}

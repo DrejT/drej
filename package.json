@@ -3,6 +3,8 @@
   "private": true,
   "workspaces": [
     "apps/*",
+    "packages/core",
+    "packages/internal/*",
     "packages/sdks/typescript"
   ],
   "scripts": {

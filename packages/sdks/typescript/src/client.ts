@@ -229,7 +229,8 @@ export type StepDef =
   | { type: "retry"; step: StepDef; maxAttempts: number; delayMs?: number; backoff?: "fixed" | "exponential" }
   | { type: "conditional"; condition: Predicate; then: StepDef[]; else?: StepDef[] }
   | { type: "loop"; over?: string; items?: unknown[]; as: string; steps: StepDef[]; concurrently?: boolean }
-  | { type: "parallel"; steps: StepDef[] };
+  | { type: "parallel"; steps: StepDef[] }
+  | { type: "sequence"; steps: StepDef[] };
 
 // ── SSE parsers ────────────────────────────────────────────────────────────
 
@@ -559,6 +560,11 @@ export class DrejClient {
   }
 
   // ── Workflows ────────────────────────────────────────────────────────────
+
+  async *run(w: { build(): { id: string; steps: StepDef[] } }): AsyncGenerator<WorkflowEvent> {
+    const { id, steps } = w.build();
+    yield* this.runWorkflow(id, steps);
+  }
 
   async *runWorkflow(id: string, steps: StepDef[]): AsyncGenerator<WorkflowEvent> {
     const res = await fetch(`${this.baseUrl}/v1/workflows`, {

@@ -28,3 +28,6 @@ export type {
   WorkflowEventKind,
   StepDef,
 } from "./client";
+
+export { workflow, WorkflowBuilder, SandboxStepBuilder } from "./workflow";
+export type { SandboxOpts, LoopItem } from "./workflow";

@@ -81,6 +81,7 @@ enum StepType {
   Conditional = "conditional",
   Loop = "loop",
   Parallel = "parallel",
+  Sequence = "sequence",
 }
 
 type Predicate =
@@ -107,7 +108,8 @@ type StepDef =
   | { type: StepType.Retry; step: StepDef; maxAttempts: number; delayMs?: number; backoff?: "fixed" | "exponential" }
   | { type: StepType.Conditional; condition: Predicate; then: StepDef[]; else?: StepDef[] }
   | { type: StepType.Loop; over?: string; items?: unknown[]; as: string; steps: StepDef[]; concurrently?: boolean }
-  | { type: StepType.Parallel; steps: StepDef[] };
+  | { type: StepType.Parallel; steps: StepDef[] }
+  | { type: StepType.Sequence; steps: StepDef[] };
 
 type WorkflowState = Record<string, unknown> & { sandboxId?: string };
 
@@ -351,6 +353,25 @@ function buildStep(def: StepDef): WorkflowStep {
         },
       };
     }
+
+    case StepType.Sequence: {
+      const childSteps = def.steps.map(buildStep);
+      return {
+        id: StepType.Sequence,
+        async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
+          let current = input;
+          for (const step of childSteps) {
+            current = await step.run(current, ctx);
+          }
+          return current;
+        },
+        async rollback(input: unknown, ctx: WorkflowRunContext): Promise<void> {
+          for (const step of [...childSteps].reverse()) {
+            if (step.rollback) await step.rollback(input, ctx);
+          }
+        },
+      };
+    }
   }
 }
 
@@ -480,6 +501,7 @@ const StepSchema = t.Recursive((Self) =>
       t.Literal(StepType.Conditional),
       t.Literal(StepType.Loop),
       t.Literal(StepType.Parallel),
+      t.Literal(StepType.Sequence),
     ]),
     // create_sandbox
     image: t.Optional(ImageSpecSchema),

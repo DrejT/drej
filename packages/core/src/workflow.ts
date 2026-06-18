@@ -1,5 +1,8 @@
 import type { ILedger, LedgerEntry } from "./ledger";
+import { LedgerEvent } from "./ledger";
 import type { ISandboxControl, IExecClientFactory } from "./types";
+import type { ILogger } from "./logger";
+import { noopLogger } from "./logger";
 
 export interface WorkflowRunContext {
   readonly workflowId: string;
@@ -28,12 +31,14 @@ export interface WorkflowDeps {
   control: ISandboxControl;
   execFactory: IExecClientFactory;
   ledger: ILedger;
+  logger?: ILogger;
 }
 
 export class Workflow {
   readonly id: string;
   private _status: WorkflowStatus = "idle";
   private readonly completedSteps = new Map<number, { output: unknown; completedAt: number }>();
+  private readonly log: ILogger;
 
   get status(): WorkflowStatus {
     return this._status;
@@ -45,10 +50,13 @@ export class Workflow {
     private readonly deps: WorkflowDeps,
   ) {
     this.id = id;
+    this.log = deps.logger ?? noopLogger;
   }
 
   async run(input: unknown, startFromStep = 0): Promise<unknown> {
     this._status = "running";
+    this.log.info("workflow started", { workflowId: this.id, startFromStep, totalSteps: this.steps.length });
+
     let current: unknown =
       startFromStep > 0 ? (this.completedSteps.get(startFromStep - 1)?.output ?? input) : input;
 
@@ -56,36 +64,39 @@ export class Workflow {
       const step = this.steps[i];
       const ctx = this.makeContext(i);
 
-      await ctx.emit({ ts: Date.now(), workflowId: this.id, stepIndex: i, event: "step_start" });
+      this.log.debug("step starting", { workflowId: this.id, stepIndex: i, stepId: step.id });
+      await ctx.emit({ ts: Date.now(), workflowId: this.id, stepIndex: i, event: LedgerEvent.StepStart });
 
       try {
         const output = await step.run(current, ctx);
         this.completedSteps.set(i, { output, completedAt: Date.now() });
         current = output;
 
+        this.log.debug("step complete", { workflowId: this.id, stepIndex: i, stepId: step.id });
         await ctx.emit({
           ts: Date.now(),
           workflowId: this.id,
           stepIndex: i,
-          event: "step_complete",
+          event: LedgerEvent.StepComplete,
           payload: output,
         });
 
-        // Checkpoint written to ledger after every completed step for time-travel resumption
+        // Checkpoint written after every completed step for resumption
         await this.deps.ledger.append({
           ts: Date.now(),
           workflowId: this.id,
           stepIndex: i + 1,
-          event: "checkpoint",
+          event: LedgerEvent.Checkpoint,
           payload: this.snapshot(),
         });
       } catch (err) {
         this._status = "failed";
+        this.log.error("step failed", { workflowId: this.id, stepIndex: i, stepId: step.id, error: String(err) });
         await ctx.emit({
           ts: Date.now(),
           workflowId: this.id,
           stepIndex: i,
-          event: "step_failed",
+          event: LedgerEvent.StepFailed,
           error: String(err),
         });
         throw err;
@@ -93,17 +104,19 @@ export class Workflow {
     }
 
     this._status = "completed";
+    this.log.info("workflow complete", { workflowId: this.id });
     await this.deps.ledger.append({
       ts: Date.now(),
       workflowId: this.id,
       stepIndex: -1,
-      event: "workflow_complete",
+      event: LedgerEvent.WorkflowComplete,
     });
     return current;
   }
 
   // Saga-style rollback: undoes completed steps in reverse order
   async rollback(toStep = 0): Promise<void> {
+    this.log.info("rolling back workflow", { workflowId: this.id });
     const stepsToUndo = [...this.completedSteps.entries()]
       .filter(([i]) => i >= toStep)
       .sort(([a], [b]) => b - a);
@@ -112,23 +125,25 @@ export class Workflow {
       const step = this.steps[i];
       if (step.rollback) {
         const ctx = this.makeContext(i);
+        this.log.debug("rolling back step", { workflowId: this.id, stepIndex: i, stepId: step.id });
         await step.rollback(result.output, ctx);
         await ctx.emit({
           ts: Date.now(),
           workflowId: this.id,
           stepIndex: i,
-          event: "step_rolled_back",
+          event: LedgerEvent.StepRolledBack,
         });
         this.completedSteps.delete(i);
       }
     }
 
     this._status = "rolled_back";
+    this.log.info("workflow rolled back", { workflowId: this.id });
     await this.deps.ledger.append({
       ts: Date.now(),
       workflowId: this.id,
       stepIndex: -1,
-      event: "workflow_failed",
+      event: LedgerEvent.WorkflowFailed,
       error: "rolled_back",
     });
   }
@@ -157,6 +172,7 @@ export class Workflow {
         wf.completedSteps.set(Number(idx), result as { output: unknown; completedAt: number });
       }
       const lastOutput = cp.completedSteps[cp.stepIndex - 1]?.output ?? {};
+      deps.logger?.info("resuming workflow from checkpoint", { workflowId, nextStep: cp.stepIndex });
       return { workflow: wf, nextStep: cp.stepIndex, lastOutput };
     }
 

@@ -1,16 +1,19 @@
+export enum LedgerEvent {
+  StepStart = "step_start",
+  StepComplete = "step_complete",
+  StepFailed = "step_failed",
+  StepRolledBack = "step_rolled_back",
+  WorkflowComplete = "workflow_complete",
+  WorkflowFailed = "workflow_failed",
+  Checkpoint = "checkpoint",
+  ExecEvent = "exec_event",
+}
+
 export interface LedgerEntry {
   ts: number;
   workflowId: string;
   stepIndex: number;
-  event:
-    | "step_start"
-    | "step_complete"
-    | "step_failed"
-    | "step_rolled_back"
-    | "workflow_complete"
-    | "workflow_failed"
-    | "checkpoint"
-    | "exec_event";
+  event: LedgerEvent;
   payload?: unknown;
   error?: string;
 }
@@ -35,42 +38,44 @@ export class MemoryLedger implements ILedger {
   async lastCheckpoint(workflowId: string): Promise<LedgerEntry | null> {
     const all = await this.readAll(workflowId);
     for (let i = all.length - 1; i >= 0; i--) {
-      if (all[i].event === "checkpoint") return all[i];
+      if (all[i].event === LedgerEvent.Checkpoint) return all[i];
     }
     return null;
   }
 }
 
+// Each workflow gets its own <dir>/<workflowId>.ndjson file.
+// Bun.write creates parent directories automatically on first write.
 export class NdjsonLedger implements ILedger {
-  constructor(private readonly filePath: string) {}
+  constructor(private readonly dir: string) {}
+
+  private filePath(workflowId: string): string {
+    return `${this.dir}/${workflowId}.ndjson`;
+  }
 
   async append(entry: LedgerEntry): Promise<void> {
-    const line = JSON.stringify(entry) + "\n";
-    const existing = await Bun.file(this.filePath).text().catch(() => "");
-    await Bun.write(this.filePath, existing + line);
+    const path = this.filePath(entry.workflowId);
+    const existing = await Bun.file(path).text().catch(() => "");
+    await Bun.write(path, existing + JSON.stringify(entry) + "\n");
   }
 
   async readAll(workflowId: string): Promise<LedgerEntry[]> {
-    return (await this.parseAll()).filter((e) => e.workflowId === workflowId);
+    try {
+      const text = await Bun.file(this.filePath(workflowId)).text();
+      return text
+        .split("\n")
+        .filter((line) => line.length > 0)
+        .map((line) => JSON.parse(line) as LedgerEntry);
+    } catch {
+      return [];
+    }
   }
 
   async lastCheckpoint(workflowId: string): Promise<LedgerEntry | null> {
     const all = await this.readAll(workflowId);
     for (let i = all.length - 1; i >= 0; i--) {
-      if (all[i].event === "checkpoint") return all[i];
+      if (all[i].event === LedgerEvent.Checkpoint) return all[i];
     }
     return null;
-  }
-
-  private async parseAll(): Promise<LedgerEntry[]> {
-    try {
-      const text = await Bun.file(this.filePath).text();
-      return text
-        .split("\n")
-        .filter((line: string) => line.length > 0)
-        .map((line: string) => JSON.parse(line) as LedgerEntry);
-    } catch {
-      return [];
-    }
   }
 }

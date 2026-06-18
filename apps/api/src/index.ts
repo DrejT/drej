@@ -4,6 +4,9 @@ import type { SSEEvent } from "@drej/opensandbox";
 import {
   Workflow,
   NdjsonLedger,
+  LedgerEvent,
+  ConsoleLogger,
+  LogLevel,
   type WorkflowDeps,
   type WorkflowStep,
   type WorkflowRunContext,
@@ -15,10 +18,19 @@ import {
 const BASE_URL = process.env.OPEN_SANDBOX_BASE_URL ?? "http://localhost:8080";
 const API_KEY = process.env.OPEN_SANDBOX_API_KEY!;
 const PORT = Number(process.env.PORT ?? 6000);
+const LEDGER_DIR = process.env.LEDGER_DIR ?? "./ledgers";
 
-console.log(`[config] OPEN_SANDBOX_BASE_URL=${BASE_URL}`);
-console.log(`[config] OPEN_SANDBOX_API_KEY=${API_KEY ? "(set)" : "(empty)"}`);
-console.log(`[config] PORT=${PORT}`);
+function parseLogLevel(s?: string): LogLevel {
+  switch (s?.toLowerCase()) {
+    case "debug": return LogLevel.Debug;
+    case "warn": return LogLevel.Warn;
+    case "error": return LogLevel.Error;
+    case "silent": return LogLevel.Silent;
+    default: return LogLevel.Info;
+  }
+}
+
+const logger = new ConsoleLogger(parseLogLevel(process.env.LOG_LEVEL));
 
 const control = new ControlClient({ baseUrl: BASE_URL, apiKey: API_KEY });
 
@@ -53,14 +65,22 @@ const workflowDeps: WorkflowDeps = {
       return exec as unknown as ISandboxExec;
     },
   },
-  ledger: new NdjsonLedger(process.env.LEDGER_PATH ?? "./drej.ndjson"),
+  ledger: new NdjsonLedger(LEDGER_DIR),
+  logger,
 };
 
 // ── Workflow step definitions ──────────────────────────────────────────────
 
+enum StepType {
+  CreateSandbox = "create_sandbox",
+  ExecCode = "exec_code",
+  ExecCommand = "exec_command",
+  DeleteSandbox = "delete_sandbox",
+}
+
 type StepDef =
   | {
-      type: "create_sandbox";
+      type: StepType.CreateSandbox;
       image?: { uri: string; auth?: { username: string; password: string } };
       snapshotId?: string;
       timeout?: number;
@@ -69,17 +89,17 @@ type StepDef =
       metadata?: Record<string, string>;
       resourceLimits?: { cpu?: string; memory?: string; gpu?: string };
     }
-  | { type: "exec_code"; code: string; context?: { id: string; language: string } }
-  | { type: "exec_command"; command: string; cwd?: string; envs?: Record<string, string> }
-  | { type: "delete_sandbox" };
+  | { type: StepType.ExecCode; code: string; context?: { id: string; language: string } }
+  | { type: StepType.ExecCommand; command: string; cwd?: string; envs?: Record<string, string> }
+  | { type: StepType.DeleteSandbox };
 
 type WorkflowState = Record<string, unknown> & { sandboxId?: string };
 
 function buildStep(def: StepDef): WorkflowStep {
   switch (def.type) {
-    case "create_sandbox":
+    case StepType.CreateSandbox:
       return {
-        id: "create_sandbox",
+        id: StepType.CreateSandbox,
         async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
           const state = (input ?? {}) as WorkflowState;
           const sb = await ctx.control.createSandbox({
@@ -111,9 +131,9 @@ function buildStep(def: StepDef): WorkflowStep {
         },
       };
 
-    case "exec_code":
+    case StepType.ExecCode:
       return {
-        id: "exec_code",
+        id: StepType.ExecCode,
         async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
           const state = (input ?? {}) as WorkflowState;
           if (!state.sandboxId) throw new Error("exec_code requires sandboxId in workflow state");
@@ -124,7 +144,7 @@ function buildStep(def: StepDef): WorkflowStep {
               ts: Date.now(),
               workflowId: ctx.workflowId,
               stepIndex: ctx.stepIndex,
-              event: "exec_event",
+              event: LedgerEvent.ExecEvent,
               payload: ev,
             });
             events.push(ev as unknown as SSEEvent);
@@ -133,9 +153,9 @@ function buildStep(def: StepDef): WorkflowStep {
         },
       };
 
-    case "exec_command":
+    case StepType.ExecCommand:
       return {
-        id: "exec_command",
+        id: StepType.ExecCommand,
         async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
           const state = (input ?? {}) as WorkflowState;
           if (!state.sandboxId) throw new Error("exec_command requires sandboxId in workflow state");
@@ -146,7 +166,7 @@ function buildStep(def: StepDef): WorkflowStep {
               ts: Date.now(),
               workflowId: ctx.workflowId,
               stepIndex: ctx.stepIndex,
-              event: "exec_event",
+              event: LedgerEvent.ExecEvent,
               payload: ev,
             });
             events.push(ev as unknown as SSEEvent);
@@ -155,9 +175,9 @@ function buildStep(def: StepDef): WorkflowStep {
         },
       };
 
-    case "delete_sandbox":
+    case StepType.DeleteSandbox:
       return {
-        id: "delete_sandbox",
+        id: StepType.DeleteSandbox,
         async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
           const state = (input ?? {}) as WorkflowState;
           if (state.sandboxId) await ctx.control.deleteSandbox(state.sandboxId);
@@ -274,10 +294,10 @@ const ResourcesSchema = t.Object({
 
 const StepSchema = t.Object({
   type: t.Union([
-    t.Literal("create_sandbox"),
-    t.Literal("exec_code"),
-    t.Literal("exec_command"),
-    t.Literal("delete_sandbox"),
+    t.Literal(StepType.CreateSandbox),
+    t.Literal(StepType.ExecCode),
+    t.Literal(StepType.ExecCommand),
+    t.Literal(StepType.DeleteSandbox),
   ]),
   // create_sandbox
   image: t.Optional(ImageSpecSchema),

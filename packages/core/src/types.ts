@@ -72,6 +72,7 @@ export interface ISandboxControl {
 export interface ISandboxExec {
   executeCode(options: ExecuteCodeInput): AsyncGenerator<SSEEvent>;
   executeCommand(options: ExecuteCommandInput): AsyncGenerator<SSEEvent>;
+  uploadFile(path: string, content: string | Uint8Array): Promise<void>;
 }
 
 export interface IExecClientFactory {

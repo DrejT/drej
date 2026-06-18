@@ -76,6 +76,7 @@ enum StepType {
   ExecCode = "exec_code",
   ExecCommand = "exec_command",
   DeleteSandbox = "delete_sandbox",
+  WriteFile = "write_file",
   Retry = "retry",
   Conditional = "conditional",
   Loop = "loop",
@@ -102,6 +103,7 @@ type StepDef =
   | { type: StepType.ExecCode; code: string; context?: { id: string; language: string } }
   | { type: StepType.ExecCommand; command: string; cwd?: string; envs?: Record<string, string> }
   | { type: StepType.DeleteSandbox }
+  | { type: StepType.WriteFile; path: string; content: string; encoding?: "utf8" | "base64" }
   | { type: StepType.Retry; step: StepDef; maxAttempts: number; delayMs?: number; backoff?: "fixed" | "exponential" }
   | { type: StepType.Conditional; condition: Predicate; then: StepDef[]; else?: StepDef[] }
   | { type: StepType.Loop; over?: string; items?: unknown[]; as: string; steps: StepDef[]; concurrently?: boolean }
@@ -208,11 +210,9 @@ function buildStep(def: StepDef): WorkflowStep {
           const exec = await ctx.execFactory.forSandbox(state.sandboxId);
           // Interpolate {{key}} placeholders from state (useful inside loop iterations).
           const raw = interpolate(def.command, state);
-          // Multiline commands lose their newlines through the JSON serialization boundary.
-          // Base64-encode them so the container receives the script verbatim.
-          const command = raw.includes("\n")
-            ? `echo ${Buffer.from(raw).toString("base64")} | base64 -d | bash`
-            : raw;
+          // Always base64-encode so any content (newlines, quotes, special chars)
+          // survives the JSON serialization boundary without quoting issues.
+          const command = `echo ${Buffer.from(raw).toString("base64")} | base64 -d | bash`;
           const events: SSEEvent[] = [];
           for await (const ev of exec.executeCommand({ command, cwd: def.cwd, envs: def.envs })) {
             await ctx.emit({
@@ -235,6 +235,21 @@ function buildStep(def: StepDef): WorkflowStep {
           const state = (input ?? {}) as WorkflowState;
           if (state.sandboxId) await ctx.control.deleteSandbox(state.sandboxId);
           return { ...state, sandboxId: undefined };
+        },
+      };
+
+    case StepType.WriteFile:
+      return {
+        id: StepType.WriteFile,
+        async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
+          const state = (input ?? {}) as WorkflowState;
+          if (!state.sandboxId) throw new Error("write_file requires sandboxId in workflow state");
+          const exec = await ctx.execFactory.forSandbox(state.sandboxId);
+          const content: string | Uint8Array = def.encoding === "base64"
+            ? new Uint8Array(Buffer.from(def.content, "base64"))
+            : def.content;
+          await exec.uploadFile(def.path, content);
+          return state;
         },
       };
 
@@ -460,6 +475,7 @@ const StepSchema = t.Recursive((Self) =>
       t.Literal(StepType.ExecCode),
       t.Literal(StepType.ExecCommand),
       t.Literal(StepType.DeleteSandbox),
+      t.Literal(StepType.WriteFile),
       t.Literal(StepType.Retry),
       t.Literal(StepType.Conditional),
       t.Literal(StepType.Loop),
@@ -480,6 +496,10 @@ const StepSchema = t.Recursive((Self) =>
     command: t.Optional(t.String()),
     cwd: t.Optional(t.String()),
     envs: t.Optional(t.Record(t.String(), t.String())),
+    // write_file
+    path: t.Optional(t.String()),
+    content: t.Optional(t.String()),
+    encoding: t.Optional(t.Union([t.Literal("utf8"), t.Literal("base64")])),
     // retry
     step: t.Optional(Self),
     maxAttempts: t.Optional(t.Number()),

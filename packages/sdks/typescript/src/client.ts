@@ -225,6 +225,7 @@ export type StepDef =
   | { type: "exec_code"; code: string; context?: { id: string; language: string } }
   | { type: "exec_command"; command: string; cwd?: string; envs?: Record<string, string> }
   | { type: "delete_sandbox" }
+  | { type: "write_file"; path: string; content: string; encoding?: "utf8" | "base64" }
   | { type: "retry"; step: StepDef; maxAttempts: number; delayMs?: number; backoff?: "fixed" | "exponential" }
   | { type: "conditional"; condition: Predicate; then: StepDef[]; else?: StepDef[] }
   | { type: "loop"; over?: string; items?: unknown[]; as: string; steps: StepDef[]; concurrently?: boolean }

@@ -46,6 +46,10 @@ docker run --rm --network=host \
 # Changesets (required on every PR touching publishable packages)
 bunx changeset        # add a changeset
 bunx changeset status # verify one exists
+
+# IMPORTANT: after committing code changes, always add and commit a changeset too.
+# The CI changeset check (bunx changeset status --since origin/main) reads from
+# git history — an uncommitted changeset file will NOT satisfy it.
 ```
 
 ## Architecture
@@ -90,7 +94,7 @@ packages/sdks/python/      — Public Python SDK
 
 | Variable | Default | Description |
 |---|---|---|
-| `OPEN_SANDBOX_BASE_URL` | `https://api.open-sandbox.ai` | OpenSandbox server URL |
+| `OPEN_SANDBOX_BASE_URL` | `http://localhost:8080` | OpenSandbox server URL |
 | `OPEN_SANDBOX_API_KEY` | required | API key (empty string for local) |
 | `PORT` | `6000` | API server port |
 | `LEDGER_PATH` | `./drej.ndjson` | NDJSON ledger file path |

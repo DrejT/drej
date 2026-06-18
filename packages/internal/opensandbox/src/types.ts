@@ -1,0 +1,176 @@
+export interface Resources {
+  cpu?: string;
+  memory?: string;
+  gpu?: string;
+}
+
+export interface ImageAuth {
+  username: string;
+  password: string;
+}
+
+export interface ImageSpec {
+  uri: string;
+  auth?: ImageAuth;
+}
+
+export type SandboxState =
+  | "Pending"
+  | "Running"
+  | "Pausing"
+  | "Paused"
+  | "Resuming"
+  | "Stopping"
+  | "Terminated"
+  | "Failed"
+  | "Unknown";
+
+export interface SandboxStatus {
+  state: SandboxState;
+  reason?: string;
+  message?: string;
+  lastTransitionAt?: string;
+}
+
+export interface Sandbox {
+  id: string;
+  status: SandboxStatus;
+  createdAt: string;
+  expiresAt?: string | null;
+  image?: ImageSpec;
+  snapshotId?: string;
+  entrypoint?: string[];
+  metadata?: Record<string, string>;
+  platform?: unknown;
+}
+
+export interface CreateSandboxOptions {
+  image?: ImageSpec;
+  snapshotId?: string;
+  timeout?: number;
+  resourceLimits?: Resources;
+  entrypoint?: string[];
+  env?: Record<string, string>;
+  metadata?: Record<string, string>;
+  secureAccess?: boolean;
+}
+
+export interface ListSandboxesOptions {
+  state?: SandboxState;
+  limit?: number;
+  offset?: number;
+}
+
+export type SnapshotState = "Pending" | "Committing" | "Pushing" | "Ready" | "Failed";
+
+export interface Snapshot {
+  id: string;
+  sandboxId: string;
+  state: SnapshotState;
+  createdAt: string;
+}
+
+export interface ListSnapshotsOptions {
+  sandboxId?: string;
+  limit?: number;
+  offset?: number;
+}
+
+// GET /v1/sandboxes/:id/endpoints/:port response
+export interface SandboxEndpoint {
+  endpoint: string;
+  headers?: Record<string, string>;
+}
+
+export interface DiagnosticLog {
+  name: string;
+  size: number;
+  url?: string;
+  inline?: string;
+}
+
+export interface DiagnosticEvent {
+  timestamp: string;
+  type: string;
+  message: string;
+}
+
+export type SSEEventType =
+  | "init"
+  | "status"
+  | "stdout"
+  | "stderr"
+  | "result"
+  | "execution_complete"
+  | "execution_count"
+  | "error"
+  | "ping"
+  | "message";
+
+export interface SSEEvent {
+  type: SSEEventType;
+  text?: string;
+  results?: Record<string, string>;
+  error?: { name?: string; message: string };
+  execution_count?: number;
+  execution_time?: number;
+  timestamp: number;
+}
+
+export interface CodeContext {
+  id: string;
+  language: string;
+}
+
+// POST /code body
+export interface ExecuteCodeOptions {
+  code: string;
+  context?: {
+    id: string;
+    language: string;
+  };
+}
+
+// POST /command body
+export interface ExecuteCommandOptions {
+  command: string;
+  cwd?: string;
+  background?: boolean;
+  timeout?: number;
+  uid?: number;
+  gid?: number;
+  envs?: Record<string, string>;
+}
+
+export interface CommandStatus {
+  session: string;
+  status: "running" | "completed" | "failed";
+  exitCode?: number;
+}
+
+export interface FileInfo {
+  path: string;
+  size: number;
+  mode: string;
+  modifiedAt: string;
+  isDirectory: boolean;
+}
+
+export interface DirectoryEntry {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+  size?: number;
+}
+
+export interface FileReplacement {
+  path: string;
+  old: string;
+  new: string;
+}
+
+export interface Metrics {
+  cpu: number;
+  memory: number;
+  timestamp: string;
+}

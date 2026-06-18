@@ -122,6 +122,12 @@ mode = "direct"
 mode = "dns"
 ```
 
+## SDK focus
+
+We are currently focused exclusively on making the **TypeScript SDK** (`packages/sdks/typescript`) full-featured and production-ready. Python SDK is maintained but not the priority. Do not add new features to the Python SDK unless explicitly asked.
+
 ## Releases
 
 The TypeScript SDK (`packages/sdks/typescript`) is published to npm via changesets. Every PR that changes publishable packages needs a changeset (`bunx changeset`). CI enforces this. Releases are cut automatically via `changesets/action` on merge to `main`.
+
+> **Changeset must be committed** before CI will pass — `bunx changeset status --since origin/main` reads from git history, not disk.

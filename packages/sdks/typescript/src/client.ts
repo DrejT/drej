@@ -198,11 +198,18 @@ export interface WorkflowEvent {
   ts: number;
   workflowId: string;
   stepIndex: number;
+  branch?: number; // set on events emitted from parallel branches
   event: WorkflowEventKind;
   payload?: unknown;
   error?: string;
   result?: unknown;
 }
+
+export type Predicate =
+  | { op: "eq" | "neq"; field: string; value: unknown }
+  | { op: "gt" | "lt" | "gte" | "lte"; field: string; value: number }
+  | { op: "exists" | "not_exists"; field: string }
+  | { op: "and" | "or"; predicates: Predicate[] };
 
 export type StepDef =
   | {
@@ -217,7 +224,11 @@ export type StepDef =
     }
   | { type: "exec_code"; code: string; context?: { id: string; language: string } }
   | { type: "exec_command"; command: string; cwd?: string; envs?: Record<string, string> }
-  | { type: "delete_sandbox" };
+  | { type: "delete_sandbox" }
+  | { type: "retry"; step: StepDef; maxAttempts: number; delayMs?: number; backoff?: "fixed" | "exponential" }
+  | { type: "conditional"; condition: Predicate; then: StepDef[]; else?: StepDef[] }
+  | { type: "loop"; over?: string; items?: unknown[]; as: string; steps: StepDef[]; concurrently?: boolean }
+  | { type: "parallel"; steps: StepDef[] };
 
 // ── SSE parsers ────────────────────────────────────────────────────────────
 

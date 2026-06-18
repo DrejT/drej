@@ -76,7 +76,17 @@ enum StepType {
   ExecCode = "exec_code",
   ExecCommand = "exec_command",
   DeleteSandbox = "delete_sandbox",
+  Retry = "retry",
+  Conditional = "conditional",
+  Loop = "loop",
+  Parallel = "parallel",
 }
+
+type Predicate =
+  | { op: "eq" | "neq"; field: string; value: unknown }
+  | { op: "gt" | "lt" | "gte" | "lte"; field: string; value: number }
+  | { op: "exists" | "not_exists"; field: string }
+  | { op: "and" | "or"; predicates: Predicate[] };
 
 type StepDef =
   | {
@@ -91,9 +101,45 @@ type StepDef =
     }
   | { type: StepType.ExecCode; code: string; context?: { id: string; language: string } }
   | { type: StepType.ExecCommand; command: string; cwd?: string; envs?: Record<string, string> }
-  | { type: StepType.DeleteSandbox };
+  | { type: StepType.DeleteSandbox }
+  | { type: StepType.Retry; step: StepDef; maxAttempts: number; delayMs?: number; backoff?: "fixed" | "exponential" }
+  | { type: StepType.Conditional; condition: Predicate; then: StepDef[]; else?: StepDef[] }
+  | { type: StepType.Loop; over?: string; items?: unknown[]; as: string; steps: StepDef[]; concurrently?: boolean }
+  | { type: StepType.Parallel; steps: StepDef[] };
 
 type WorkflowState = Record<string, unknown> & { sandboxId?: string };
+
+// Resolves a dot-path into a plain object, e.g. "status.exitCode" → obj.status.exitCode
+function getPath(obj: unknown, path: string): unknown {
+  return path.split(".").reduce<unknown>((cur, key) => {
+    if (cur === null || cur === undefined || typeof cur !== "object") return undefined;
+    return (cur as Record<string, unknown>)[key];
+  }, obj);
+}
+
+// Replaces {{key}} placeholders in a string with values from WorkflowState.
+// Enables loop items and other state values to be referenced in exec_command strings.
+function interpolate(template: string, state: WorkflowState): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
+    const val = state[key as keyof WorkflowState];
+    return val !== undefined ? String(val) : `{{${key}}}`;
+  });
+}
+
+function evaluate(predicate: Predicate, state: unknown): boolean {
+  switch (predicate.op) {
+    case "eq":  return getPath(state, predicate.field) === predicate.value;
+    case "neq": return getPath(state, predicate.field) !== predicate.value;
+    case "gt":  return Number(getPath(state, predicate.field)) > predicate.value;
+    case "lt":  return Number(getPath(state, predicate.field)) < predicate.value;
+    case "gte": return Number(getPath(state, predicate.field)) >= predicate.value;
+    case "lte": return Number(getPath(state, predicate.field)) <= predicate.value;
+    case "exists":     return getPath(state, predicate.field) !== undefined;
+    case "not_exists": return getPath(state, predicate.field) === undefined;
+    case "and": return predicate.predicates.every((p) => evaluate(p, state));
+    case "or":  return predicate.predicates.some((p) => evaluate(p, state));
+  }
+}
 
 function buildStep(def: StepDef): WorkflowStep {
   switch (def.type) {
@@ -160,8 +206,15 @@ function buildStep(def: StepDef): WorkflowStep {
           const state = (input ?? {}) as WorkflowState;
           if (!state.sandboxId) throw new Error("exec_command requires sandboxId in workflow state");
           const exec = await ctx.execFactory.forSandbox(state.sandboxId);
+          // Interpolate {{key}} placeholders from state (useful inside loop iterations).
+          const raw = interpolate(def.command, state);
+          // Multiline commands lose their newlines through the JSON serialization boundary.
+          // Base64-encode them so the container receives the script verbatim.
+          const command = raw.includes("\n")
+            ? `echo ${Buffer.from(raw).toString("base64")} | base64 -d | bash`
+            : raw;
           const events: SSEEvent[] = [];
-          for await (const ev of exec.executeCommand({ command: def.command, cwd: def.cwd, envs: def.envs })) {
+          for await (const ev of exec.executeCommand({ command, cwd: def.cwd, envs: def.envs })) {
             await ctx.emit({
               ts: Date.now(),
               workflowId: ctx.workflowId,
@@ -184,6 +237,105 @@ function buildStep(def: StepDef): WorkflowStep {
           return { ...state, sandboxId: undefined };
         },
       };
+
+    case StepType.Retry: {
+      const child = buildStep(def.step);
+      return {
+        id: StepType.Retry,
+        rollback: child.rollback,
+        async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
+          let lastErr: unknown;
+          for (let attempt = 0; attempt < def.maxAttempts; attempt++) {
+            try {
+              return await child.run(input, ctx);
+            } catch (err) {
+              lastErr = err;
+              if (attempt < def.maxAttempts - 1) {
+                const base = def.delayMs ?? 500;
+                const delay = def.backoff === "exponential" ? base * Math.pow(2, attempt) : base;
+                await ctx.emit({
+                  ts: Date.now(), workflowId: ctx.workflowId, stepIndex: ctx.stepIndex,
+                  event: LedgerEvent.ExecEvent,
+                  payload: { type: "retry_attempt", attempt: attempt + 1, maxAttempts: def.maxAttempts, error: String(err) },
+                });
+                await new Promise<void>((r) => setTimeout(r, delay));
+              }
+            }
+          }
+          throw lastErr;
+        },
+      };
+    }
+
+    case StepType.Conditional: {
+      const thenSteps = def.then.map(buildStep);
+      const elseSteps = (def.else ?? []).map(buildStep);
+      return {
+        id: StepType.Conditional,
+        async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
+          const branch = evaluate(def.condition, input) ? thenSteps : elseSteps;
+          let current = input;
+          for (const step of branch) {
+            current = await step.run(current, ctx);
+          }
+          return current;
+        },
+      };
+    }
+
+    case StepType.Loop: {
+      return {
+        id: StepType.Loop,
+        async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
+          const arr = def.items ?? (def.over ? getPath(input, def.over) : undefined);
+          if (!Array.isArray(arr)) throw new Error(`loop: must provide either "items" or "over" pointing to an array in workflow state`);
+
+          const runIteration = async (item: unknown, index: number): Promise<unknown> => {
+            const iterState = { ...(input as WorkflowState), [def.as]: item, loopIndex: index };
+            let current: unknown = iterState;
+            for (const step of def.steps.map(buildStep)) {
+              current = await step.run(current, ctx);
+            }
+            return current;
+          };
+
+          const loopResults = def.concurrently
+            ? await Promise.all(arr.map((item, i) => runIteration(item, i)))
+            : await arr.reduce<Promise<unknown[]>>(async (accP, item, i) => {
+                const acc = await accP;
+                acc.push(await runIteration(item, i));
+                return acc;
+              }, Promise.resolve([]));
+
+          return { ...(input as WorkflowState), loopResults };
+        },
+      };
+    }
+
+    case StepType.Parallel: {
+      return {
+        id: StepType.Parallel,
+        async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
+          const results = await Promise.all(
+            def.steps.map((stepDef, branchIndex) => {
+              const branchCtx: WorkflowRunContext = {
+                ...ctx,
+                stepIndex: ctx.stepIndex * 1000 + branchIndex,
+                emit: (entry) => ctx.emit({ ...entry, branch: branchIndex }),
+              };
+              return buildStep(stepDef).run(input, branchCtx);
+            }),
+          );
+
+          const merged = results.reduce<WorkflowState>(
+            (acc, result) => ({ ...acc, ...(result as WorkflowState) }),
+            input as WorkflowState,
+          );
+
+          return { ...merged, parallelResults: results };
+        },
+      };
+    }
   }
 }
 
@@ -292,30 +444,60 @@ const ResourcesSchema = t.Object({
   gpu: t.Optional(t.String()),
 });
 
-const StepSchema = t.Object({
-  type: t.Union([
-    t.Literal(StepType.CreateSandbox),
-    t.Literal(StepType.ExecCode),
-    t.Literal(StepType.ExecCommand),
-    t.Literal(StepType.DeleteSandbox),
+const PredicateSchema = t.Recursive((Self) =>
+  t.Union([
+    t.Object({ op: t.Union([t.Literal("eq"), t.Literal("neq")]), field: t.String(), value: t.Any() }),
+    t.Object({ op: t.Union([t.Literal("gt"), t.Literal("lt"), t.Literal("gte"), t.Literal("lte")]), field: t.String(), value: t.Number() }),
+    t.Object({ op: t.Union([t.Literal("exists"), t.Literal("not_exists")]), field: t.String() }),
+    t.Object({ op: t.Union([t.Literal("and"), t.Literal("or")]), predicates: t.Array(Self) }),
   ]),
-  // create_sandbox
-  image: t.Optional(ImageSpecSchema),
-  snapshotId: t.Optional(t.String()),
-  timeout: t.Optional(t.Number()),
-  entrypoint: t.Optional(t.Array(t.String())),
-  env: t.Optional(t.Record(t.String(), t.String())),
-  metadata: t.Optional(t.Record(t.String(), t.String())),
-  // exec_code
-  code: t.Optional(t.String()),
-  context: t.Optional(t.Object({ id: t.String(), language: t.String() })),
-  // exec_command
-  command: t.Optional(t.String()),
-  cwd: t.Optional(t.String()),
-  envs: t.Optional(t.Record(t.String(), t.String())),
-  // create_sandbox resource limits
-  resourceLimits: t.Optional(ResourcesSchema),
-});
+);
+
+const StepSchema = t.Recursive((Self) =>
+  t.Object({
+    type: t.Union([
+      t.Literal(StepType.CreateSandbox),
+      t.Literal(StepType.ExecCode),
+      t.Literal(StepType.ExecCommand),
+      t.Literal(StepType.DeleteSandbox),
+      t.Literal(StepType.Retry),
+      t.Literal(StepType.Conditional),
+      t.Literal(StepType.Loop),
+      t.Literal(StepType.Parallel),
+    ]),
+    // create_sandbox
+    image: t.Optional(ImageSpecSchema),
+    snapshotId: t.Optional(t.String()),
+    timeout: t.Optional(t.Number()),
+    entrypoint: t.Optional(t.Array(t.String())),
+    env: t.Optional(t.Record(t.String(), t.String())),
+    metadata: t.Optional(t.Record(t.String(), t.String())),
+    resourceLimits: t.Optional(ResourcesSchema),
+    // exec_code
+    code: t.Optional(t.String()),
+    context: t.Optional(t.Object({ id: t.String(), language: t.String() })),
+    // exec_command
+    command: t.Optional(t.String()),
+    cwd: t.Optional(t.String()),
+    envs: t.Optional(t.Record(t.String(), t.String())),
+    // retry
+    step: t.Optional(Self),
+    maxAttempts: t.Optional(t.Number()),
+    delayMs: t.Optional(t.Number()),
+    backoff: t.Optional(t.Union([t.Literal("fixed"), t.Literal("exponential")])),
+    // conditional
+    condition: t.Optional(PredicateSchema),
+    then: t.Optional(t.Array(Self)),
+    else: t.Optional(t.Array(Self)),
+    // loop
+    over: t.Optional(t.String()),
+    items: t.Optional(t.Array(t.Any())),
+    as: t.Optional(t.String()),
+    steps: t.Optional(t.Array(Self)),
+    concurrently: t.Optional(t.Boolean()),
+    // parallel reuses steps above
+  }),
+);
 
 // ── App ────────────────────────────────────────────────────────────────────
 

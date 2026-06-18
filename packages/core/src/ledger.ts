@@ -13,6 +13,7 @@ export interface LedgerEntry {
   ts: number;
   workflowId: string;
   stepIndex: number;
+  branch?: number; // set by parallel steps to identify which concurrent branch emitted this entry
   event: LedgerEvent;
   payload?: unknown;
   error?: string;

@@ -14,7 +14,7 @@ class DrejError(Exception):
 
 
 class DrejClient:
-    def __init__(self, base_url: str = "http://localhost:3000") -> None:
+    def __init__(self, base_url: str = "http://localhost:6000") -> None:
         self.base_url = base_url.rstrip("/")
 
     def _request(self, method: str, path: str, body: dict | None = None) -> Any:
@@ -366,3 +366,14 @@ class DrejClient:
 
     def watch_metrics(self, sandbox_id: str) -> Generator[dict, None, None]:
         return self._stream("GET", f"/v1/sandboxes/{sandbox_id}/metrics/watch")
+
+    # ── Workflows ─────────────────────────────────────────────────────────
+
+    def run_workflow(self, id: str, steps: list[dict]) -> Generator[dict, None, None]:
+        return self._stream("POST", "/v1/workflows", {"id": id, "steps": steps})
+
+    def resume_workflow(self, id: str, steps: list[dict]) -> Generator[dict, None, None]:
+        return self._stream("POST", f"/v1/workflows/{id}/resume", {"steps": steps})
+
+    def get_workflow_ledger(self, id: str) -> list[dict]:
+        return self._request("GET", f"/v1/workflows/{id}/ledger")

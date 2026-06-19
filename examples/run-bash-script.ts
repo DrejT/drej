@@ -22,14 +22,15 @@ echo ""
 echo "=== done ==="
 `.trim();
 
-const w = workflow(`bash-script-${Date.now()}`)
-  .sandbox({ image: { uri: "ubuntu:22.04" }, resourceLimits: { cpu: "500m", memory: "512Mi" } }, (s) =>
-    s.exec(script),
-  );
+const w = workflow("bash-script").sandbox(
+  { image: { uri: "ubuntu:22.04" }, resourceLimits: { cpu: "500m", memory: "512Mi" } },
+  (s) => s.exec(script),
+);
 
-console.log(`Running workflow ${w.build().id}...`);
+const run = await client.run(w);
+console.log(`Run ID: ${run.id} (workflow: ${run.name})`);
 
-for await (const ev of client.run(w)) {
+for await (const ev of run) {
   if (ev.event === "exec_event") {
     const e = ev.payload as { type: string; text?: string };
     if (e.text) process.stdout.write(e.text);

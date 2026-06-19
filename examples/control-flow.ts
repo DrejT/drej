@@ -2,15 +2,16 @@
  * Demonstrates all control-flow builder methods:
  *   retry    — retries a flaky command with exponential backoff
  *   when     — branches on workflow state
- *   forEach  — iterates a list; item is a real template variable
+ *   forEach  — iterates a list; item resolves via template literal
  *   parallel — runs branches concurrently inside the same sandbox
  */
 import { DrejClient, workflow } from "../packages/sdks/typescript/src/index";
 
 const client = new DrejClient({ baseUrl: process.env.DREJ_API_URL ?? "http://localhost:6000" });
 
-const w = workflow(`control-flow-${Date.now()}`)
-  .sandbox({ image: { uri: "ubuntu:22.04" }, resourceLimits: { cpu: "500m", memory: "512Mi" } }, (s) =>
+const w = workflow("control-flow").sandbox(
+  { image: { uri: "ubuntu:22.04" }, resourceLimits: { cpu: "500m", memory: "512Mi" } },
+  (s) =>
     s
       // retry: coin flip, fails ~50% of the time
       .retry(
@@ -31,7 +32,7 @@ const w = workflow(`control-flow-${Date.now()}`)
         (s) => s.exec('echo "[when] else-branch: no sandbox"'),
       )
 
-      // forEach: item is a LoopVar — use it in a template literal directly
+      // forEach: item is a LoopVar — use directly in a template literal
       .forEach(["alpha.txt", "beta.txt", "gamma.txt"], { as: "filename" }, (s, filename) =>
         s.exec(`echo "[loop] writing /tmp/${filename}" && echo "hello" > /tmp/${filename}`),
       )
@@ -45,11 +46,12 @@ const w = workflow(`control-flow-${Date.now()}`)
 
       // verify loop files survived
       .exec("ls /tmp/*.txt && echo '[verify] all files present'"),
-  );
+);
 
-console.log(`Running workflow ${w.build().id}...\n`);
+const run = await client.run(w);
+console.log(`Run ID: ${run.id} (workflow: ${run.name})\n`);
 
-for await (const ev of client.run(w)) {
+for await (const ev of run) {
   if (ev.event === "exec_event") {
     const e = ev.payload as { type: string; text?: string };
     if (e.text) process.stdout.write(e.text);

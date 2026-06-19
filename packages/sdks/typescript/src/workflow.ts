@@ -184,7 +184,7 @@ class WorkflowParallelBuilder {
 export class WorkflowBuilder {
   private _steps: StepDef[] = [];
 
-  constructor(private _id: string) {}
+  constructor(private _name: string) {}
 
   sandbox(opts: SandboxOpts, fn: (s: SandboxStepBuilder) => SandboxStepBuilder): this {
     const sb = new SandboxStepBuilder();
@@ -204,11 +204,11 @@ export class WorkflowBuilder {
     return this;
   }
 
-  build(): { id: string; steps: StepDef[] } {
-    return { id: this._id, steps: this._steps };
+  build(): { name: string; steps: StepDef[] } {
+    return { name: this._name, steps: this._steps };
   }
 }
 
-export function workflow(id: string): WorkflowBuilder {
-  return new WorkflowBuilder(id);
+export function workflow(name: string): WorkflowBuilder {
+  return new WorkflowBuilder(name);
 }

@@ -2,14 +2,15 @@ import { DrejClient, workflow } from "../packages/sdks/typescript/src/index";
 
 const client = new DrejClient({ baseUrl: process.env.DREJ_API_URL ?? "http://localhost:6000" });
 
-const w = workflow(`hello-world-${Date.now()}`)
-  .sandbox({ image: { uri: "ubuntu:22.04" }, resourceLimits: { cpu: "500m", memory: "512Mi" } }, (s) =>
-    s.exec('echo "hello world"'),
-  );
+const w = workflow("hello-world").sandbox(
+  { image: { uri: "ubuntu:22.04" }, resourceLimits: { cpu: "500m", memory: "512Mi" } },
+  (s) => s.exec('echo "hello world"'),
+);
 
-console.log(`Running workflow ${w.build().id}...`);
+const run = await client.run(w);
+console.log(`Run ID: ${run.id} (workflow: ${run.name})`);
 
-for await (const ev of client.run(w)) {
+for await (const ev of run) {
   if (ev.event === "exec_event") {
     const e = ev.payload as { type: string; text?: string };
     if (e.text) process.stdout.write(e.text);

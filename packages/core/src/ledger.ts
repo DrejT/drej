@@ -1,4 +1,6 @@
+
 export enum LedgerEvent {
+  RunStarted = "run_started",
   StepStart = "step_start",
   StepComplete = "step_complete",
   StepFailed = "step_failed",
@@ -11,9 +13,10 @@ export enum LedgerEvent {
 
 export interface LedgerEntry {
   ts: number;
-  workflowId: string;
+  workflowName: string;
+  runId: string;
   stepIndex: number;
-  branch?: number; // set by parallel steps to identify which concurrent branch emitted this entry
+  branch?: number;
   event: LedgerEvent;
   payload?: unknown;
   error?: string;
@@ -21,8 +24,9 @@ export interface LedgerEntry {
 
 export interface ILedger {
   append(entry: LedgerEntry): Promise<void>;
-  readAll(workflowId: string): Promise<LedgerEntry[]>;
-  lastCheckpoint(workflowId: string): Promise<LedgerEntry | null>;
+  readAll(workflowName: string, runId: string): Promise<LedgerEntry[]>;
+  lastCheckpoint(workflowName: string, runId: string): Promise<LedgerEntry | null>;
+  listRuns(workflowName: string): Promise<string[]>;
 }
 
 export class MemoryLedger implements ILedger {
@@ -32,37 +36,45 @@ export class MemoryLedger implements ILedger {
     this.entries.push(entry);
   }
 
-  async readAll(workflowId: string): Promise<LedgerEntry[]> {
-    return this.entries.filter((e) => e.workflowId === workflowId);
+  async readAll(workflowName: string, runId: string): Promise<LedgerEntry[]> {
+    return this.entries.filter((e) => e.workflowName === workflowName && e.runId === runId);
   }
 
-  async lastCheckpoint(workflowId: string): Promise<LedgerEntry | null> {
-    const all = await this.readAll(workflowId);
+  async lastCheckpoint(workflowName: string, runId: string): Promise<LedgerEntry | null> {
+    const all = await this.readAll(workflowName, runId);
     for (let i = all.length - 1; i >= 0; i--) {
       if (all[i].event === LedgerEvent.Checkpoint) return all[i];
     }
     return null;
   }
+
+  async listRuns(workflowName: string): Promise<string[]> {
+    const seen = new Set<string>();
+    for (const e of this.entries) {
+      if (e.workflowName === workflowName) seen.add(e.runId);
+    }
+    return [...seen];
+  }
 }
 
-// Each workflow gets its own <dir>/<workflowId>.ndjson file.
+// Each run gets its own <dir>/<workflowName>/<runId>.ndjson file.
 // Bun.write creates parent directories automatically on first write.
 export class NdjsonLedger implements ILedger {
   constructor(private readonly dir: string) {}
 
-  private filePath(workflowId: string): string {
-    return `${this.dir}/${workflowId}.ndjson`;
+  private filePath(workflowName: string, runId: string): string {
+    return `${this.dir}/${workflowName}/${runId}.ndjson`;
   }
 
   async append(entry: LedgerEntry): Promise<void> {
-    const path = this.filePath(entry.workflowId);
+    const path = this.filePath(entry.workflowName, entry.runId);
     const existing = await Bun.file(path).text().catch(() => "");
     await Bun.write(path, existing + JSON.stringify(entry) + "\n");
   }
 
-  async readAll(workflowId: string): Promise<LedgerEntry[]> {
+  async readAll(workflowName: string, runId: string): Promise<LedgerEntry[]> {
     try {
-      const text = await Bun.file(this.filePath(workflowId)).text();
+      const text = await Bun.file(this.filePath(workflowName, runId)).text();
       return text
         .split("\n")
         .filter((line) => line.length > 0)
@@ -72,11 +84,24 @@ export class NdjsonLedger implements ILedger {
     }
   }
 
-  async lastCheckpoint(workflowId: string): Promise<LedgerEntry | null> {
-    const all = await this.readAll(workflowId);
+  async lastCheckpoint(workflowName: string, runId: string): Promise<LedgerEntry | null> {
+    const all = await this.readAll(workflowName, runId);
     for (let i = all.length - 1; i >= 0; i--) {
       if (all[i].event === LedgerEvent.Checkpoint) return all[i];
     }
     return null;
+  }
+
+  async listRuns(workflowName: string): Promise<string[]> {
+    try {
+      const glob = new Bun.Glob("*.ndjson");
+      const files: string[] = [];
+      for await (const f of glob.scan({ cwd: `${this.dir}/${workflowName}`, onlyFiles: true })) {
+        files.push(f.slice(0, -7)); // strip .ndjson
+      }
+      return files;
+    } catch {
+      return [];
+    }
   }
 }

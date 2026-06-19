@@ -1,4 +1,4 @@
-export { DrejClient, DrejError } from "./client";
+export { DrejClient, DrejError, WorkflowRun } from "./client";
 export type {
   DrejClientOptions,
   Resources,

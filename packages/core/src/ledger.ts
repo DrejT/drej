@@ -57,40 +57,40 @@ export class MemoryLedger implements ILedger {
   }
 }
 
-// Each run gets its own <dir>/<workflowName>/<runId>.ndjson file.
-// appendFileSync opens in O_APPEND mode — safe even if the process crashes mid-write
-// because it never truncates existing content (unlike Bun.write which uses O_TRUNC).
-import { appendFileSync, mkdirSync } from "node:fs";
-
+// Each entry gets its own file: <dir>/<workflowName>/<runId>/<ts>-<rand>.ndjson
+// Bun.write to a new path never truncates existing entries — safe on crash.
+// readAll globs all entry files and sorts by the ts field for deterministic order.
 export class NdjsonLedger implements ILedger {
   constructor(private readonly dir: string) {}
 
-  private filePath(workflowName: string, runId: string): string {
-    return `${this.dir}/${workflowName}/${runId}.ndjson`;
+  private runDir(workflowName: string, runId: string): string {
+    return `${this.dir}/${workflowName}/${runId}`;
   }
 
   async append(entry: LedgerEntry): Promise<void> {
-    const path = this.filePath(entry.workflowName, entry.runId);
-    mkdirSync(`${this.dir}/${entry.workflowName}`, { recursive: true });
-    appendFileSync(path, JSON.stringify(entry) + "\n");
+    const dir = this.runDir(entry.workflowName, entry.runId);
+    const filename = `${entry.ts}-${Math.random().toString(36).slice(2)}.ndjson`;
+    await Bun.write(`${dir}/${filename}`, JSON.stringify(entry) + "\n");
   }
 
   async readAll(workflowName: string, runId: string): Promise<LedgerEntry[]> {
+    const dir = this.runDir(workflowName, runId);
+    const entries: LedgerEntry[] = [];
     try {
-      const text = await Bun.file(this.filePath(workflowName, runId)).text();
-      const entries: LedgerEntry[] = [];
-      for (const line of text.split("\n")) {
-        if (!line) continue;
+      const glob = new Bun.Glob("*.ndjson");
+      for await (const f of glob.scan({ cwd: dir, onlyFiles: true })) {
         try {
-          entries.push(JSON.parse(line) as LedgerEntry);
+          const text = await Bun.file(`${dir}/${f}`).text();
+          const line = text.trim();
+          if (line) entries.push(JSON.parse(line) as LedgerEntry);
         } catch {
-          // skip lines corrupted by a crash mid-write
+          // skip corrupted entry files
         }
       }
-      return entries;
     } catch {
       return [];
     }
+    return entries.sort((a, b) => a.ts - b.ts);
   }
 
   async lastCheckpoint(workflowName: string, runId: string): Promise<LedgerEntry | null> {
@@ -103,12 +103,15 @@ export class NdjsonLedger implements ILedger {
 
   async listRuns(workflowName: string): Promise<string[]> {
     try {
-      const glob = new Bun.Glob("*.ndjson");
-      const files: string[] = [];
+      // Each run is a subdirectory. Glob one level deep for any .ndjson entry file,
+      // extract the directory segment (the runId), and deduplicate.
+      const glob = new Bun.Glob("*/*.ndjson");
+      const seen = new Set<string>();
       for await (const f of glob.scan({ cwd: `${this.dir}/${workflowName}`, onlyFiles: true })) {
-        files.push(f.slice(0, -7)); // strip .ndjson
+        const runId = f.split("/")[0];
+        if (runId) seen.add(runId);
       }
-      return files;
+      return [...seen];
     } catch {
       return [];
     }

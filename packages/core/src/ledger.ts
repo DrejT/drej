@@ -58,7 +58,10 @@ export class MemoryLedger implements ILedger {
 }
 
 // Each run gets its own <dir>/<workflowName>/<runId>.ndjson file.
-// Bun.write creates parent directories automatically on first write.
+// appendFileSync opens in O_APPEND mode — safe even if the process crashes mid-write
+// because it never truncates existing content (unlike Bun.write which uses O_TRUNC).
+import { appendFileSync, mkdirSync } from "node:fs";
+
 export class NdjsonLedger implements ILedger {
   constructor(private readonly dir: string) {}
 
@@ -68,17 +71,23 @@ export class NdjsonLedger implements ILedger {
 
   async append(entry: LedgerEntry): Promise<void> {
     const path = this.filePath(entry.workflowName, entry.runId);
-    const existing = await Bun.file(path).text().catch(() => "");
-    await Bun.write(path, existing + JSON.stringify(entry) + "\n");
+    mkdirSync(`${this.dir}/${entry.workflowName}`, { recursive: true });
+    appendFileSync(path, JSON.stringify(entry) + "\n");
   }
 
   async readAll(workflowName: string, runId: string): Promise<LedgerEntry[]> {
     try {
       const text = await Bun.file(this.filePath(workflowName, runId)).text();
-      return text
-        .split("\n")
-        .filter((line) => line.length > 0)
-        .map((line) => JSON.parse(line) as LedgerEntry);
+      const entries: LedgerEntry[] = [];
+      for (const line of text.split("\n")) {
+        if (!line) continue;
+        try {
+          entries.push(JSON.parse(line) as LedgerEntry);
+        } catch {
+          // skip lines corrupted by a crash mid-write
+        }
+      }
+      return entries;
     } catch {
       return [];
     }

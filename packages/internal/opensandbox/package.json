@@ -7,7 +7,12 @@
   "scripts": {
     "typecheck": "bunx tsc --noEmit"
   },
+  "dependencies": {
+    "@drej/core": "workspace:*"
+  },
   "devDependencies": {
+    "@types/node": "latest",
+    "bun-types": "latest",
     "typescript": "latest"
   }
 }

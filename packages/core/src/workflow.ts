@@ -29,11 +29,21 @@ export interface WorkflowCheckpoint {
 
 export type WorkflowStatus = "idle" | "running" | "completed" | "failed" | "rolled_back";
 
+export interface WorkflowHooks {
+  onStepStart?(info: { workflowName: string; runId: string; stepIndex: number; stepId: string }): void | Promise<void>;
+  onStepComplete?(info: { workflowName: string; runId: string; stepIndex: number; stepId: string; output: unknown }): void | Promise<void>;
+  onStepFailed?(info: { workflowName: string; runId: string; stepIndex: number; stepId: string; error: Error }): void | Promise<void>;
+  onStepRolledBack?(info: { workflowName: string; runId: string; stepIndex: number; stepId: string }): void | Promise<void>;
+  onWorkflowComplete?(info: { workflowName: string; runId: string; output: unknown }): void | Promise<void>;
+  onWorkflowFailed?(info: { workflowName: string; runId: string; error: Error }): void | Promise<void>;
+}
+
 export interface WorkflowDeps {
   control: ISandboxControl;
   execFactory: IExecClientFactory;
   ledger: ILedger;
   logger?: ILogger;
+  hooks?: WorkflowHooks;
 }
 
 export class Workflow {
@@ -58,6 +68,19 @@ export class Workflow {
     this.log = deps.logger ?? noopLogger;
   }
 
+  private async callHook<K extends keyof WorkflowHooks>(
+    name: K,
+    info: Parameters<NonNullable<WorkflowHooks[K]>>[0],
+  ): Promise<void> {
+    const hook = this.deps.hooks?.[name] as ((i: typeof info) => void | Promise<void>) | undefined;
+    if (!hook) return;
+    try {
+      await hook(info);
+    } catch (err) {
+      this.log.warn(`hook ${name} threw`, { error: String(err) });
+    }
+  }
+
   async run(input: unknown, startFromStep = 0): Promise<unknown> {
     this._status = "running";
     this.log.info("workflow started", { workflowName: this.name, runId: this.runId, startFromStep, totalSteps: this.steps.length });
@@ -70,6 +93,7 @@ export class Workflow {
       const ctx = this.makeContext(i);
 
       this.log.debug("step starting", { workflowName: this.name, runId: this.runId, stepIndex: i, stepId: step.id });
+      await this.callHook("onStepStart", { workflowName: this.name, runId: this.runId, stepIndex: i, stepId: step.id });
       await ctx.emit({ ts: Date.now(), workflowName: this.name, runId: this.runId, stepIndex: i, event: LedgerEvent.StepStart });
 
       try {
@@ -78,6 +102,7 @@ export class Workflow {
         current = output;
 
         this.log.debug("step complete", { workflowName: this.name, runId: this.runId, stepIndex: i, stepId: step.id });
+        await this.callHook("onStepComplete", { workflowName: this.name, runId: this.runId, stepIndex: i, stepId: step.id, output });
         await ctx.emit({
           ts: Date.now(),
           workflowName: this.name,
@@ -97,16 +122,19 @@ export class Workflow {
         });
       } catch (err) {
         this._status = "failed";
-        this.log.error("step failed", { workflowName: this.name, runId: this.runId, stepIndex: i, stepId: step.id, error: String(err) });
+        const error = err instanceof Error ? err : new Error(String(err));
+        this.log.error("step failed", { workflowName: this.name, runId: this.runId, stepIndex: i, stepId: step.id, error: error.message });
+        await this.callHook("onStepFailed", { workflowName: this.name, runId: this.runId, stepIndex: i, stepId: step.id, error });
         await ctx.emit({
           ts: Date.now(),
           workflowName: this.name,
           runId: this.runId,
           stepIndex: i,
           event: LedgerEvent.StepFailed,
-          error: String(err),
+          error: error.message,
         });
-        throw err;
+        await this.callHook("onWorkflowFailed", { workflowName: this.name, runId: this.runId, error });
+        throw error;
       }
     }
 
@@ -119,6 +147,7 @@ export class Workflow {
       stepIndex: -1,
       event: LedgerEvent.WorkflowComplete,
     });
+    await this.callHook("onWorkflowComplete", { workflowName: this.name, runId: this.runId, output: current });
     return current;
   }
 
@@ -134,6 +163,7 @@ export class Workflow {
         const ctx = this.makeContext(i);
         this.log.debug("rolling back step", { workflowName: this.name, runId: this.runId, stepIndex: i, stepId: step.id });
         await step.rollback(result.output, ctx);
+        await this.callHook("onStepRolledBack", { workflowName: this.name, runId: this.runId, stepIndex: i, stepId: step.id });
         await ctx.emit({
           ts: Date.now(),
           workflowName: this.name,
@@ -155,6 +185,7 @@ export class Workflow {
       event: LedgerEvent.WorkflowFailed,
       error: "rolled_back",
     });
+    await this.callHook("onWorkflowFailed", { workflowName: this.name, runId: this.runId, error: new Error("rolled_back") });
   }
 
   snapshot(): WorkflowCheckpoint {

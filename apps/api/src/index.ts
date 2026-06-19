@@ -1,5 +1,5 @@
 import { Elysia, t } from "elysia";
-import { ControlClient, ExecClient, OpenSandboxError } from "@drej/opensandbox";
+import { ControlClient, ExecClient, OpenSandboxError, OpenSandboxControlAdapter, OpenSandboxExecFactory } from "@drej/opensandbox";
 import type { SSEEvent } from "@drej/opensandbox";
 import {
   Workflow,
@@ -11,8 +11,6 @@ import {
   type WorkflowStep,
   type WorkflowRunContext,
   type ILedger,
-  type ISandboxControl,
-  type ISandboxExec,
 } from "@drej/core";
 
 const BASE_URL = process.env.OPEN_SANDBOX_BASE_URL ?? "http://localhost:8080";
@@ -34,12 +32,13 @@ const logger = new ConsoleLogger(parseLogLevel(process.env.LOG_LEVEL));
 
 const control = new ControlClient({ baseUrl: BASE_URL, apiKey: API_KEY });
 
+// Used by direct sandbox exec routes (/v1/sandboxes/:id/exec/*)
+// which need the full ExecClient surface, not just ISandboxExec.
 async function resolveExecClient(sandboxId: string, retries = 15, delayMs = 1_000): Promise<ExecClient> {
   const ep = await control.getEndpoint(sandboxId, 44772);
   const baseUrl = ep.endpoint.startsWith("http") ? ep.endpoint : `http://${ep.endpoint}`;
   const token = ep.headers?.["X-EXECD-ACCESS-TOKEN"] ?? "";
   const client = new ExecClient({ baseUrl, accessToken: token });
-
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       await client.listContexts();
@@ -53,18 +52,10 @@ async function resolveExecClient(sandboxId: string, retries = 15, delayMs = 1_00
 }
 
 // ── Microkernel adapter wiring ─────────────────────────────────────────────
-// Bridge @drej/opensandbox concrete drivers → @drej/core port interfaces.
-// The cast is intentional: both types are structurally identical (derived from
-// the same OpenSandbox API spec) but live in separate packages.
 
 const workflowDeps: WorkflowDeps = {
-  control: control as unknown as ISandboxControl,
-  execFactory: {
-    forSandbox: async (sandboxId: string): Promise<ISandboxExec> => {
-      const exec = await resolveExecClient(sandboxId);
-      return exec as unknown as ISandboxExec;
-    },
-  },
+  control: new OpenSandboxControlAdapter(control),
+  execFactory: new OpenSandboxExecFactory(control),
   ledger: new NdjsonLedger(LEDGER_DIR),
   logger,
 };

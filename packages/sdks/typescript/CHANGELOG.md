@@ -1,5 +1,48 @@
 # drej
 
+## 0.4.0
+
+### Minor Changes
+
+- d0486df: Add fluent workflow builder API to TypeScript SDK.
+
+  `workflow(id)` returns a `WorkflowBuilder` with chainable `.sandbox()` and `.parallel()` methods. Inside a sandbox scope, `SandboxStepBuilder` provides `.exec()`, `.writeFile()`, `.retry()`, `.forEach()`, `.when()`, and `.parallel()`. The `forEach` callback receives `(s, item)` where `item` serialises to `{{name}}` in template literals, enabling natural JS interpolation. Top-level `.parallel()` supports multiple concurrent sandbox sessions via `WorkflowParallelBuilder`. `DrejClient.run(w)` accepts a built workflow directly. The `sandbox()` helper defaults the entrypoint to `["tail", "-f", "/dev/null"]`.
+
+  Adds a server-side `sequence` step type that runs child steps sequentially, used internally by the builder to represent multi-step parallel branches.
+
+- e1f9bb8: Add `snapshotConfig` option to `client.run()` and a `replayFromSnapshot()` method.
+
+  Pass `snapshotConfig: { afterSteps?: number[]; everyNSteps?: number }` to capture sandbox snapshots at specific points in a workflow. Call `client.replayFromSnapshot(name, runId, workflow)` to start a new run booted from the latest captured snapshot — skipping any setup steps already baked into the image.
+
+- 9a30c31: Introduce per-run ledger with workflow name / run ID separation.
+
+  Each workflow execution now has a stable **workflow name** (user-defined) and an auto-generated **run ID** (UUID). Ledger files are stored at `ledgers/<name>/<runId>.ndjson` so all runs of a workflow are grouped together.
+
+  API changes:
+
+  - `POST /v1/workflows/:name/runs` — starts a run; first SSE event is `run_started` carrying the run ID
+  - `POST /v1/workflows/:name/runs/:runId/resume` — resumes a specific run
+  - `GET /v1/workflows/:name/runs` — lists all run IDs for a workflow
+  - `GET /v1/workflows/:name/runs/:runId/ledger` — fetches ledger for a specific run
+
+  SDK changes:
+
+  - `client.run(w)` is now `async` and returns `Promise<WorkflowRun>`; `run.id` gives the run ID, `run.name` the workflow name, and it is async-iterable for events
+  - `client.resumeRun(name, runId, w)` resumes a run
+  - `client.listWorkflowRuns(name)` lists runs
+  - `client.getWorkflowLedger(name, runId)` fetches the ledger
+  - `WorkflowEvent` fields renamed: `workflowId` → `workflowName` + `runId`
+
+### Patch Changes
+
+- b3c0bc9: feat: lifecycle hooks, append-only WAL, and clean adapter layer
+
+  - Add `WorkflowHooks` interface with `onStepStart`, `onStepComplete`, `onStepFailed`, `onStepRolledBack`, `onWorkflowComplete`, `onWorkflowFailed` callbacks on `WorkflowDeps`
+  - Fix `NdjsonLedger.append` to use `appendFileSync` (O_APPEND) instead of read-then-overwrite (O_TRUNC), preventing ledger truncation on crash
+  - Make `NdjsonLedger.readAll` resilient to malformed lines from partial writes
+  - Add `OpenSandboxControlAdapter` and `OpenSandboxExecFactory` to `@drej/opensandbox` — concrete implementations of `ISandboxControl` and `IExecClientFactory` that encapsulate execd readiness polling
+  - Remove `as unknown as` double-cast from `apps/api`; adapter wiring is now explicit and type-safe
+
 ## 0.3.0
 
 ### Minor Changes

@@ -192,7 +192,7 @@ function buildStep(def: StepDef): WorkflowStep {
           for await (const ev of exec.executeCode({ code: def.code, context: def.context })) {
             await ctx.emit({
               ts: Date.now(),
-              workflowId: ctx.workflowId,
+              workflowName: ctx.workflowName, runId: ctx.runId,
               stepIndex: ctx.stepIndex,
               event: LedgerEvent.ExecEvent,
               payload: ev,
@@ -219,7 +219,7 @@ function buildStep(def: StepDef): WorkflowStep {
           for await (const ev of exec.executeCommand({ command, cwd: def.cwd, envs: def.envs })) {
             await ctx.emit({
               ts: Date.now(),
-              workflowId: ctx.workflowId,
+              workflowName: ctx.workflowName, runId: ctx.runId,
               stepIndex: ctx.stepIndex,
               event: LedgerEvent.ExecEvent,
               payload: ev,
@@ -271,7 +271,7 @@ function buildStep(def: StepDef): WorkflowStep {
                 const base = def.delayMs ?? 500;
                 const delay = def.backoff === "exponential" ? base * Math.pow(2, attempt) : base;
                 await ctx.emit({
-                  ts: Date.now(), workflowId: ctx.workflowId, stepIndex: ctx.stepIndex,
+                  ts: Date.now(), workflowName: ctx.workflowName, runId: ctx.runId, stepIndex: ctx.stepIndex,
                   event: LedgerEvent.ExecEvent,
                   payload: { type: "retry_attempt", attempt: attempt + 1, maxAttempts: def.maxAttempts, error: String(err) },
                 });
@@ -408,7 +408,8 @@ function sseResponse(gen: AsyncGenerator<SSEEvent>): Response {
 // Tee ledger: persists to NdjsonLedger AND streams each entry to the SSE client.
 // exec_event entries flow through here in real-time as code/commands execute.
 function workflowSseResponse(
-  workflowId: string,
+  workflowName: string,
+  runId: string,
   steps: WorkflowStep[],
   deps: WorkflowDeps,
   resumeMode: boolean,
@@ -424,11 +425,15 @@ function workflowSseResponse(
             await deps.ledger.append(entry);
             emit(entry);
           },
-          readAll: (wfId) => deps.ledger.readAll(wfId),
-          lastCheckpoint: (wfId) => deps.ledger.lastCheckpoint(wfId),
+          readAll: (name, id) => deps.ledger.readAll(name, id),
+          lastCheckpoint: (name, id) => deps.ledger.lastCheckpoint(name, id),
+          listRuns: (name) => deps.ledger.listRuns(name),
         };
 
         const teeDeps: WorkflowDeps = { ...deps, ledger: teeLedger };
+
+        // First event tells the client the auto-generated run ID
+        emit({ event: LedgerEvent.RunStarted, workflowName, runId, stepIndex: -1, ts: Date.now(), payload: { workflowName, runId } });
 
         let workflow: Workflow | undefined;
         try {
@@ -437,21 +442,21 @@ function workflowSseResponse(
 
           if (resumeMode) {
             ({ workflow, nextStep, lastOutput } = await Workflow.resumeFromLedger(
-              workflowId,
+              workflowName,
+              runId,
               steps,
               teeDeps,
             ));
           } else {
-            workflow = new Workflow(workflowId, steps, teeDeps);
+            workflow = new Workflow(workflowName, runId, steps, teeDeps);
             nextStep = 0;
             lastOutput = {};
           }
 
           await workflow.run(lastOutput, nextStep);
         } catch (err) {
-          // Saga rollback: clean up any completed steps (e.g. delete sandbox on failure)
           try { await workflow?.rollback(); } catch { /* ignore rollback errors */ }
-          emit({ event: "workflow_failed", workflowId, error: String(err), ts: Date.now(), stepIndex: -1 });
+          emit({ event: "workflow_failed", workflowName, runId, error: String(err), ts: Date.now(), stepIndex: -1 });
         } finally {
           ctrl.close();
         }
@@ -827,23 +832,23 @@ const app = new Elysia()
   // ── Workflows (microkernel engine) ─────────────────────────────────────────
 
   .post(
-    "/v1/workflows",
-    ({ body }) => {
+    "/v1/workflows/:name/runs",
+    ({ params, body }) => {
+      const runId = crypto.randomUUID();
       const steps = (body.steps as unknown as StepDef[]).map(buildStep);
-      return workflowSseResponse(body.id, steps, workflowDeps, false);
+      return workflowSseResponse(params.name, runId, steps, workflowDeps, false);
     },
     {
       body: t.Object({
-        id: t.String(),
         steps: t.Array(StepSchema),
       }),
     },
   )
   .post(
-    "/v1/workflows/:id/resume",
+    "/v1/workflows/:name/runs/:runId/resume",
     ({ params, body }) => {
       const steps = (body.steps as unknown as StepDef[]).map(buildStep);
-      return workflowSseResponse(params.id, steps, workflowDeps, true);
+      return workflowSseResponse(params.name, params.runId, steps, workflowDeps, true);
     },
     {
       body: t.Object({
@@ -851,8 +856,11 @@ const app = new Elysia()
       }),
     },
   )
-  .get("/v1/workflows/:id/ledger", ({ params }) =>
-    workflowDeps.ledger.readAll(params.id),
+  .get("/v1/workflows/:name/runs", ({ params }) =>
+    workflowDeps.ledger.listRuns(params.name).then((runs) => ({ runs })),
+  )
+  .get("/v1/workflows/:name/runs/:runId/ledger", ({ params }) =>
+    workflowDeps.ledger.readAll(params.name, params.runId),
   )
 
   .listen(PORT);

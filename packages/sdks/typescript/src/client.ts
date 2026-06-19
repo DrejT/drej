@@ -185,6 +185,7 @@ export interface DrejClientOptions {
 // ── Workflow types ─────────────────────────────────────────────────────────
 
 export type WorkflowEventKind =
+  | "run_started"
   | "step_start"
   | "step_complete"
   | "step_failed"
@@ -196,13 +197,26 @@ export type WorkflowEventKind =
 
 export interface WorkflowEvent {
   ts: number;
-  workflowId: string;
+  workflowName: string;
+  runId: string;
   stepIndex: number;
-  branch?: number; // set on events emitted from parallel branches
+  branch?: number;
   event: WorkflowEventKind;
   payload?: unknown;
   error?: string;
   result?: unknown;
+}
+
+export class WorkflowRun implements AsyncIterable<WorkflowEvent> {
+  constructor(
+    public readonly name: string,
+    public readonly id: string,
+    private readonly _events: AsyncGenerator<WorkflowEvent>,
+  ) {}
+
+  [Symbol.asyncIterator](): AsyncIterator<WorkflowEvent> {
+    return this._events;
+  }
 }
 
 export type Predicate =
@@ -561,34 +575,65 @@ export class DrejClient {
 
   // ── Workflows ────────────────────────────────────────────────────────────
 
-  async *run(w: { build(): { id: string; steps: StepDef[] } }): AsyncGenerator<WorkflowEvent> {
-    const { id, steps } = w.build();
-    yield* this.runWorkflow(id, steps);
+  async run(w: { build(): { name: string; steps: StepDef[] } }): Promise<WorkflowRun> {
+    const { name, steps } = w.build();
+    return this._startRun(name, steps);
   }
 
-  async *runWorkflow(id: string, steps: StepDef[]): AsyncGenerator<WorkflowEvent> {
-    const res = await fetch(`${this.baseUrl}/v1/workflows`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, steps }),
-    });
+  async resumeRun(
+    name: string,
+    runId: string,
+    w: { build(): { name: string; steps: StepDef[] } } | StepDef[],
+  ): Promise<WorkflowRun> {
+    const steps = Array.isArray(w) ? w : w.build().steps;
+    const res = await fetch(
+      `${this.baseUrl}/v1/workflows/${encodeURIComponent(name)}/runs/${encodeURIComponent(runId)}/resume`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ steps }),
+      },
+    );
     if (!res.ok) throw new DrejError("drej API error", res.status);
-    if (!res.body) return;
-    yield* parseWorkflowSSE(res.body);
+    if (!res.body) throw new DrejError("empty response body", 500);
+    return this._consumeRunStarted(name, res.body);
   }
 
-  async *resumeWorkflow(id: string, steps: StepDef[]): AsyncGenerator<WorkflowEvent> {
-    const res = await fetch(`${this.baseUrl}/v1/workflows/${id}/resume`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ steps }),
-    });
+  listWorkflowRuns(name: string): Promise<{ runs: string[] }> {
+    return this.request("GET", `/v1/workflows/${encodeURIComponent(name)}/runs`);
+  }
+
+  getWorkflowLedger(name: string, runId: string): Promise<WorkflowEvent[]> {
+    return this.request(
+      "GET",
+      `/v1/workflows/${encodeURIComponent(name)}/runs/${encodeURIComponent(runId)}/ledger`,
+    );
+  }
+
+  private async _startRun(name: string, steps: StepDef[]): Promise<WorkflowRun> {
+    const res = await fetch(
+      `${this.baseUrl}/v1/workflows/${encodeURIComponent(name)}/runs`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ steps }),
+      },
+    );
     if (!res.ok) throw new DrejError("drej API error", res.status);
-    if (!res.body) return;
-    yield* parseWorkflowSSE(res.body);
+    if (!res.body) throw new DrejError("empty response body", 500);
+    return this._consumeRunStarted(name, res.body);
   }
 
-  getWorkflowLedger(id: string): Promise<WorkflowEvent[]> {
-    return this.request("GET", `/v1/workflows/${id}/ledger`);
+  private async _consumeRunStarted(
+    name: string,
+    body: ReadableStream<Uint8Array>,
+  ): Promise<WorkflowRun> {
+    const stream = parseWorkflowSSE(body);
+    const first = await stream.next();
+    if (first.done || first.value.event !== "run_started") {
+      throw new DrejError("expected run_started as first SSE event", 500);
+    }
+    const { runId } = first.value.payload as { runId: string };
+    return new WorkflowRun(name, runId, stream);
   }
 }

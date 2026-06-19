@@ -57,6 +57,15 @@ export interface ExecuteCommandInput {
   envs?: Record<string, string>;
 }
 
+export type SnapshotState = "Pending" | "Committing" | "Pushing" | "Ready" | "Failed";
+
+export interface SnapshotInfo {
+  id: string;
+  sandboxId: string;
+  state: SnapshotState;
+  createdAt: string;
+}
+
 // Ports — implemented by adapters in apps/api, never imported by SDKs
 
 export interface ISandboxControl {
@@ -67,6 +76,8 @@ export interface ISandboxControl {
   pauseSandbox(id: string): Promise<void>;
   resumeSandbox(id: string): Promise<void>;
   renewExpiration(id: string): Promise<void>;
+  createSnapshot(sandboxId: string): Promise<SnapshotInfo>;
+  getSnapshot(id: string): Promise<SnapshotInfo>;
 }
 
 export interface ISandboxExec {

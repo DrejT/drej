@@ -27,6 +27,8 @@ export type {
   WorkflowEvent,
   WorkflowEventKind,
   StepDef,
+  SnapshotConfig,
+  RunOptions,
 } from "./client";
 
 export { workflow, WorkflowBuilder, SandboxStepBuilder } from "./workflow";

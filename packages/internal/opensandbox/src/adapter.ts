@@ -5,9 +5,24 @@ import type {
   Sandbox,
   CreateSandboxInput,
   SandboxState,
+  SnapshotInfo,
+  SnapshotState,
 } from "@drej/core";
 import { ControlClient } from "./control";
 import { ExecClient } from "./exec";
+
+// The OpenSandbox API returns snapshot state nested under status: { state }.
+// SnapshotInfo (our core port type) flattens it to state at the top level.
+interface RawSnapshot {
+  id: string;
+  sandboxId: string;
+  status: { state: SnapshotState };
+  createdAt: string;
+}
+
+function toSnapshotInfo(raw: RawSnapshot): SnapshotInfo {
+  return { id: raw.id, sandboxId: raw.sandboxId, state: raw.status.state, createdAt: raw.createdAt };
+}
 
 // Implements the @drej/core ISandboxControl port using OpenSandbox's ControlClient.
 // Types are structurally compatible; the return type cast on createSandbox resolves
@@ -41,6 +56,17 @@ export class OpenSandboxControlAdapter implements ISandboxControl {
 
   renewExpiration(id: string): Promise<void> {
     return this.client.renewExpiration(id);
+  }
+
+  // OpenSandbox returns { status: { state } } but SnapshotInfo flattens it to { state }.
+  async createSnapshot(sandboxId: string): Promise<SnapshotInfo> {
+    const raw = await this.client.createSnapshot(sandboxId) as unknown as RawSnapshot;
+    return toSnapshotInfo(raw);
+  }
+
+  async getSnapshot(id: string): Promise<SnapshotInfo> {
+    const raw = await this.client.getSnapshot(id) as unknown as RawSnapshot;
+    return toSnapshotInfo(raw);
   }
 }
 

@@ -193,7 +193,19 @@ export type WorkflowEventKind =
   | "workflow_complete"
   | "workflow_failed"
   | "checkpoint"
-  | "exec_event";
+  | "exec_event"
+  | "snapshot";
+
+export interface SnapshotConfig {
+  /** Take a snapshot after these step indices (0-based). */
+  afterSteps?: number[];
+  /** Take a snapshot after every N steps. */
+  everyNSteps?: number;
+}
+
+export interface RunOptions {
+  snapshotConfig?: SnapshotConfig;
+}
 
 export interface WorkflowEvent {
   ts: number;
@@ -575,9 +587,38 @@ export class DrejClient {
 
   // ── Workflows ────────────────────────────────────────────────────────────
 
-  async run(w: { build(): { name: string; steps: StepDef[] } }): Promise<WorkflowRun> {
+  async run(
+    w: { build(): { name: string; steps: StepDef[] } },
+    options?: RunOptions,
+  ): Promise<WorkflowRun> {
     const { name, steps } = w.build();
-    return this._startRun(name, steps);
+    return this._startRun(name, steps, options?.snapshotConfig);
+  }
+
+  /**
+   * Start a new run using a snapshot captured from a previous run.
+   *
+   * Reads the ledger for the given run, finds the latest snapshot entry,
+   * and injects the snapshotId into the first `create_sandbox` step of the
+   * provided workflow — so the new sandbox boots from that snapshot with the
+   * previous environment already in place.
+   */
+  async replayFromSnapshot(
+    name: string,
+    runId: string,
+    w: { build(): { name: string; steps: StepDef[] } },
+  ): Promise<WorkflowRun> {
+    const ledger = await this.getWorkflowLedger(name, runId);
+    const snapEntry = [...ledger].reverse().find((e) => e.event === "snapshot");
+    if (!snapEntry) throw new DrejError(`No snapshot found in ledger for ${name}/${runId}`, 404);
+    const { snapshotId } = snapEntry.payload as { snapshotId: string };
+
+    const { name: wfName, steps } = w.build();
+    const replaySteps: StepDef[] = steps.map((step) =>
+      step.type === "create_sandbox" ? { ...step, snapshotId } : step,
+    );
+
+    return this._startRun(wfName, replaySteps);
   }
 
   async resumeRun(
@@ -610,13 +651,17 @@ export class DrejClient {
     );
   }
 
-  private async _startRun(name: string, steps: StepDef[]): Promise<WorkflowRun> {
+  private async _startRun(
+    name: string,
+    steps: StepDef[],
+    snapshotConfig?: SnapshotConfig,
+  ): Promise<WorkflowRun> {
     const res = await fetch(
       `${this.baseUrl}/v1/workflows/${encodeURIComponent(name)}/runs`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ steps }),
+        body: JSON.stringify({ steps, ...(snapshotConfig ? { snapshotConfig } : {}) }),
       },
     );
     if (!res.ok) throw new DrejError("drej API error", res.status);

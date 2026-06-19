@@ -167,16 +167,19 @@ export class ExecClient {
   }
 
   async uploadFile(path: string, content: Blob | BufferSource | string): Promise<void> {
-    const blob = content instanceof Blob ? content : new Blob([content]);
+    // execd requires File objects (not Blob) so Content-Disposition includes a filename attribute.
     const formData = new FormData();
-    formData.append("file", blob, path.split("/").pop());
-    formData.append("path", path);
+    formData.append("metadata", new File([JSON.stringify({ path })], "metadata.json", { type: "application/json" }));
+    formData.append("file", new File([content], path.split("/").pop() ?? "file", { type: "application/octet-stream" }));
     const res = await fetch(`${this.baseUrl}/files/upload`, {
       method: "POST",
       headers: this.authHeader,
       body: formData,
     });
-    if (!res.ok) throw new Error(`execd error ${res.status}`);
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(text || `execd error ${res.status}`);
+    }
   }
 
   async downloadFile(path: string): Promise<ReadableStream<Uint8Array>> {

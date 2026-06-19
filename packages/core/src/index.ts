@@ -24,5 +24,6 @@ export type {
   WorkflowCheckpoint,
   WorkflowStatus,
   WorkflowDeps,
+  WorkflowHooks,
 } from "./workflow";
 export { Workflow } from "./workflow";

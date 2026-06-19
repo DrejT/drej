@@ -11,6 +11,7 @@ import {
   type WorkflowStep,
   type WorkflowRunContext,
   type ILedger,
+  type ISandboxControl,
 } from "@drej/core";
 
 const BASE_URL = process.env.OPEN_SANDBOX_BASE_URL ?? "http://localhost:8080";
@@ -366,6 +367,34 @@ function buildStep(def: StepDef): WorkflowStep {
   }
 }
 
+// ── Snapshot helpers ───────────────────────────────────────────────────────
+
+interface SnapshotConfig {
+  afterSteps?: number[];
+  everyNSteps?: number;
+}
+
+function shouldSnapshot(config: SnapshotConfig, stepIndex: number): boolean {
+  if (config.afterSteps?.includes(stepIndex)) return true;
+  if (config.everyNSteps && (stepIndex + 1) % config.everyNSteps === 0) return true;
+  return false;
+}
+
+async function waitForSnapshot(
+  control: ISandboxControl,
+  snapshotId: string,
+  timeoutMs = 120_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const snap = await control.getSnapshot(snapshotId);
+    if (snap.state === "Ready") return;
+    if (snap.state === "Failed") throw new Error(`Snapshot ${snapshotId} failed`);
+    await new Promise<void>((r) => setTimeout(r, 2_000));
+  }
+  throw new Error(`Snapshot ${snapshotId} did not become ready within ${timeoutMs}ms`);
+}
+
 // ── SSE helpers ────────────────────────────────────────────────────────────
 
 const enc = new TextEncoder();
@@ -404,6 +433,7 @@ function workflowSseResponse(
   steps: WorkflowStep[],
   deps: WorkflowDeps,
   resumeMode: boolean,
+  snapshotConfig?: SnapshotConfig,
 ): Response {
   return new Response(
     new ReadableStream({
@@ -414,14 +444,35 @@ function workflowSseResponse(
         const teeLedger: ILedger = {
           async append(entry) {
             await deps.ledger.append(entry);
-            emit(entry);
+            try { emit(entry); } catch { /* client disconnected — disk write already succeeded */ }
           },
           readAll: (name, id) => deps.ledger.readAll(name, id),
           lastCheckpoint: (name, id) => deps.ledger.lastCheckpoint(name, id),
           listRuns: (name) => deps.ledger.listRuns(name),
         };
 
-        const teeDeps: WorkflowDeps = { ...deps, ledger: teeLedger };
+        const snapshotHook: WorkflowDeps["hooks"] = snapshotConfig
+          ? {
+              async onStepComplete({ workflowName: wfName, runId: rid, stepIndex, output }) {
+                if (!shouldSnapshot(snapshotConfig, stepIndex)) return;
+                const sandboxId = (output as Record<string, unknown>)?.sandboxId;
+                if (typeof sandboxId !== "string") return;
+                const snap = await deps.control.createSnapshot(sandboxId);
+                await waitForSnapshot(deps.control, snap.id);
+                const entry = {
+                  ts: Date.now(),
+                  workflowName: wfName,
+                  runId: rid,
+                  stepIndex,
+                  event: LedgerEvent.Snapshot,
+                  payload: { snapshotId: snap.id, sandboxId },
+                };
+                await teeLedger.append(entry);
+              },
+            }
+          : undefined;
+
+        const teeDeps: WorkflowDeps = { ...deps, ledger: teeLedger, hooks: snapshotHook };
 
         // First event tells the client the auto-generated run ID
         emit({ event: LedgerEvent.RunStarted, workflowName, runId, stepIndex: -1, ts: Date.now(), payload: { workflowName, runId } });
@@ -827,11 +878,18 @@ const app = new Elysia()
     ({ params, body }) => {
       const runId = crypto.randomUUID();
       const steps = (body.steps as unknown as StepDef[]).map(buildStep);
-      return workflowSseResponse(params.name, runId, steps, workflowDeps, false);
+      const snapshotConfig = body.snapshotConfig as SnapshotConfig | undefined;
+      return workflowSseResponse(params.name, runId, steps, workflowDeps, false, snapshotConfig);
     },
     {
       body: t.Object({
         steps: t.Array(StepSchema),
+        snapshotConfig: t.Optional(
+          t.Object({
+            afterSteps: t.Optional(t.Array(t.Number())),
+            everyNSteps: t.Optional(t.Number()),
+          }),
+        ),
       }),
     },
   )

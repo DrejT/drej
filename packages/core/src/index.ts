@@ -9,6 +9,8 @@ export type {
   ISandboxControl,
   ISandboxExec,
   IExecClientFactory,
+  SnapshotState,
+  SnapshotInfo,
 } from "./types";
 
 export { LedgerEvent } from "./ledger";

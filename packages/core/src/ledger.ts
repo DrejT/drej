@@ -9,6 +9,7 @@ export enum LedgerEvent {
   WorkflowFailed = "workflow_failed",
   Checkpoint = "checkpoint",
   ExecEvent = "exec_event",
+  Snapshot = "snapshot",
 }
 
 export interface LedgerEntry {

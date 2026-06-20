@@ -8,7 +8,7 @@ This directory is managed by [Changesets](https://github.com/changesets/changese
 bunx changeset
 ```
 
-Follow the prompts — pick the package (`@drej/sdk`), bump type (`patch` / `minor` / `major`), and write a short description. Commit the generated `.md` file alongside your PR.
+Follow the prompts — pick the package (`@drejt/sdk`), bump type (`patch` / `minor` / `major`), and write a short description. Commit the generated `.md` file alongside your PR.
 
 ## Release flow
 

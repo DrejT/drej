@@ -10,7 +10,7 @@ import {
   type LedgerEntry,
   type SnapshotConfig,
   type StepDef,
-} from "@drej/core";
+} from "@drejt/core";
 import {
   ControlClient,
   type Sandbox,
@@ -21,7 +21,7 @@ import {
   type ListSnapshotsOptions,
   type DiagnosticLog,
   type DiagnosticEvent,
-} from "@drej/opensandbox";
+} from "@drejt/opensandbox";
 import type { WorkflowBuilder } from "./workflow";
 
 export { LedgerEvent };
@@ -35,8 +35,8 @@ export type {
   ListSnapshotsOptions,
   DiagnosticLog,
   DiagnosticEvent,
-} from "@drej/opensandbox";
-export type { SandboxStatus, SnapshotState, Resources, ImageSpec, ImageAuth } from "@drej/opensandbox";
+} from "@drejt/opensandbox";
+export type { SandboxStatus, SnapshotState, Resources, ImageSpec, ImageAuth } from "@drejt/opensandbox";
 
 /** Thrown when an OpenSandbox API call returns a non-2xx response. */
 export class DrejError extends Error {
@@ -58,8 +58,8 @@ export interface DrejClientOptions {
   /**
    * Storage adapter for persisting workflow events.
    *
-   * Pass `new SQLiteAdapter("./drej.db")` from `@drej/sqlite` for local use, or
-   * `new PostgresAdapter(connectionString)` from `@drej/postgres` for production.
+   * Pass `new SQLiteAdapter("./drej.db")` from `@drejt/sqlite` for local use, or
+   * `new PostgresAdapter(connectionString)` from `@drejt/postgres` for production.
    * You can also supply any custom `IStorageAdapter` implementation.
    */
   adapter: IStorageAdapter;
@@ -112,7 +112,7 @@ export class WorkflowRun implements AsyncIterable<WorkflowEvent> {
  * @example
  * ```ts
  * import { DrejClient, workflow } from "drej";
- * import { SQLiteAdapter } from "@drej/sqlite";
+ * import { SQLiteAdapter } from "@drejt/sqlite";
  *
  * const client = new DrejClient({
  *   baseUrl: "http://localhost:8080",

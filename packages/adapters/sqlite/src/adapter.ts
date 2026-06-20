@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import type { IStorageAdapter, LedgerEntry, LedgerEvent } from "@drej/core";
+import type { IStorageAdapter, LedgerEntry, LedgerEvent } from "@drejt/core";
 import { MIGRATION_SQL } from "./migrations";
 
 type Row = {

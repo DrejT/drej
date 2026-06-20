@@ -1,6 +1,6 @@
 import type { IStorageAdapter, LedgerEntry } from "./ledger";
 import { LedgerEvent } from "./ledger";
-import type { ControlClient, ExecClient } from "@drej/opensandbox";
+import type { ControlClient, ExecClient } from "@drejt/opensandbox";
 import type { ILogger } from "./logger";
 import { noopLogger } from "./logger";
 

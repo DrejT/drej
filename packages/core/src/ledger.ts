@@ -44,12 +44,12 @@ export interface LedgerEntry {
  * Persistence interface for workflow event storage.
  *
  * Implement this interface to plug in any storage backend. drej ships two
- * official implementations: `@drej/sqlite` (local dev, zero infra) and
- * `@drej/postgres` (production).
+ * official implementations: `@drejt/sqlite` (local dev, zero infra) and
+ * `@drejt/postgres` (production).
  *
  * @example
  * ```ts
- * import { SQLiteAdapter } from "@drej/sqlite";
+ * import { SQLiteAdapter } from "@drejt/sqlite";
  * const client = new DrejClient({ baseUrl, adapter: new SQLiteAdapter("./drej.db") });
  * await client.connect();
  * ```

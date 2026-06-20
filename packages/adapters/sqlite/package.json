@@ -1,10 +1,10 @@
 {
-  "name": "@drej/sqlite",
+  "name": "@drejt/sqlite",
   "version": "0.1.0",
   "private": false,
   "main": "./src/index.ts",
   "dependencies": {
-    "@drej/core": "workspace:*"
+    "@drejt/core": "workspace:*"
   },
   "devDependencies": {
     "bun-types": "latest",

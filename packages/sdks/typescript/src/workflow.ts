@@ -1,5 +1,5 @@
-import type { StepDef, Predicate } from "@drej/core";
-import type { ImageSpec, Resources } from "@drej/opensandbox";
+import type { StepDef, Predicate } from "@drejt/core";
+import type { ImageSpec, Resources } from "@drejt/opensandbox";
 
 // Placeholder that serialises to {{name}} inside template literals.
 // Used as the `item` parameter in forEach callbacks so users write
@@ -11,15 +11,24 @@ class LoopVar {
   }
 }
 
+/** Represents the current loop variable inside a `forEach` callback. Serialises to `{{name}}`. */
 export type LoopItem = { toString(): string };
 
+/** Options for creating a sandbox within a workflow step. */
 export type SandboxOpts = {
+  /** Container image to boot. Omit when booting from a `snapshotId`. */
   image?: ImageSpec;
+  /** Boot from this snapshot ID instead of pulling a fresh image. */
   snapshotId?: string;
+  /** Maximum seconds before the sandbox is forcibly terminated. */
   timeout?: number;
+  /** Override the container entrypoint. Defaults to `["tail", "-f", "/dev/null"]`. */
   entrypoint?: string[];
+  /** Environment variables injected into every exec call in this sandbox. */
   env?: Record<string, string>;
+  /** Arbitrary key/value metadata attached to the sandbox for filtering. */
   metadata?: Record<string, string>;
+  /** CPU and memory limits. */
   resourceLimits?: Resources;
 };
 
@@ -35,21 +44,50 @@ function wrapSteps(steps: StepDef[]): StepDef {
   return steps.length === 1 ? steps[0] : { type: "sequence", steps };
 }
 
-// ── SandboxStepBuilder ────────────────────────────────────────────────────────
-
+/**
+ * Fluent builder for steps that run inside a sandbox.
+ * Returned by the callback in `workflow().sandbox(opts, s => s.exec(...))`.
+ */
 export class SandboxStepBuilder {
   protected _steps: StepDef[] = [];
 
+  /**
+   * Run a shell command inside the sandbox.
+   *
+   * @example
+   * ```ts
+   * s.exec("npm ci").exec("npm test")
+   * s.exec("python script.py", { cwd: "/app" })
+   * ```
+   */
   exec(command: string, opts?: { cwd?: string; envs?: Record<string, string> }): this {
     this._steps.push({ type: "exec_command", command, ...opts });
     return this;
   }
 
+  /**
+   * Write a file into the sandbox filesystem.
+   *
+   * @param encoding Defaults to `utf8`. Use `base64` for binary content.
+   *
+   * @example
+   * ```ts
+   * s.writeFile("/app/config.json", JSON.stringify(config))
+   * ```
+   */
   writeFile(path: string, content: string, encoding?: "utf8" | "base64"): this {
     this._steps.push({ type: "write_file", path, content, ...(encoding ? { encoding } : {}) });
     return this;
   }
 
+  /**
+   * Retry a group of steps up to `maxAttempts` times on failure.
+   *
+   * @example
+   * ```ts
+   * s.retry(3, (r) => r.exec("flaky-command"), { backoff: "exponential" })
+   * ```
+   */
   retry(
     maxAttempts: number,
     fn: (s: SandboxStepBuilder) => SandboxStepBuilder,
@@ -61,6 +99,20 @@ export class SandboxStepBuilder {
     return this;
   }
 
+  /**
+   * Iterate over a list and run steps for each item.
+   *
+   * @param source An array literal, or `{ from: "prevStepOutputKey" }` to read
+   *   the list from a previous step's output at runtime.
+   * @param opts.concurrency Run up to N iterations in parallel.
+   * @param opts.as Variable name to use inside the callback (default: `"item"`).
+   *
+   * @example
+   * ```ts
+   * s.forEach(["a.txt", "b.txt"], (s, item) => s.exec(`cat ${item}`))
+   * s.forEach({ from: "files" }, { concurrency: 4 }, (s, item) => s.exec(`process ${item}`))
+   * ```
+   */
   forEach(source: ForEachSource, fn: ForEachCallback): this;
   forEach(source: ForEachSource, opts: ForEachOpts, fn: ForEachCallback): this;
   forEach(
@@ -92,6 +144,19 @@ export class SandboxStepBuilder {
     return this;
   }
 
+  /**
+   * Conditionally execute steps based on a predicate evaluated at runtime.
+   *
+   * @param condition A predicate object (e.g. `{ field: "exitCode", eq: 0 }`).
+   *
+   * @example
+   * ```ts
+   * s.when({ field: "exitCode", eq: 0 },
+   *   (s) => s.exec("echo success"),
+   *   (s) => s.exec("echo failed"),
+   * )
+   * ```
+   */
   when(
     condition: Predicate,
     thenFn: (s: SandboxStepBuilder) => SandboxStepBuilder,
@@ -118,6 +183,18 @@ export class SandboxStepBuilder {
     return this;
   }
 
+  /**
+   * Run multiple branches concurrently inside the same sandbox.
+   * All branches share the sandbox filesystem and environment.
+   *
+   * @example
+   * ```ts
+   * s.parallel((p) => p
+   *   .branch((b) => b.exec("lint"))
+   *   .branch((b) => b.exec("test")),
+   * )
+   * ```
+   */
   parallel(fn: (p: SandboxParallelBuilder) => SandboxParallelBuilder): this {
     const pb = new SandboxParallelBuilder();
     fn(pb);
@@ -180,13 +257,28 @@ class WorkflowParallelBuilder {
   }
 }
 
-// ── WorkflowBuilder ───────────────────────────────────────────────────────────
-
+/**
+ * Top-level workflow builder. Create one with `workflow(name)` then chain
+ * `.sandbox()` or `.parallel()` calls to define steps.
+ *
+ * @example
+ * ```ts
+ * const wf = workflow("deploy")
+ *   .sandbox({ image: { uri: "node:20-slim" } }, (s) =>
+ *     s.exec("npm ci").exec("npm run build"),
+ *   );
+ * const run = await client.run(wf);
+ * ```
+ */
 export class WorkflowBuilder {
   private _steps: StepDef[] = [];
 
   constructor(private _name: string) {}
 
+  /**
+   * Add a sandbox step: creates a fresh sandbox, runs the steps defined in `fn`,
+   * then deletes the sandbox. The sandbox is torn down even if a step fails.
+   */
   sandbox(opts: SandboxOpts, fn: (s: SandboxStepBuilder) => SandboxStepBuilder): this {
     const sb = new SandboxStepBuilder();
     fn(sb);
@@ -210,6 +302,22 @@ export class WorkflowBuilder {
   }
 }
 
+/**
+ * Create a new workflow with the given name.
+ *
+ * The name is used as the storage key for the run ledger — use a stable,
+ * descriptive name (e.g. `"deploy-api"`, `"nightly-report"`).
+ *
+ * @example
+ * ```ts
+ * const run = await client.run(
+ *   workflow("hello-world").sandbox(
+ *     { image: { uri: "node:20-slim" } },
+ *     (s) => s.exec("echo hello"),
+ *   ),
+ * );
+ * ```
+ */
 export function workflow(name: string): WorkflowBuilder {
   return new WorkflowBuilder(name);
 }

@@ -6,7 +6,7 @@
  *   parallel — runs branches concurrently inside the same sandbox
  */
 import { DrejClient, workflow } from "drej";
-import { SQLiteAdapter } from "@drej/sqlite";
+import { SQLiteAdapter } from "@drejt/sqlite";
 
 const client = new DrejClient({
   baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://localhost:8080",

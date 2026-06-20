@@ -1,5 +1,5 @@
 {
-  "name": "@drej/core",
+  "name": "@drejt/core",
   "version": "0.1.0",
   "main": "./src/index.ts",
   "types": "./dist/index.d.ts",
@@ -10,7 +10,7 @@
     "build:types": "tsc --project tsconfig.build.json"
   },
   "dependencies": {
-    "@drej/opensandbox": "workspace:*"
+    "@drejt/opensandbox": "workspace:*"
   },
   "devDependencies": {
     "bun-types": "latest",

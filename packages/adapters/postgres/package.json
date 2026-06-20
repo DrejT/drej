@@ -1,11 +1,11 @@
 {
-  "name": "@drej/postgres",
+  "name": "@drejt/postgres",
   "version": "0.1.0",
   "private": false,
   "main": "./src/index.ts",
   "dependencies": {
     "postgres": "^3.4.5",
-    "@drej/core": "workspace:*"
+    "@drejt/core": "workspace:*"
   },
   "devDependencies": {
     "bun-types": "latest",

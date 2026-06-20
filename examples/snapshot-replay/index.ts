@@ -6,7 +6,7 @@
  * updated script against the same environment.
  */
 import { DrejClient, workflow } from "drej";
-import { SQLiteAdapter } from "@drej/sqlite";
+import { SQLiteAdapter } from "@drejt/sqlite";
 
 const client = new DrejClient({
   baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://localhost:8080",

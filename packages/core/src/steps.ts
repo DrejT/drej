@@ -1,5 +1,5 @@
-import { ControlClient, ExecClient } from "@drej/opensandbox";
-import type { SSEEvent } from "@drej/opensandbox";
+import { ControlClient, ExecClient } from "@drejt/opensandbox";
+import type { SSEEvent } from "@drejt/opensandbox";
 import { LedgerEvent } from "./ledger";
 import type { WorkflowRunContext, WorkflowStep } from "./workflow";
 

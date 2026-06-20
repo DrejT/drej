@@ -31,6 +31,7 @@ bun run typecheck
 bunx tsc --noEmit --strict --project packages/opensandbox/tsconfig.json
 bunx tsc --noEmit --strict --project packages/core/tsconfig.json
 bunx tsc --noEmit --strict --project packages/sdks/typescript/tsconfig.json
+bunx tsc --noEmit --strict --project packages/adapters/postgres/tsconfig.json
 
 # Changesets (required on every PR touching publishable packages)
 bunx changeset        # add a changeset
@@ -46,7 +47,7 @@ bunx changeset status # verify one exists
 ```
 packages/core/              — Workflow engine (no runtime deps outside opensandbox)
   types.ts / steps.ts       — StepDef union and buildStep() factory
-  ledger.ts                 — ILedger, MemoryLedger, NdjsonLedger, LedgerEvent
+  ledger.ts                 — IStorageAdapter, MemoryAdapter, NdjsonAdapter, LedgerEvent
   workflow.ts               — Workflow class (run, rollback, resumeFromLedger), WorkflowHooks
 
 packages/opensandbox/       — OpenSandbox HTTP clients
@@ -57,6 +58,10 @@ packages/opensandbox/       — OpenSandbox HTTP clients
 packages/sdks/typescript/   — Public TypeScript SDK (published to npm as "drej")
   client.ts                 — DrejClient: runs workflows in-process, exposes sandbox/snapshot mgmt
   workflow.ts               — WorkflowBuilder, SandboxStepBuilder (fluent builder API)
+
+packages/adapters/postgres/ — Postgres storage adapter (published as "@drej/adapter-postgres")
+  src/adapter.ts            — PostgresAdapter implementing IStorageAdapter
+  src/migrations.ts         — Idempotent CREATE TABLE IF NOT EXISTS schema
 ```
 
 ### Key design points
@@ -67,7 +72,7 @@ packages/sdks/typescript/   — Public TypeScript SDK (published to npm as "drej
 
 **Async event stream**: `client.run()` returns a `WorkflowRun` which is an `AsyncIterable<WorkflowEvent>`. Callers `for await` over events in real-time as steps execute. Every event is also persisted to the ledger simultaneously (tee pattern inside `DrejClient._makeStream`).
 
-**Ledger**: `DrejClientOptions.ledgerDir` enables a durable NDJSON ledger on disk. Omit it for an in-memory ledger. The ledger backs `resumeRun()` and `replayFromSnapshot()`.
+**Storage adapter**: `DrejClientOptions.adapter` accepts any `IStorageAdapter` implementation — pass `new PostgresAdapter(connectionString)` for production. `ledgerDir` is shorthand for an `NdjsonAdapter`. Omit both for an in-memory `MemoryAdapter`. Call `await client.connect()` before first use when using a DB-backed adapter; `await client.close()` on shutdown. The adapter backs `resumeRun()`, `replayFromSnapshot()`, `listRuns()`, and `getRunLedger()`.
 
 **Hooks**: `WorkflowHooks` (defined in `packages/core/workflow.ts`) provides lifecycle callbacks: `onStepStart`, `onStepComplete`, `onStepFailed`, `onStepRolledBack`, `onWorkflowComplete`, `onWorkflowFailed`. Pass via `WorkflowDeps.hooks`.
 
@@ -87,7 +92,8 @@ packages/sdks/typescript/   — Public TypeScript SDK (published to npm as "drej
 |---|---|
 | `baseUrl` | OpenSandbox server URL (e.g. `http://localhost:8080`) |
 | `apiKey` | OpenSandbox API key (empty string for local dev) |
-| `ledgerDir` | Directory for durable NDJSON ledger (omit for in-memory) |
+| `adapter` | Custom `IStorageAdapter` (e.g. `new PostgresAdapter(url)`) |
+| `ledgerDir` | Shorthand for `new NdjsonAdapter(dir)` — durable NDJSON on disk |
 
 ## Local OpenSandbox setup
 

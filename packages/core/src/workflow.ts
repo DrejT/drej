@@ -1,4 +1,4 @@
-import type { ILedger, LedgerEntry } from "./ledger";
+import type { IStorageAdapter, LedgerEntry } from "./ledger";
 import { LedgerEvent } from "./ledger";
 import type { ControlClient, ExecClient } from "@drej/opensandbox";
 import type { ILogger } from "./logger";
@@ -41,7 +41,7 @@ export interface WorkflowHooks {
 export interface WorkflowDeps {
   control: ControlClient;
   resolveExec: (sandboxId: string) => Promise<ExecClient>;
-  ledger: ILedger;
+  ledger: IStorageAdapter;
   logger?: ILogger;
   hooks?: WorkflowHooks;
 }

@@ -1,0 +1,1 @@
+export { PostgresAdapter } from "./adapter";

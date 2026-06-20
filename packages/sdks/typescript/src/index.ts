@@ -5,6 +5,7 @@ export type {
   SnapshotConfig,
   WorkflowEvent,
   StepDef,
+  IStorageAdapter,
   Sandbox,
   SandboxState,
   SandboxStatus,

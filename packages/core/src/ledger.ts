@@ -23,14 +23,16 @@ export interface LedgerEntry {
   error?: string;
 }
 
-export interface ILedger {
+export interface IStorageAdapter {
+  connect?(): Promise<void>;
+  close?(): Promise<void>;
   append(entry: LedgerEntry): Promise<void>;
   readAll(workflowName: string, runId: string): Promise<LedgerEntry[]>;
   lastCheckpoint(workflowName: string, runId: string): Promise<LedgerEntry | null>;
   listRuns(workflowName: string): Promise<string[]>;
 }
 
-export class MemoryLedger implements ILedger {
+export class MemoryAdapter implements IStorageAdapter {
   private readonly entries: LedgerEntry[] = [];
 
   async append(entry: LedgerEntry): Promise<void> {
@@ -61,7 +63,7 @@ export class MemoryLedger implements ILedger {
 // Each entry gets its own file: <dir>/<workflowName>/<runId>/<ts>-<rand>.ndjson
 // Bun.write to a new path never truncates existing entries — safe on crash.
 // readAll globs all entry files and sorts by the ts field for deterministic order.
-export class NdjsonLedger implements ILedger {
+export class NdjsonAdapter implements IStorageAdapter {
   constructor(private readonly dir: string) {}
 
   private runDir(workflowName: string, runId: string): string {

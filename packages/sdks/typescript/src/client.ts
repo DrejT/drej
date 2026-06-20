@@ -1,14 +1,14 @@
 import {
   Workflow,
-  NdjsonLedger,
-  MemoryLedger,
+  NdjsonAdapter,
+  MemoryAdapter,
   LedgerEvent,
   buildStep,
   resolveExecClient,
   shouldSnapshot,
   waitForSnapshot,
   type WorkflowDeps,
-  type ILedger,
+  type IStorageAdapter,
   type LedgerEntry,
   type SnapshotConfig,
   type StepDef,
@@ -27,7 +27,7 @@ import {
 import type { WorkflowBuilder } from "./workflow";
 
 export { LedgerEvent };
-export type { LedgerEntry, SnapshotConfig, StepDef };
+export type { LedgerEntry, SnapshotConfig, StepDef, IStorageAdapter };
 export type {
   Sandbox,
   SandboxState,
@@ -55,7 +55,12 @@ export interface DrejClientOptions {
   baseUrl: string;
   /** OpenSandbox API key (empty string for local dev) */
   apiKey?: string;
-  /** Directory for durable NDJSON ledger. Omit to use an in-memory ledger. */
+  /**
+   * Pluggable storage adapter. Implement IStorageAdapter to use any database.
+   * Defaults to an in-memory adapter when omitted.
+   */
+  adapter?: IStorageAdapter;
+  /** Directory for durable NDJSON storage. Shorthand for `adapter: new NdjsonAdapter(dir)`. */
   ledgerDir?: string;
 }
 
@@ -64,7 +69,7 @@ export interface RunOptions {
 }
 
 // WorkflowEvent is a ledger entry — the same record emitted during execution
-// and stored in the ledger.
+// and stored in the adapter.
 export type WorkflowEvent = LedgerEntry;
 
 export class WorkflowRun implements AsyncIterable<WorkflowEvent> {
@@ -81,16 +86,30 @@ export class WorkflowRun implements AsyncIterable<WorkflowEvent> {
 
 export class DrejClient {
   private readonly control: ControlClient;
-  private readonly ledger: ILedger;
+  private readonly adapter: IStorageAdapter;
 
   constructor(options: DrejClientOptions) {
     this.control = new ControlClient({
       baseUrl: options.baseUrl,
       apiKey: options.apiKey ?? "",
     });
-    this.ledger = options.ledgerDir
-      ? new NdjsonLedger(options.ledgerDir)
-      : new MemoryLedger();
+    if (options.adapter) {
+      this.adapter = options.adapter;
+    } else if (options.ledgerDir) {
+      this.adapter = new NdjsonAdapter(options.ledgerDir);
+    } else {
+      this.adapter = new MemoryAdapter();
+    }
+  }
+
+  /** Call once before first use when using a DB-backed adapter. */
+  async connect(): Promise<void> {
+    await this.adapter.connect?.();
+  }
+
+  /** Releases adapter resources (e.g. closes DB connection pool). */
+  async close(): Promise<void> {
+    await this.adapter.close?.();
   }
 
   // ── Sandbox management ────────────────────────────────────────────────────
@@ -185,7 +204,7 @@ export class DrejClient {
     runId: string,
     w: WorkflowBuilder,
   ): Promise<WorkflowRun> {
-    const entries = await this.ledger.readAll(name, runId);
+    const entries = await this.adapter.readAll(name, runId);
     const snapEntry = [...entries].reverse().find((e) => e.event === LedgerEvent.Snapshot);
     if (!snapEntry) throw new DrejError(`No snapshot found in ledger for ${name}/${runId}`, 404);
     const { snapshotId } = snapEntry.payload as { snapshotId: string };
@@ -219,14 +238,14 @@ export class DrejClient {
     return new WorkflowRun(name, runId, stream);
   }
 
-  // ── Ledger access ─────────────────────────────────────────────────────────
+  // ── Adapter access ────────────────────────────────────────────────────────
 
   listRuns(workflowName: string): Promise<string[]> {
-    return this.ledger.listRuns(workflowName);
+    return this.adapter.listRuns(workflowName);
   }
 
   getRunLedger(workflowName: string, runId: string): Promise<WorkflowEvent[]> {
-    return this.ledger.readAll(workflowName, runId) as Promise<WorkflowEvent[]>;
+    return this.adapter.readAll(workflowName, runId) as Promise<WorkflowEvent[]>;
   }
 
   // ── Internal ──────────────────────────────────────────────────────────────
@@ -269,7 +288,7 @@ export class DrejClient {
   }
 
   // Runs `execute` in the background and returns an async generator that
-  // yields WorkflowEvents in real-time as they are appended to the ledger.
+  // yields WorkflowEvents in real-time as they are appended to the adapter.
   private _makeStream(
     name: string,
     runId: string,
@@ -286,20 +305,20 @@ export class DrejClient {
       fn?.();
     };
 
-    const teeLedger: ILedger = {
+    const teeAdapter: IStorageAdapter = {
       append: async (entry) => {
-        await this.ledger.append(entry);
+        await this.adapter.append(entry);
         enqueue(entry);
       },
-      readAll: (n, id) => this.ledger.readAll(n, id),
-      lastCheckpoint: (n, id) => this.ledger.lastCheckpoint(n, id),
-      listRuns: (n) => this.ledger.listRuns(n),
+      readAll: (n, id) => this.adapter.readAll(n, id),
+      lastCheckpoint: (n, id) => this.adapter.lastCheckpoint(n, id),
+      listRuns: (n) => this.adapter.listRuns(n),
     };
 
     const teeDeps: WorkflowDeps = {
       control: this.control,
       resolveExec: (sandboxId) => resolveExecClient(this.control, sandboxId),
-      ledger: teeLedger,
+      ledger: teeAdapter,
     };
 
     // Emit run_started before kicking off execution

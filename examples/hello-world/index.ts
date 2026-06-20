@@ -1,33 +1,13 @@
-import { DrejClient, workflow } from "../packages/sdks/typescript/src/index";
+import { DrejClient, workflow } from "drej";
 
 const client = new DrejClient({
   baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://localhost:8080",
   apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",
 });
 
-const script = `
-#!/bin/bash
-set -euo pipefail
-
-echo "=== system info ==="
-uname -a
-echo ""
-
-echo "=== disk usage ==="
-df -h /
-echo ""
-
-echo "=== writing a file and reading it back ==="
-echo "hello from drej" > /tmp/drej-test.txt
-cat /tmp/drej-test.txt
-echo ""
-
-echo "=== done ==="
-`.trim();
-
-const w = workflow("bash-script").sandbox(
+const w = workflow("hello-world").sandbox(
   { image: { uri: "ubuntu:22.04" }, resourceLimits: { cpu: "500m", memory: "512Mi" } },
-  (s) => s.exec(script),
+  (s) => s.exec('echo "hello world"'),
 );
 
 const run = await client.run(w);

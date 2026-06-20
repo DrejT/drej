@@ -4,12 +4,13 @@
  * An initial run installs dependencies and captures a snapshot. A replay run
  * boots from that snapshot directly — skipping the install — and runs an
  * updated script against the same environment.
- *
- * Usage: bun run examples/snapshot-replay.ts
  */
-import { DrejClient, workflow } from "../packages/sdks/typescript/src/index";
+import { DrejClient, workflow } from "drej";
 
-const client = new DrejClient({\n  baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://localhost:8080",\n  apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",\n});
+const client = new DrejClient({
+  baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://localhost:8080",
+  apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",
+});
 
 const WORKFLOW = "snapshot-replay-demo";
 const sandbox = { image: { uri: "python:3.11-slim" }, resourceLimits: { cpu: "1", memory: "512Mi" } };
@@ -42,18 +43,15 @@ const run1 = await client.run(
 
 console.log(`run: ${run1.id}`);
 
-let snapshotId: string | undefined;
 for await (const ev of run1) {
   if (ev.event === "exec_event") {
     const { text } = ev.payload as { text?: string };
     if (text) process.stdout.write(text);
   } else if (ev.event === "snapshot") {
-    snapshotId = (ev.payload as { snapshotId: string }).snapshotId;
+    const { snapshotId } = ev.payload as { snapshotId: string };
     console.log(`snapshot: ${snapshotId}`);
   }
 }
-
-if (!snapshotId) throw new Error("no snapshot captured");
 
 // ── Replay ────────────────────────────────────────────────────────────────────
 // Boots from the snapshot (deps already present), skips the install step.

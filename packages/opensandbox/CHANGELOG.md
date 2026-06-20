@@ -1,5 +1,14 @@
 # @drej/opensandbox
 
+## 0.1.1
+
+### Patch Changes
+
+- 0ea4c33: Rename npm scope from `@drej/*` to `@drejt/*` and add TSDoc to all public API surfaces.
+
+  - All workspace packages now published under `@drejt/*` (e.g. `@drejt/sqlite`, `@drejt/postgres`)
+  - `DrejClient`, `WorkflowBuilder`, `SandboxStepBuilder`, `IStorageAdapter`, `LedgerEvent`, `SandboxOpts` and all their members now have hover documentation visible in VS Code
+
 ## 0.1.0
 
 ### Minor Changes

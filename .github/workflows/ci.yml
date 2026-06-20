@@ -20,6 +20,9 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Build workspace declarations
+        run: bunx tsc --project packages/opensandbox/tsconfig.build.json && bunx tsc --project packages/core/tsconfig.build.json
+
       - name: Typecheck opensandbox
         run: bunx tsc --noEmit --strict
         working-directory: packages/opensandbox

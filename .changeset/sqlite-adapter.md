@@ -4,9 +4,10 @@
 
 Introduce `@drej/sqlite` storage adapter.
 
-`SQLiteAdapter` implements `IStorageAdapter` via Bun's built-in `bun:sqlite` — zero extra dependencies and no infrastructure required. Data persists across restarts, making it a better local dev option than `NdjsonAdapter` without requiring Postgres.
+`SQLiteAdapter` implements `IStorageAdapter` via Bun's built-in `bun:sqlite` — zero extra dependencies and no infrastructure required. Data persists across restarts, making it suitable for local development and single-process production workloads.
 
 ```ts
+import { DrejClient } from "drej";
 import { SQLiteAdapter } from "@drej/sqlite";
 
 const client = new DrejClient({

@@ -6,6 +6,7 @@
     "start": "bun index.ts"
   },
   "dependencies": {
-    "drej": "^0.5.0"
+    "drej": "^0.5.0",
+    "@drej/sqlite": "^0.0.1"
   }
 }

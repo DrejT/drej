@@ -7,9 +7,6 @@
   "scripts": {
     "typecheck": "bunx tsc --noEmit"
   },
-  "dependencies": {
-    "@drej/core": "workspace:*"
-  },
   "devDependencies": {
     "bun-types": "latest",
     "typescript": "latest"

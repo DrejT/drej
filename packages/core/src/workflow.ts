@@ -1,6 +1,6 @@
 import type { ILedger, LedgerEntry } from "./ledger";
 import { LedgerEvent } from "./ledger";
-import type { ISandboxControl, IExecClientFactory } from "./types";
+import type { ControlClient, ExecClient } from "@drej/opensandbox";
 import type { ILogger } from "./logger";
 import { noopLogger } from "./logger";
 
@@ -8,8 +8,8 @@ export interface WorkflowRunContext {
   readonly workflowName: string;
   readonly runId: string;
   readonly stepIndex: number;
-  readonly control: ISandboxControl;
-  readonly execFactory: IExecClientFactory;
+  readonly control: ControlClient;
+  readonly resolveExec: (sandboxId: string) => Promise<ExecClient>;
   emit(entry: LedgerEntry): Promise<void>;
 }
 
@@ -39,8 +39,8 @@ export interface WorkflowHooks {
 }
 
 export interface WorkflowDeps {
-  control: ISandboxControl;
-  execFactory: IExecClientFactory;
+  control: ControlClient;
+  resolveExec: (sandboxId: string) => Promise<ExecClient>;
   ledger: ILedger;
   logger?: ILogger;
   hooks?: WorkflowHooks;
@@ -226,7 +226,7 @@ export class Workflow {
       runId: this.runId,
       stepIndex,
       control: this.deps.control,
-      execFactory: this.deps.execFactory,
+      resolveExec: this.deps.resolveExec,
       emit: (entry) => this.deps.ledger.append(entry),
     };
   }

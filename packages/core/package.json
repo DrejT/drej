@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "main": "./src/index.ts",
+  "dependencies": {
+    "@drej/opensandbox": "workspace:*"
+  },
   "devDependencies": {
     "bun-types": "latest",
     "typescript": "latest"

@@ -9,7 +9,7 @@
  */
 import { DrejClient, workflow } from "../packages/sdks/typescript/src/index";
 
-const client = new DrejClient({ baseUrl: process.env.DREJ_API_URL ?? "http://localhost:6000" });
+const client = new DrejClient({\n  baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://localhost:8080",\n  apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",\n});
 
 const WORKFLOW = "snapshot-replay-demo";
 const sandbox = { image: { uri: "python:3.11-slim" }, resourceLimits: { cpu: "1", memory: "512Mi" } };

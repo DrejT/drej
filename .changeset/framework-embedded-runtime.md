@@ -1,5 +1,5 @@
 ---
-"drej": major
+"drej": minor
 ---
 
 Remove the HTTP API layer. `DrejClient` now runs workflows in-process directly against OpenSandbox — no separate `drej` server required.

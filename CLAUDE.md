@@ -10,38 +10,27 @@ Reusable skill references live in `.agents/skills/<name>/SKILL.md`. Always check
 
 Available skills:
 
-- **`.agents/skills/bun/`** — Bun runtime, package manager, test runner, and bundler. Covers `bun run`, `bun install`, `bun test`, `bun build`, workspace flags, common gotchas (flag placement, lifecycle scripts, lockfile format), and key APIs (`Bun.file()`, `Bun.serve()`, `Bun.write()`).
+- **`.agents/skills/bun/`** — Bun runtime, package manager, test runner, and bundler. Covers `bun run`, `bun install`, `bun test`, `bun build`, workspace flags, common gotchas (flag placement, lifecycle scripts, lockfile format), and key APIs (`Bun.file()`, `Bun.serve()`, `Bun.write()`)
 
 Example: before writing a `bun build` command or debugging a workspace install issue, read `.agents/skills/bun/SKILL.md` for the correct flags and known pitfalls.
 
 ## What this is
 
-`drej` is a lightweight workflow orchestration engine built on top of [OpenSandbox](https://opensandbox.ai). It lets you define multi-step workflows that run inside isolated sandbox containers. Steps can create sandboxes, execute code or shell commands, and delete sandboxes. The API streams results via SSE and writes a durable NDJSON ledger to support resumption.
+`drej` is a workflow orchestration framework built on top of [OpenSandbox](https://opensandbox.ai). It lets you define multi-step workflows that run inside isolated sandbox containers. Workflows execute in-process — there is no separate drej server. The `DrejClient` talks directly to your OpenSandbox instance and streams events via an async generator.
 
 ## Commands
 
 ```bash
-# Start API server in watch mode (hot reload)
-bun run dev
-
-# Run the hello-world example against a local server
+# Run the hello-world example
 bun run examples/hello-world.ts
 
-# Typecheck each package individually (CI runs these)
-bunx tsc --noEmit --strict   # from packages/internal/opensandbox
-bunx tsc --noEmit --strict   # from packages/core
-bunx tsc --noEmit --strict   # from apps/api
-bunx tsc --noEmit --strict   # from packages/sdks/typescript
+# Typecheck all packages
+bun run typecheck
 
-# Run API directly (no watch)
-bun run apps/api/src/index.ts
-
-# Docker
-docker build -t drej-api .
-docker run --rm --network=host \
-  -e OPEN_SANDBOX_BASE_URL=http://localhost:8080 \
-  -e OPEN_SANDBOX_API_KEY="" \
-  drej-api
+# Typecheck packages individually
+bunx tsc --noEmit --strict --project packages/opensandbox/tsconfig.json
+bunx tsc --noEmit --strict --project packages/core/tsconfig.json
+bunx tsc --noEmit --strict --project packages/sdks/typescript/tsconfig.json
 
 # Changesets (required on every PR touching publishable packages)
 bunx changeset        # add a changeset
@@ -55,36 +44,36 @@ bunx changeset status # verify one exists
 ## Architecture
 
 ```
-packages/core/          — Port interfaces only (no runtime deps)
-  types.ts              — ISandboxControl, IExecClientFactory, ISandboxExec
-  ledger.ts             — ILedger, MemoryLedger, NdjsonLedger
-  workflow.ts           — Workflow class (run, rollback, resumeFromLedger)
+packages/core/              — Workflow engine (no runtime deps outside opensandbox)
+  types.ts / steps.ts       — StepDef union and buildStep() factory
+  ledger.ts                 — ILedger, MemoryLedger, NdjsonLedger, LedgerEvent
+  workflow.ts               — Workflow class (run, rollback, resumeFromLedger), WorkflowHooks
 
-packages/internal/opensandbox/   — Concrete OpenSandbox HTTP clients
-  control.ts            — ControlClient (sandbox lifecycle via REST)
-  exec.ts               — ExecClient (code/command execution via SSE)
+packages/opensandbox/       — OpenSandbox HTTP clients
+  control.ts                — ControlClient (sandbox lifecycle via REST)
+  exec.ts                   — ExecClient (code/command execution via SSE)
+  types.ts                  — Full OpenSandbox API type system
 
-apps/api/src/index.ts   — Elysia HTTP server; wires adapters → core ports
-  - Injects ControlClient + ExecClient into WorkflowDeps
-  - Defines StepDef union and buildStep() factory
-  - workflowSseResponse(): tee ledger (NdjsonLedger + live SSE)
-  - POST /v1/workflows, POST /v1/workflows/:id/resume, GET /v1/workflows/:id/ledger
-
-packages/sdks/typescript/  — Public TypeScript SDK (published to npm as "drej")
-packages/sdks/python/      — Public Python SDK
+packages/sdks/typescript/   — Public TypeScript SDK (published to npm as "drej")
+  client.ts                 — DrejClient: runs workflows in-process, exposes sandbox/snapshot mgmt
+  workflow.ts               — WorkflowBuilder, SandboxStepBuilder (fluent builder API)
 ```
 
 ### Key design points
 
-**Microkernel / hexagonal**: `packages/core` defines abstract ports (`ISandboxControl`, `IExecClientFactory`, `ILedger`). `apps/api` injects the concrete OpenSandbox adapters. The core never imports from `apps/` or `packages/internal/`.
+**In-process execution**: `DrejClient` runs workflows directly in the calling process. No HTTP server, no separate drej daemon. Instantiate `DrejClient` with your OpenSandbox URL and call `client.run(workflow(...))`.
 
-**Tee ledger**: `workflowSseResponse` wraps `NdjsonLedger` in a proxy that writes every `LedgerEntry` to disk AND streams it to the SSE response simultaneously. All exec output flows through `ctx.emit()` as `exec_event` entries.
+**Fluent builder API**: Workflows are constructed via `workflow(name).sandbox(opts, s => s.exec(...).writeFile(...))`. The builder compiles down to a `StepDef[]` which the core engine executes. Step types include `exec_command`, `exec_code`, `write_file`, `retry`, `conditional`, `loop`, `parallel`, and `sequence`.
 
-**Workflow state**: Steps pass a `WorkflowState` object (plain record) as the return value. `sandboxId` is set by `create_sandbox` and consumed by `exec_code`, `exec_command`, and `delete_sandbox`. Each step receives the previous step's output as `input`.
+**Async event stream**: `client.run()` returns a `WorkflowRun` which is an `AsyncIterable<WorkflowEvent>`. Callers `for await` over events in real-time as steps execute. Every event is also persisted to the ledger simultaneously (tee pattern inside `DrejClient._makeStream`).
+
+**Ledger**: `DrejClientOptions.ledgerDir` enables a durable NDJSON ledger on disk. Omit it for an in-memory ledger. The ledger backs `resumeRun()` and `replayFromSnapshot()`.
+
+**Hooks**: `WorkflowHooks` (defined in `packages/core/workflow.ts`) provides lifecycle callbacks: `onStepStart`, `onStepComplete`, `onStepFailed`, `onStepRolledBack`, `onWorkflowComplete`, `onWorkflowFailed`. Pass via `WorkflowDeps.hooks`.
 
 **Saga rollback**: If any step throws, `Workflow.rollback()` runs completed steps in reverse. `create_sandbox` has a rollback that calls `deleteSandbox`, preventing sandbox leaks on failure.
 
-**Resumption**: `Workflow.resumeFromLedger()` reads the last `checkpoint` entry from the NDJSON ledger to reconstruct completed-step state and restart from the next step.
+**Resumption**: `Workflow.resumeFromLedger()` reads the last `checkpoint` entry from the ledger to reconstruct completed-step state and restart from the next step.
 
 **execd readiness**: OpenSandbox reports a sandbox as "Running" before the execd process inside is ready to accept connections. `resolveExecClient()` calls `getEndpoint()` exactly once (each call returns a different ephemeral proxy port) then polls `listContexts()` until execd responds.
 
@@ -92,12 +81,13 @@ packages/sdks/python/      — Public Python SDK
 
 ## Environment variables
 
-| Variable | Default | Description |
-|---|---|---|
-| `OPEN_SANDBOX_BASE_URL` | `http://localhost:8080` | OpenSandbox server URL |
-| `OPEN_SANDBOX_API_KEY` | required | API key (empty string for local) |
-| `PORT` | `6000` | API server port |
-| `LEDGER_PATH` | `./drej.ndjson` | NDJSON ledger file path |
+`DrejClient` is configured via constructor options, not environment variables. The consuming application is responsible for reading env vars and passing them in:
+
+| Option | Description |
+|---|---|
+| `baseUrl` | OpenSandbox server URL (e.g. `http://localhost:8080`) |
+| `apiKey` | OpenSandbox API key (empty string for local dev) |
+| `ledgerDir` | Directory for durable NDJSON ledger (omit for in-memory) |
 
 ## Local OpenSandbox setup
 

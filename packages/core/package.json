@@ -1,8 +1,12 @@
 {
   "name": "@drej/core",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.0.1",
   "main": "./src/index.ts",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build:types": "tsc --project tsconfig.build.json"
+  },
   "dependencies": {
     "@drej/opensandbox": "workspace:*"
   },

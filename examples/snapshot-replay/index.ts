@@ -6,11 +6,15 @@
  * updated script against the same environment.
  */
 import { DrejClient, workflow } from "drej";
+import { SQLiteAdapter } from "@drej/sqlite";
 
 const client = new DrejClient({
   baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://localhost:8080",
   apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",
+  adapter: new SQLiteAdapter("./ledger.db"),
 });
+
+await client.connect();
 
 const WORKFLOW = "snapshot-replay-demo";
 const sandbox = { image: { uri: "python:3.11-slim" }, resourceLimits: { cpu: "1", memory: "512Mi" } };
@@ -73,3 +77,5 @@ for await (const ev of run2) {
     if (text) process.stdout.write(text);
   }
 }
+
+await client.close();

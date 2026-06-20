@@ -6,11 +6,15 @@
  *   parallel — runs branches concurrently inside the same sandbox
  */
 import { DrejClient, workflow } from "drej";
+import { SQLiteAdapter } from "@drej/sqlite";
 
 const client = new DrejClient({
   baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://localhost:8080",
   apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",
+  adapter: new SQLiteAdapter("./ledger.db"),
 });
+
+await client.connect();
 
 const w = workflow("control-flow").sandbox(
   { image: { uri: "ubuntu:22.04" }, resourceLimits: { cpu: "500m", memory: "512Mi" } },
@@ -64,3 +68,5 @@ for await (const ev of run) {
     console.log(`[${ev.event}] step=${ev.stepIndex}${branch}${extra}`);
   }
 }
+
+await client.close();

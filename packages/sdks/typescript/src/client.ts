@@ -1,7 +1,5 @@
 import {
   Workflow,
-  NdjsonAdapter,
-  MemoryAdapter,
   LedgerEvent,
   buildStep,
   resolveExecClient,
@@ -55,13 +53,8 @@ export interface DrejClientOptions {
   baseUrl: string;
   /** OpenSandbox API key (empty string for local dev) */
   apiKey?: string;
-  /**
-   * Pluggable storage adapter. Implement IStorageAdapter to use any database.
-   * Defaults to an in-memory adapter when omitted.
-   */
-  adapter?: IStorageAdapter;
-  /** Directory for durable NDJSON storage. Shorthand for `adapter: new NdjsonAdapter(dir)`. */
-  ledgerDir?: string;
+  /** Storage adapter for persisting workflow events. Use @drej/sqlite, @drej/postgres, or implement IStorageAdapter. */
+  adapter: IStorageAdapter;
 }
 
 export interface RunOptions {
@@ -93,13 +86,7 @@ export class DrejClient {
       baseUrl: options.baseUrl,
       apiKey: options.apiKey ?? "",
     });
-    if (options.adapter) {
-      this.adapter = options.adapter;
-    } else if (options.ledgerDir) {
-      this.adapter = new NdjsonAdapter(options.ledgerDir);
-    } else {
-      this.adapter = new MemoryAdapter();
-    }
+    this.adapter = options.adapter;
   }
 
   /** Call once before first use when using a DB-backed adapter. */
@@ -265,7 +252,7 @@ export class DrejClient {
               if (typeof sandboxId !== "string") return;
               const snap = await teeDeps.control.createSnapshot(sandboxId);
               await waitForSnapshot(teeDeps.control, snap.id);
-              await teeDeps.ledger.append({
+              await teeDeps.adapter.append({
                 ts: Date.now(),
                 workflowName: wfName,
                 runId: rid,
@@ -318,7 +305,7 @@ export class DrejClient {
     const teeDeps: WorkflowDeps = {
       control: this.control,
       resolveExec: (sandboxId) => resolveExecClient(this.control, sandboxId),
-      ledger: teeAdapter,
+      adapter: teeAdapter,
     };
 
     // Emit run_started before kicking off execution

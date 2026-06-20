@@ -24,6 +24,9 @@ Example: before writing a `bun build` command or debugging a workspace install i
 # Run the hello-world example
 bun run examples/hello-world.ts
 
+# Build the SDK for publishing (generates dist/ across all packages)
+bun run build
+
 # Typecheck all packages
 bun run typecheck
 
@@ -61,6 +64,10 @@ packages/sdks/typescript/   — Public TypeScript SDK (published to npm as "drej
 
 packages/adapters/postgres/ — Postgres storage adapter (published as "@drej/postgres")
   src/adapter.ts            — PostgresAdapter implementing IStorageAdapter
+  src/migrations.ts         — Idempotent CREATE TABLE IF NOT EXISTS schema
+
+packages/adapters/sqlite/   — SQLite storage adapter (published as "@drej/sqlite")
+  src/adapter.ts            — SQLiteAdapter via bun:sqlite (zero extra deps, WAL mode enabled)
   src/migrations.ts         — Idempotent CREATE TABLE IF NOT EXISTS schema
 ```
 

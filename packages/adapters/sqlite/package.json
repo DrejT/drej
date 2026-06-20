@@ -1,0 +1,13 @@
+{
+  "name": "@drej/sqlite",
+  "version": "0.0.1",
+  "private": false,
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@drej/core": "workspace:*"
+  },
+  "devDependencies": {
+    "bun-types": "latest",
+    "typescript": "latest"
+  }
+}

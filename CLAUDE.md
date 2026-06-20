@@ -59,7 +59,7 @@ packages/sdks/typescript/   — Public TypeScript SDK (published to npm as "drej
   client.ts                 — DrejClient: runs workflows in-process, exposes sandbox/snapshot mgmt
   workflow.ts               — WorkflowBuilder, SandboxStepBuilder (fluent builder API)
 
-packages/adapters/postgres/ — Postgres storage adapter (published as "@drej/adapter-postgres")
+packages/adapters/postgres/ — Postgres storage adapter (published as "@drej/postgres")
   src/adapter.ts            — PostgresAdapter implementing IStorageAdapter
   src/migrations.ts         — Idempotent CREATE TABLE IF NOT EXISTS schema
 ```

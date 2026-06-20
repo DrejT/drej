@@ -2,14 +2,12 @@
   "name": "drej",
   "private": true,
   "workspaces": [
-    "apps/*",
     "packages/core",
     "packages/opensandbox",
     "packages/sdks/typescript"
   ],
   "scripts": {
-    "dev": "bun run --cwd apps/api dev",
-    "build": "bun run --cwd apps/api build"
+    "typecheck": "bunx tsc --noEmit --strict --project packages/opensandbox/tsconfig.json && bunx tsc --noEmit --strict --project packages/core/tsconfig.json && bunx tsc --noEmit --strict --project packages/sdks/typescript/tsconfig.json"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0"

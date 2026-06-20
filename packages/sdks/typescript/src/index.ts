@@ -1,9 +1,10 @@
-export { DrejClient, DrejError, WorkflowRun } from "./client";
+export { DrejClient, DrejError, WorkflowRun, LedgerEvent } from "./client";
 export type {
   DrejClientOptions,
-  Resources,
-  ImageAuth,
-  ImageSpec,
+  RunOptions,
+  SnapshotConfig,
+  WorkflowEvent,
+  StepDef,
   Sandbox,
   SandboxState,
   SandboxStatus,
@@ -12,23 +13,11 @@ export type {
   Snapshot,
   SnapshotState,
   ListSnapshotsOptions,
-  SSEEvent,
-  SSEEventType,
-  CodeContext,
-  ExecuteCodeOptions,
-  ExecuteCommandOptions,
-  CommandStatus,
-  FileInfo,
-  DirectoryEntry,
-  FileReplacement,
-  Metrics,
+  Resources,
+  ImageSpec,
+  ImageAuth,
   DiagnosticLog,
   DiagnosticEvent,
-  WorkflowEvent,
-  WorkflowEventKind,
-  StepDef,
-  SnapshotConfig,
-  RunOptions,
 } from "./client";
 
 export { workflow, WorkflowBuilder, SandboxStepBuilder } from "./workflow";

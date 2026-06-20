@@ -1,4 +1,5 @@
-import type { StepDef, ImageSpec, Resources, Predicate } from "./client";
+import type { StepDef, Predicate } from "@drej/core";
+import type { ImageSpec, Resources } from "@drej/opensandbox";
 
 // Placeholder that serialises to {{name}} inside template literals.
 // Used as the `item` parameter in forEach callbacks so users write

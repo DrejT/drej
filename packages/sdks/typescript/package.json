@@ -6,7 +6,12 @@
   "scripts": {
     "build": "bun build src/index.ts --outdir dist --target browser"
   },
+  "dependencies": {
+    "@drej/core": "workspace:*",
+    "@drej/opensandbox": "workspace:*"
+  },
   "devDependencies": {
+    "bun-types": "latest",
     "typescript": "latest"
   }
 }

@@ -1,6 +1,9 @@
 import { DrejClient, workflow } from "../packages/sdks/typescript/src/index";
 
-const client = new DrejClient({ baseUrl: process.env.DREJ_API_URL ?? "http://localhost:6000" });
+const client = new DrejClient({
+  baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://localhost:8080",
+  apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",
+});
 
 const script = `
 #!/bin/bash

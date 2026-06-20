@@ -6,7 +6,8 @@
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "declaration": true
+    "declaration": true,
+    "types": ["bun-types"]
   },
   "include": ["src"]
 }

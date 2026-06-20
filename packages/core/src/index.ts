@@ -15,5 +15,5 @@ export type {
 } from "./workflow";
 export { Workflow } from "./workflow";
 
-export { StepType, buildStep, resolveExecClient, shouldSnapshot, waitForSnapshot } from "./steps";
+export { buildStep, resolveExecClient, shouldSnapshot, waitForSnapshot } from "./steps";
 export type { StepDef, Predicate, WorkflowState, SnapshotConfig } from "./steps";

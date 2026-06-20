@@ -5,19 +5,6 @@ import type { WorkflowRunContext, WorkflowStep } from "./workflow";
 
 // ── Step types ─────────────────────────────────────────────────────────────
 
-export enum StepType {
-  CreateSandbox = "create_sandbox",
-  ExecCode = "exec_code",
-  ExecCommand = "exec_command",
-  DeleteSandbox = "delete_sandbox",
-  WriteFile = "write_file",
-  Retry = "retry",
-  Conditional = "conditional",
-  Loop = "loop",
-  Parallel = "parallel",
-  Sequence = "sequence",
-}
-
 export type Predicate =
   | { op: "eq" | "neq"; field: string; value: unknown }
   | { op: "gt" | "lt" | "gte" | "lte"; field: string; value: number }
@@ -26,7 +13,7 @@ export type Predicate =
 
 export type StepDef =
   | {
-      type: StepType.CreateSandbox;
+      type: "create_sandbox";
       image?: { uri: string; auth?: { username: string; password: string } };
       snapshotId?: string;
       timeout?: number;
@@ -35,15 +22,15 @@ export type StepDef =
       metadata?: Record<string, string>;
       resourceLimits?: { cpu?: string; memory?: string; gpu?: string };
     }
-  | { type: StepType.ExecCode; code: string; context?: { id: string; language: string } }
-  | { type: StepType.ExecCommand; command: string; cwd?: string; envs?: Record<string, string> }
-  | { type: StepType.DeleteSandbox }
-  | { type: StepType.WriteFile; path: string; content: string; encoding?: "utf8" | "base64" }
-  | { type: StepType.Retry; step: StepDef; maxAttempts: number; delayMs?: number; backoff?: "fixed" | "exponential" }
-  | { type: StepType.Conditional; condition: Predicate; then: StepDef[]; else?: StepDef[] }
-  | { type: StepType.Loop; over?: string; items?: unknown[]; as: string; steps: StepDef[]; concurrently?: boolean }
-  | { type: StepType.Parallel; steps: StepDef[] }
-  | { type: StepType.Sequence; steps: StepDef[] };
+  | { type: "exec_code"; code: string; context?: { id: string; language: string } }
+  | { type: "exec_command"; command: string; cwd?: string; envs?: Record<string, string> }
+  | { type: "delete_sandbox" }
+  | { type: "write_file"; path: string; content: string; encoding?: "utf8" | "base64" }
+  | { type: "retry"; step: StepDef; maxAttempts: number; delayMs?: number; backoff?: "fixed" | "exponential" }
+  | { type: "conditional"; condition: Predicate; then: StepDef[]; else?: StepDef[] }
+  | { type: "loop"; over?: string; items?: unknown[]; as: string; steps: StepDef[]; concurrently?: boolean }
+  | { type: "parallel"; steps: StepDef[] }
+  | { type: "sequence"; steps: StepDef[] };
 
 export type WorkflowState = Record<string, unknown> & { sandboxId?: string };
 
@@ -137,9 +124,9 @@ function evaluate(predicate: Predicate, state: unknown): boolean {
 
 export function buildStep(def: StepDef): WorkflowStep {
   switch (def.type) {
-    case StepType.CreateSandbox:
+    case "create_sandbox":
       return {
-        id: StepType.CreateSandbox,
+        id: "create_sandbox",
         async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
           const state = (input ?? {}) as WorkflowState;
           const sb = await ctx.control.createSandbox({
@@ -170,9 +157,9 @@ export function buildStep(def: StepDef): WorkflowStep {
         },
       };
 
-    case StepType.ExecCode:
+    case "exec_code":
       return {
-        id: StepType.ExecCode,
+        id: "exec_code",
         async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
           const state = (input ?? {}) as WorkflowState;
           if (!state.sandboxId) throw new Error("exec_code requires sandboxId in workflow state");
@@ -192,9 +179,9 @@ export function buildStep(def: StepDef): WorkflowStep {
         },
       };
 
-    case StepType.ExecCommand:
+    case "exec_command":
       return {
-        id: StepType.ExecCommand,
+        id: "exec_command",
         async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
           const state = (input ?? {}) as WorkflowState;
           if (!state.sandboxId) throw new Error("exec_command requires sandboxId in workflow state");
@@ -217,9 +204,9 @@ export function buildStep(def: StepDef): WorkflowStep {
         },
       };
 
-    case StepType.DeleteSandbox:
+    case "delete_sandbox":
       return {
-        id: StepType.DeleteSandbox,
+        id: "delete_sandbox",
         async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
           const state = (input ?? {}) as WorkflowState;
           if (state.sandboxId) await ctx.control.deleteSandbox(state.sandboxId);
@@ -227,9 +214,9 @@ export function buildStep(def: StepDef): WorkflowStep {
         },
       };
 
-    case StepType.WriteFile:
+    case "write_file":
       return {
-        id: StepType.WriteFile,
+        id: "write_file",
         async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
           const state = (input ?? {}) as WorkflowState;
           if (!state.sandboxId) throw new Error("write_file requires sandboxId in workflow state");
@@ -242,10 +229,10 @@ export function buildStep(def: StepDef): WorkflowStep {
         },
       };
 
-    case StepType.Retry: {
+    case "retry": {
       const child = buildStep(def.step);
       return {
-        id: StepType.Retry,
+        id: "retry",
         rollback: child.rollback,
         async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
           let lastErr: unknown;
@@ -271,11 +258,11 @@ export function buildStep(def: StepDef): WorkflowStep {
       };
     }
 
-    case StepType.Conditional: {
+    case "conditional": {
       const thenSteps = def.then.map(buildStep);
       const elseSteps = (def.else ?? []).map(buildStep);
       return {
-        id: StepType.Conditional,
+        id: "conditional",
         async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
           const branch = evaluate(def.condition, input) ? thenSteps : elseSteps;
           let current = input;
@@ -287,9 +274,9 @@ export function buildStep(def: StepDef): WorkflowStep {
       };
     }
 
-    case StepType.Loop: {
+    case "loop": {
       return {
-        id: StepType.Loop,
+        id: "loop",
         async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
           const arr = def.items ?? (def.over ? getPath(input, def.over) : undefined);
           if (!Array.isArray(arr)) throw new Error(`loop: must provide either "items" or "over" pointing to an array in workflow state`);
@@ -316,9 +303,9 @@ export function buildStep(def: StepDef): WorkflowStep {
       };
     }
 
-    case StepType.Parallel: {
+    case "parallel": {
       return {
-        id: StepType.Parallel,
+        id: "parallel",
         async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
           const results = await Promise.all(
             def.steps.map((stepDef, branchIndex) => {
@@ -341,10 +328,10 @@ export function buildStep(def: StepDef): WorkflowStep {
       };
     }
 
-    case StepType.Sequence: {
+    case "sequence": {
       const childSteps = def.steps.map(buildStep);
       return {
-        id: StepType.Sequence,
+        id: "sequence",
         async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
           let current = input;
           for (const step of childSteps) {

@@ -1,0 +1,15 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "drej-example-hello-world",
+      "dependencies": {
+        "drej": "^0.4.0",
+      },
+    },
+  },
+  "packages": {
+    "drej": ["drej@0.4.0", "", {}, "sha512-YuX61TshYZGdQqrJI9KSKCfSct3FvkRwuFFsGTrhoDM709xWpFG75jd4QFezmctTnQT3W6j4Lf4IYN9IE7b+hQ=="],
+  }
+}

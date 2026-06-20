@@ -5,7 +5,7 @@
  *   forEach  — iterates a list; item resolves via template literal
  *   parallel — runs branches concurrently inside the same sandbox
  */
-import { DrejClient, workflow } from "../packages/sdks/typescript/src/index";
+import { DrejClient, workflow } from "drej";
 
 const client = new DrejClient({
   baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://localhost:8080",
@@ -59,7 +59,7 @@ for await (const ev of run) {
     const e = ev.payload as { type: string; text?: string };
     if (e.text) process.stdout.write(e.text);
   } else {
-    const branch = ev.branch !== undefined ? ` branch=${ev.branch}` : "";
+    const branch = (ev as { branch?: number }).branch !== undefined ? ` branch=${(ev as { branch?: number }).branch}` : "";
     const extra = ev.error ? ` error=${ev.error}` : "";
     console.log(`[${ev.event}] step=${ev.stepIndex}${branch}${extra}`);
   }

@@ -41,7 +41,7 @@ export interface WorkflowHooks {
 export interface WorkflowDeps {
   control: ControlClient;
   resolveExec: (sandboxId: string) => Promise<ExecClient>;
-  ledger: IStorageAdapter;
+  adapter: IStorageAdapter;
   logger?: ILogger;
   hooks?: WorkflowHooks;
 }
@@ -112,7 +112,7 @@ export class Workflow {
           payload: output,
         });
 
-        await this.deps.ledger.append({
+        await this.deps.adapter.append({
           ts: Date.now(),
           workflowName: this.name,
           runId: this.runId,
@@ -140,7 +140,7 @@ export class Workflow {
 
     this._status = "completed";
     this.log.info("workflow complete", { workflowName: this.name, runId: this.runId });
-    await this.deps.ledger.append({
+    await this.deps.adapter.append({
       ts: Date.now(),
       workflowName: this.name,
       runId: this.runId,
@@ -177,7 +177,7 @@ export class Workflow {
 
     this._status = "rolled_back";
     this.log.info("workflow rolled back", { workflowName: this.name, runId: this.runId });
-    await this.deps.ledger.append({
+    await this.deps.adapter.append({
       ts: Date.now(),
       workflowName: this.name,
       runId: this.runId,
@@ -205,7 +205,7 @@ export class Workflow {
     deps: WorkflowDeps,
   ): Promise<{ workflow: Workflow; nextStep: number; lastOutput: unknown }> {
     const wf = new Workflow(workflowName, runId, steps, deps);
-    const entry = await deps.ledger.lastCheckpoint(workflowName, runId);
+    const entry = await deps.adapter.lastCheckpoint(workflowName, runId);
 
     if (entry?.payload) {
       const cp = entry.payload as WorkflowCheckpoint;
@@ -227,7 +227,7 @@ export class Workflow {
       stepIndex,
       control: this.deps.control,
       resolveExec: this.deps.resolveExec,
-      emit: (entry) => this.deps.ledger.append(entry),
+      emit: (entry) => this.deps.adapter.append(entry),
     };
   }
 }

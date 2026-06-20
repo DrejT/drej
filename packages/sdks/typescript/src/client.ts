@@ -265,7 +265,7 @@ export class DrejClient {
               if (typeof sandboxId !== "string") return;
               const snap = await teeDeps.control.createSnapshot(sandboxId);
               await waitForSnapshot(teeDeps.control, snap.id);
-              await teeDeps.ledger.append({
+              await teeDeps.adapter.append({
                 ts: Date.now(),
                 workflowName: wfName,
                 runId: rid,
@@ -318,7 +318,7 @@ export class DrejClient {
     const teeDeps: WorkflowDeps = {
       control: this.control,
       resolveExec: (sandboxId) => resolveExecClient(this.control, sandboxId),
-      ledger: teeAdapter,
+      adapter: teeAdapter,
     };
 
     // Emit run_started before kicking off execution

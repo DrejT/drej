@@ -1,18 +1,3 @@
-export type {
-  SandboxState,
-  SandboxStatus,
-  Sandbox,
-  SSEEvent,
-  CreateSandboxInput,
-  ExecuteCodeInput,
-  ExecuteCommandInput,
-  ISandboxControl,
-  ISandboxExec,
-  IExecClientFactory,
-  SnapshotState,
-  SnapshotInfo,
-} from "./types";
-
 export { LedgerEvent } from "./ledger";
 export type { LedgerEntry, ILedger } from "./ledger";
 export { MemoryLedger, NdjsonLedger } from "./ledger";
@@ -29,3 +14,6 @@ export type {
   WorkflowHooks,
 } from "./workflow";
 export { Workflow } from "./workflow";
+
+export { StepType, buildStep, resolveExecClient, shouldSnapshot, waitForSnapshot } from "./steps";
+export type { StepDef, Predicate, WorkflowState, SnapshotConfig } from "./steps";

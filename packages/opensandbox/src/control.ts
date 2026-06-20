@@ -3,11 +3,25 @@ import type {
   CreateSandboxOptions,
   ListSandboxesOptions,
   Snapshot,
+  SnapshotState,
   ListSnapshotsOptions,
   SandboxEndpoint,
   DiagnosticLog,
   DiagnosticEvent,
 } from "./types";
+
+// OpenSandbox returns snapshot state nested under status: { state }.
+// We flatten it at the client boundary so callers always get a flat Snapshot.
+interface RawSnapshot {
+  id: string;
+  sandboxId: string;
+  status: { state: SnapshotState };
+  createdAt: string;
+}
+
+function flattenSnapshot(raw: RawSnapshot): Snapshot {
+  return { id: raw.id, sandboxId: raw.sandboxId, state: raw.status.state, createdAt: raw.createdAt };
+}
 
 export class OpenSandboxError extends Error {
   constructor(
@@ -91,8 +105,9 @@ export class ControlClient {
     return this.request("GET", `/v1/sandboxes/${sandboxId}/diagnostics/events`);
   }
 
-  createSnapshot(sandboxId: string): Promise<Snapshot> {
-    return this.request("POST", `/v1/sandboxes/${sandboxId}/snapshots`);
+  async createSnapshot(sandboxId: string): Promise<Snapshot> {
+    const raw = await this.request<RawSnapshot>("POST", `/v1/sandboxes/${sandboxId}/snapshots`);
+    return flattenSnapshot(raw);
   }
 
   listSnapshots(options: ListSnapshotsOptions = {}): Promise<Snapshot[]> {
@@ -104,8 +119,9 @@ export class ControlClient {
     return this.request("GET", `/v1/snapshots${qs ? `?${qs}` : ""}`);
   }
 
-  getSnapshot(id: string): Promise<Snapshot> {
-    return this.request("GET", `/v1/snapshots/${id}`);
+  async getSnapshot(id: string): Promise<Snapshot> {
+    const raw = await this.request<RawSnapshot>("GET", `/v1/snapshots/${id}`);
+    return flattenSnapshot(raw);
   }
 
   deleteSnapshot(id: string): Promise<void> {

@@ -4,7 +4,7 @@
   "workspaces": [
     "apps/*",
     "packages/core",
-    "packages/internal/*",
+    "packages/opensandbox",
     "packages/sdks/typescript"
   ],
   "scripts": {

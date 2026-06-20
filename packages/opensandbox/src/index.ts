@@ -1,6 +1,5 @@
 export { ControlClient, OpenSandboxError } from "./control";
 export { ExecClient } from "./exec";
-export { OpenSandboxControlAdapter, OpenSandboxExecFactory } from "./adapter";
 export type {
   Resources,
   ImageAuth,

@@ -24,17 +24,17 @@
     "packages/core": {
       "name": "@drej/core",
       "version": "0.0.0",
+      "dependencies": {
+        "@drej/opensandbox": "workspace:*",
+      },
       "devDependencies": {
         "bun-types": "latest",
         "typescript": "latest",
       },
     },
-    "packages/internal/opensandbox": {
+    "packages/opensandbox": {
       "name": "@drej/opensandbox",
       "version": "0.0.0",
-      "dependencies": {
-        "@drej/core": "workspace:*",
-      },
       "devDependencies": {
         "bun-types": "latest",
         "typescript": "latest",
@@ -42,7 +42,7 @@
     },
     "packages/sdks/typescript": {
       "name": "drej",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "devDependencies": {
         "typescript": "latest",
       },
@@ -91,7 +91,7 @@
 
     "@drej/core": ["@drej/core@workspace:packages/core"],
 
-    "@drej/opensandbox": ["@drej/opensandbox@workspace:packages/internal/opensandbox"],
+    "@drej/opensandbox": ["@drej/opensandbox@workspace:packages/opensandbox"],
 
     "@inquirer/external-editor": ["@inquirer/external-editor@1.0.3", "", { "dependencies": { "chardet": "^2.1.1", "iconv-lite": "^0.7.0" }, "peerDependencies": { "@types/node": ">=18" }, "optionalPeers": ["@types/node"] }, "sha512-RWbSrDiYmO4LbejWY7ttpxczuwQyZLBUyygsA9Nsv95hpzUWwnNTVQmAq3xuh7vNwCp07UTmE5i11XAEExx4RA=="],
 

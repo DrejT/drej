@@ -1,5 +1,5 @@
 {
-  "name": "@drej/adapter-postgres",
+  "name": "@drej/postgres",
   "version": "0.0.1",
   "private": false,
   "main": "./src/index.ts",

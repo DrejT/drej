@@ -1,7 +1,7 @@
 ---
 "@drej/core": minor
 "drej": minor
-"@drej/adapter-postgres": minor
+"@drej/postgres": minor
 ---
 
 Introduce pluggable storage adapter system.

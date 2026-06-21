@@ -4,13 +4,19 @@ export type { LedgerEntry, IStorageAdapter } from "./ledger";
 export { LogLevel, ConsoleLogger, noopLogger } from "./logger";
 export type { ILogger } from "./logger";
 
-export { Workflow, WorkflowStatus } from "./workflow";
+export { Workflow, WorkflowStatus, mergeHooks } from "./workflow";
 export type {
   WorkflowRunContext,
   WorkflowStep,
   WorkflowCheckpoint,
   WorkflowDeps,
   WorkflowHooks,
+  WorkflowHookInfo,
+  StepHookInfo,
+  StepCompleteHookInfo,
+  StepFailedHookInfo,
+  WorkflowCompleteHookInfo,
+  WorkflowFailedHookInfo,
 } from "./workflow";
 
 export { buildStep, resolveExecClient, shouldSnapshot, waitForSnapshot } from "./steps";

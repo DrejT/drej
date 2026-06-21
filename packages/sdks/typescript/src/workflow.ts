@@ -1,6 +1,9 @@
 import type { StepDef, Predicate } from "@drej/core";
 import { validateWorkflow } from "@drej/core";
+import { CodeLanguage } from "@drej/opensandbox";
 import type { ImageSpec, Resources, Sandbox } from "@drej/opensandbox";
+
+export { CodeLanguage };
 
 // Placeholder that serialises to {{name}} inside template literals.
 // Used as the `item` parameter in forEach callbacks so users write
@@ -78,11 +81,11 @@ export class SandboxStepBuilder {
    * Execute code inside the sandbox using a stateful interpreter context.
    *
    * **Requires** the `opensandbox/code-interpreter` image with entrypoint
-   * `["/opt/code-interpreter/code-interpreter.sh"]`. Supported languages:
-   * Python, Node.js, Java, Go, Bash.
+   * `["/opt/code-interpreter/code-interpreter.sh"]`. Pass a `CodeLanguage` value
+   * for the `context.language` field.
    *
    * @param context.id        Reuse a named context across calls to share state (variables, imports).
-   * @param context.language  Language identifier (e.g. `"python"`, `"node"`).
+   * @param context.language  Language to run (e.g. `CodeLanguage.Python`).
    *
    * @example
    * ```ts
@@ -90,11 +93,11 @@ export class SandboxStepBuilder {
    * s.execCode("print('hello')")
    *
    * // Stateful session: second call sees x defined by the first
-   * s.execCode("x = 42", { context: { id: "repl", language: "python" } })
-   * s.execCode("print(x)", { context: { id: "repl", language: "python" } })
+   * s.execCode("x = 42", { context: { id: "repl", language: CodeLanguage.Python } })
+   * s.execCode("print(x)", { context: { id: "repl", language: CodeLanguage.Python } })
    * ```
    */
-  execCode(code: string, opts?: { context?: { id: string; language: string } }): this {
+  execCode(code: string, opts?: { context?: { id: string; language: CodeLanguage } }): this {
     this._steps.push({ type: "exec_code", code, ...(opts?.context ? { context: opts.context } : {}) });
     return this;
   }

@@ -19,8 +19,15 @@ export type {
   ImageAuth,
   DiagnosticLog,
   DiagnosticEvent,
+  WorkflowHooks,
+  WorkflowHookInfo,
+  StepHookInfo,
+  StepCompleteHookInfo,
+  StepFailedHookInfo,
+  WorkflowCompleteHookInfo,
+  WorkflowFailedHookInfo,
 } from "./client";
 
-export { workflow, WorkflowBuilder, SandboxStepBuilder } from "./workflow";
+export { workflow, WorkflowBuilder, SandboxStepBuilder, CodeLanguage } from "./workflow";
 export type { SandboxOpts, LoopItem } from "./workflow";
 export type { CodeContext } from "@drej/opensandbox";

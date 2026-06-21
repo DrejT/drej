@@ -12,7 +12,7 @@
       "name": "drej-example-capture",
       "version": "0.0.0",
       "dependencies": {
-        "@drejt/sqlite": "workspace:*",
+        "@drej/sqlite": "workspace:*",
         "drej": "workspace:*",
       },
     },
@@ -20,7 +20,7 @@
       "name": "drej-example-control-flow",
       "version": "0.0.0",
       "dependencies": {
-        "@drejt/sqlite": "workspace:*",
+        "@drej/sqlite": "workspace:*",
         "drej": "workspace:*",
       },
     },
@@ -28,7 +28,7 @@
       "name": "drej-example-error-handling",
       "version": "0.0.0",
       "dependencies": {
-        "@drejt/sqlite": "workspace:*",
+        "@drej/sqlite": "workspace:*",
         "drej": "workspace:*",
       },
     },
@@ -36,7 +36,7 @@
       "name": "drej-example-exec-code",
       "version": "0.0.0",
       "dependencies": {
-        "@drejt/sqlite": "workspace:*",
+        "@drej/sqlite": "workspace:*",
         "drej": "workspace:*",
       },
     },
@@ -44,7 +44,7 @@
       "name": "drej-example-hello-world",
       "version": "0.0.0",
       "dependencies": {
-        "@drejt/sqlite": "workspace:*",
+        "@drej/sqlite": "workspace:*",
         "drej": "workspace:*",
       },
     },
@@ -52,7 +52,7 @@
       "name": "drej-example-read-file",
       "version": "0.0.0",
       "dependencies": {
-        "@drejt/sqlite": "workspace:*",
+        "@drej/sqlite": "workspace:*",
         "drej": "workspace:*",
       },
     },
@@ -60,7 +60,7 @@
       "name": "drej-example-run-bash-script",
       "version": "0.0.0",
       "dependencies": {
-        "@drejt/sqlite": "workspace:*",
+        "@drej/sqlite": "workspace:*",
         "drej": "workspace:*",
       },
     },
@@ -68,15 +68,30 @@
       "name": "drej-example-snapshot-replay",
       "version": "0.0.0",
       "dependencies": {
-        "@drejt/sqlite": "workspace:*",
+        "@drej/sqlite": "workspace:*",
         "drej": "workspace:*",
       },
     },
-    "packages/adapters/postgres": {
-      "name": "@drejt/postgres",
-      "version": "0.1.1",
+    "packages/adapters/otel": {
+      "name": "@drej/otel",
+      "version": "0.1.0",
       "dependencies": {
-        "@drejt/core": "workspace:*",
+        "@drej/core": "workspace:*",
+      },
+      "devDependencies": {
+        "@opentelemetry/api": "^1.9.0",
+        "bun-types": "latest",
+        "typescript": "latest",
+      },
+      "peerDependencies": {
+        "@opentelemetry/api": "^1.0.0",
+      },
+    },
+    "packages/adapters/postgres": {
+      "name": "@drej/postgres",
+      "version": "0.1.2",
+      "dependencies": {
+        "@drej/core": "workspace:*",
         "postgres": "^3.4.5",
       },
       "devDependencies": {
@@ -85,10 +100,10 @@
       },
     },
     "packages/adapters/sqlite": {
-      "name": "@drejt/sqlite",
-      "version": "0.1.1",
+      "name": "@drej/sqlite",
+      "version": "0.1.2",
       "dependencies": {
-        "@drejt/core": "workspace:*",
+        "@drej/core": "workspace:*",
       },
       "devDependencies": {
         "bun-types": "latest",
@@ -96,10 +111,10 @@
       },
     },
     "packages/core": {
-      "name": "@drejt/core",
-      "version": "0.1.1",
+      "name": "@drej/core",
+      "version": "0.2.0",
       "dependencies": {
-        "@drejt/opensandbox": "workspace:*",
+        "@drej/opensandbox": "workspace:*",
       },
       "devDependencies": {
         "bun-types": "latest",
@@ -107,8 +122,8 @@
       },
     },
     "packages/opensandbox": {
-      "name": "@drejt/opensandbox",
-      "version": "0.1.1",
+      "name": "@drej/opensandbox",
+      "version": "0.1.2",
       "devDependencies": {
         "bun-types": "latest",
         "typescript": "latest",
@@ -116,10 +131,10 @@
     },
     "packages/sdks/typescript": {
       "name": "drej",
-      "version": "0.5.1",
+      "version": "0.6.0",
       "dependencies": {
-        "@drejt/core": "workspace:*",
-        "@drejt/opensandbox": "workspace:*",
+        "@drej/core": "workspace:*",
+        "@drej/opensandbox": "workspace:*",
       },
       "devDependencies": {
         "bun-types": "latest",
@@ -165,13 +180,15 @@
 
     "@changesets/write": ["@changesets/write@0.4.0", "", { "dependencies": { "@changesets/types": "^6.1.0", "fs-extra": "^7.0.1", "human-id": "^4.1.1", "prettier": "^2.7.1" } }, "sha512-CdTLvIOPiCNuH71pyDu3rA+Q0n65cmAbXnwWH84rKGiFumFzkmHNT8KHTMEchcxN+Kl8I54xGUhJ7l3E7X396Q=="],
 
-    "@drejt/core": ["@drejt/core@workspace:packages/core"],
+    "@drej/core": ["@drej/core@workspace:packages/core"],
 
-    "@drejt/opensandbox": ["@drejt/opensandbox@workspace:packages/opensandbox"],
+    "@drej/opensandbox": ["@drej/opensandbox@workspace:packages/opensandbox"],
 
-    "@drejt/postgres": ["@drejt/postgres@workspace:packages/adapters/postgres"],
+    "@drej/otel": ["@drej/otel@workspace:packages/adapters/otel"],
 
-    "@drejt/sqlite": ["@drejt/sqlite@workspace:packages/adapters/sqlite"],
+    "@drej/postgres": ["@drej/postgres@workspace:packages/adapters/postgres"],
+
+    "@drej/sqlite": ["@drej/sqlite@workspace:packages/adapters/sqlite"],
 
     "@esbuild/aix-ppc64": ["@esbuild/aix-ppc64@0.27.7", "", { "os": "aix", "cpu": "ppc64" }, "sha512-EKX3Qwmhz1eMdEJokhALr0YiD0lhQNwDqkPYyPhiSwKrh7/4KRjQc04sZ8db+5DVVnZ1LmbNDI1uAMPEUBnQPg=="],
 
@@ -244,6 +261,8 @@
     "@nodelib/fs.stat": ["@nodelib/fs.stat@2.0.5", "", {}, "sha512-RkhPPp2zrqDAQA/2jNhnztcPAlv64XdhIp7a7454A5ovI7Bukxgt7MX7udwAu3zg1DcpPU0rz3VV1SeaqvY4+A=="],
 
     "@nodelib/fs.walk": ["@nodelib/fs.walk@1.2.8", "", { "dependencies": { "@nodelib/fs.scandir": "2.1.5", "fastq": "^1.6.0" } }, "sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg=="],
+
+    "@opentelemetry/api": ["@opentelemetry/api@1.9.1", "", {}, "sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q=="],
 
     "@rollup/rollup-android-arm-eabi": ["@rollup/rollup-android-arm-eabi@4.62.2", "", { "os": "android", "cpu": "arm" }, "sha512-6o7ZLZK+BeenkZCFNDXqpbjw9bD6nuWonvS/lwQJp7NoVVxm6p3qE7qQ5jGuBjiFsgvqjD8mZAU5oWxTmbOeOg=="],
 

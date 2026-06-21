@@ -1,4 +1,4 @@
-import { ControlClient, ExecClient, SandboxState, SnapshotState, SSEEventType } from "@drej/opensandbox";
+import { ControlClient, ExecClient, SandboxState, SnapshotState, SSEEventType, CodeLanguage } from "@drej/opensandbox";
 import type { SSEEvent } from "@drej/opensandbox";
 import { LedgerEvent } from "./ledger";
 import { SandboxError, ExecConnectionError, CommandError } from "./errors";
@@ -23,7 +23,7 @@ export type StepDef =
       metadata?: Record<string, string>;
       resourceLimits?: { cpu?: string; memory?: string; gpu?: string };
     }
-  | { type: "exec_code"; code: string; context?: { id: string; language: string } }
+  | { type: "exec_code"; code: string; context?: { id: string; language: CodeLanguage } }
   | { type: "exec_command"; command: string; cwd?: string; envs?: Record<string, string>; capture?: string; strict?: boolean }
   | { type: "delete_sandbox" }
   | { type: "write_file"; path: string; content: string; encoding?: "utf8" | "base64" }

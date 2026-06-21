@@ -5,13 +5,24 @@ import {
   resolveExecClient,
   shouldSnapshot,
   waitForSnapshot,
+  mergeHooks,
   type WorkflowDeps,
+  type WorkflowHooks,
   type IStorageAdapter,
   type LedgerEntry,
   type SnapshotConfig,
   type StepDef,
 } from "@drej/core";
 export { WorkflowError, SandboxError, ExecConnectionError, CommandError, WorkflowStatus } from "@drej/core";
+export type {
+  WorkflowHooks,
+  WorkflowHookInfo,
+  StepHookInfo,
+  StepCompleteHookInfo,
+  StepFailedHookInfo,
+  WorkflowCompleteHookInfo,
+  WorkflowFailedHookInfo,
+} from "@drej/core";
 import {
   ControlClient,
   SandboxState,
@@ -70,6 +81,8 @@ export interface DrejClientOptions {
 export interface RunOptions {
   /** Capture a sandbox snapshot after specific step indices complete. */
   snapshotConfig?: SnapshotConfig;
+  /** Lifecycle hooks for observability (e.g. pass `otelHooks(tracer)` from `@drej/otel`). */
+  hooks?: WorkflowHooks;
 }
 
 /**
@@ -378,7 +391,7 @@ export class DrejClient {
           }
         : undefined;
 
-      const deps: WorkflowDeps = { ...teeDeps, hooks: snapshotHook };
+      const deps: WorkflowDeps = { ...teeDeps, hooks: mergeHooks(snapshotHook, options?.hooks) };
       const wf = new Workflow(name, runId, steps.map(buildStep), deps);
       try {
         await wf.run(initialState);

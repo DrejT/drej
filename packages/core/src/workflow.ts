@@ -35,13 +35,64 @@ export enum WorkflowStatus {
   RolledBack = "rolled_back",
 }
 
+export interface WorkflowHookInfo {
+  workflowName: string;
+  runId: string;
+}
+
+export interface StepHookInfo extends WorkflowHookInfo {
+  stepIndex: number;
+  stepId: string;
+}
+
+export interface StepCompleteHookInfo extends StepHookInfo {
+  output: unknown;
+}
+
+export interface StepFailedHookInfo extends StepHookInfo {
+  error: Error;
+}
+
+export interface WorkflowCompleteHookInfo extends WorkflowHookInfo {
+  output: unknown;
+}
+
+export interface WorkflowFailedHookInfo extends WorkflowHookInfo {
+  error: Error;
+}
+
 export interface WorkflowHooks {
-  onStepStart?(info: { workflowName: string; runId: string; stepIndex: number; stepId: string }): void | Promise<void>;
-  onStepComplete?(info: { workflowName: string; runId: string; stepIndex: number; stepId: string; output: unknown }): void | Promise<void>;
-  onStepFailed?(info: { workflowName: string; runId: string; stepIndex: number; stepId: string; error: Error }): void | Promise<void>;
-  onStepRolledBack?(info: { workflowName: string; runId: string; stepIndex: number; stepId: string }): void | Promise<void>;
-  onWorkflowComplete?(info: { workflowName: string; runId: string; output: unknown }): void | Promise<void>;
-  onWorkflowFailed?(info: { workflowName: string; runId: string; error: Error }): void | Promise<void>;
+  onWorkflowStart?(info: WorkflowHookInfo): void | Promise<void>;
+  onStepStart?(info: StepHookInfo): void | Promise<void>;
+  onStepComplete?(info: StepCompleteHookInfo): void | Promise<void>;
+  onStepFailed?(info: StepFailedHookInfo): void | Promise<void>;
+  onStepRolledBack?(info: StepHookInfo): void | Promise<void>;
+  onWorkflowComplete?(info: WorkflowCompleteHookInfo): void | Promise<void>;
+  onWorkflowFailed?(info: WorkflowFailedHookInfo): void | Promise<void>;
+}
+
+export function mergeHooks(...hooks: (WorkflowHooks | undefined)[]): WorkflowHooks {
+  const defined = hooks.filter((h): h is WorkflowHooks => h !== undefined);
+  if (defined.length === 0) return {};
+  if (defined.length === 1) return defined[0];
+  const call = async <K extends keyof WorkflowHooks>(
+    name: K,
+    info: Parameters<NonNullable<WorkflowHooks[K]>>[0],
+  ) => {
+    for (const h of defined) {
+      const fn = h[name] as ((i: typeof info) => void | Promise<void>) | undefined;
+      if (fn) await fn(info);
+    }
+  };
+  return {
+    onWorkflowStart: (info) => call("onWorkflowStart", info),
+    onStepStart: (info) => call("onStepStart", info),
+    onStepComplete: (info) => call("onStepComplete", info),
+    onStepFailed: (info) => call("onStepFailed", info),
+    onStepRolledBack: (info) => call("onStepRolledBack", info),
+    onWorkflowComplete: (info) => call("onWorkflowComplete", info),
+    onWorkflowFailed: (info) => call("onWorkflowFailed", info),
+  };
 }
 
 export interface WorkflowDeps {
@@ -90,6 +141,7 @@ export class Workflow {
   async run(input: unknown, startFromStep = 0): Promise<unknown> {
     this._status = WorkflowStatus.Running;
     this.log.info("workflow started", { workflowName: this.name, runId: this.runId, startFromStep, totalSteps: this.steps.length });
+    await this.callHook("onWorkflowStart", { workflowName: this.name, runId: this.runId });
 
     let current: unknown =
       startFromStep > 0 ? (this.completedSteps.get(startFromStep - 1)?.output ?? input) : input;

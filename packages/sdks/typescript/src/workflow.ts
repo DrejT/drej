@@ -1,4 +1,5 @@
 import type { StepDef, Predicate } from "@drejt/core";
+import { validateWorkflow } from "@drejt/core";
 import type { ImageSpec, Resources } from "@drejt/opensandbox";
 
 // Placeholder that serialises to {{name}} inside template literals.
@@ -67,9 +68,12 @@ export class SandboxStepBuilder {
 
   /**
    * Execute code inside the sandbox using a stateful interpreter context.
-   * Supports Python, Node.js, and other languages depending on the execd image.
    *
-   * @param context.id   Reuse a named context across calls to share state (variables, imports).
+   * **Requires** the `opensandbox/code-interpreter` image with entrypoint
+   * `["/opt/code-interpreter/code-interpreter.sh"]`. Supported languages:
+   * Python, Node.js, Java, Go, Bash.
+   *
+   * @param context.id        Reuse a named context across calls to share state (variables, imports).
    * @param context.language  Language identifier (e.g. `"python"`, `"node"`).
    *
    * @example
@@ -320,6 +324,7 @@ export class WorkflowBuilder {
   }
 
   build(): { name: string; steps: StepDef[] } {
+    validateWorkflow(this._name, this._steps);
     return { name: this._name, steps: this._steps };
   }
 }

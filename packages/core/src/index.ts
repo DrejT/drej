@@ -16,3 +16,5 @@ export { Workflow } from "./workflow";
 
 export { buildStep, resolveExecClient, shouldSnapshot, waitForSnapshot } from "./steps";
 export type { StepDef, Predicate, WorkflowState, SnapshotConfig } from "./steps";
+
+export { validateWorkflow } from "./validate";

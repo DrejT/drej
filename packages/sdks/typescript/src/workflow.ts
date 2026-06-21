@@ -67,9 +67,12 @@ export class SandboxStepBuilder {
 
   /**
    * Execute code inside the sandbox using a stateful interpreter context.
-   * Supports Python, Node.js, and other languages depending on the execd image.
    *
-   * @param context.id   Reuse a named context across calls to share state (variables, imports).
+   * **Requires** the `opensandbox/code-interpreter` image with entrypoint
+   * `["/opt/code-interpreter/code-interpreter.sh"]`. Supported languages:
+   * Python, Node.js, Java, Go, Bash.
+   *
+   * @param context.id        Reuse a named context across calls to share state (variables, imports).
    * @param context.language  Language identifier (e.g. `"python"`, `"node"`).
    *
    * @example

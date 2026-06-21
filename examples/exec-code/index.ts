@@ -16,8 +16,14 @@ const client = new DrejClient({
 
 await client.connect();
 
+// execCode() requires the code-interpreter image — it bundles Python, Node.js,
+// Java, Go, and Bash kernels running via Jupyter inside the sandbox.
 const w = workflow("exec-code").sandbox(
-  { image: { uri: "python:3.11-slim" }, resourceLimits: { cpu: "500m", memory: "512Mi" } },
+  {
+    image: { uri: "opensandbox/code-interpreter" },
+    entrypoint: ["/opt/code-interpreter/code-interpreter.sh"],
+    resourceLimits: { cpu: "500m", memory: "512Mi" },
+  },
   (s) =>
     s
       // stateless: one-shot execution, no shared state

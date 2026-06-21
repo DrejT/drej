@@ -275,9 +275,9 @@ export class DrejClient {
     w: WorkflowBuilder,
     options?: RunOptions,
   ): Promise<WorkflowRun> {
-    const { name, steps } = w.build();
+    const { name, steps, initialState } = w.build();
     const runId = crypto.randomUUID();
-    return new WorkflowRun(name, runId, this._execute(name, runId, steps, options));
+    return new WorkflowRun(name, runId, this._execute(name, runId, steps, options, initialState));
   }
 
   /**
@@ -354,6 +354,7 @@ export class DrejClient {
     runId: string,
     steps: StepDef[],
     options?: RunOptions,
+    initialState: Record<string, unknown> = {},
   ): AsyncGenerator<WorkflowEvent> {
     return this._makeStream(name, runId, async (teeDeps) => {
       const snapshotHook: WorkflowDeps["hooks"] = options?.snapshotConfig
@@ -379,7 +380,7 @@ export class DrejClient {
       const deps: WorkflowDeps = { ...teeDeps, hooks: snapshotHook };
       const wf = new Workflow(name, runId, steps.map(buildStep), deps);
       try {
-        await wf.run({});
+        await wf.run(initialState);
       } catch {
         try { await wf.rollback(); } catch { /* ignore */ }
       }

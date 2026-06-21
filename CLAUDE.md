@@ -48,48 +48,74 @@ bunx changeset status # verify one exists
 ## Architecture
 
 ```
-packages/core/              — Workflow engine (no runtime deps outside opensandbox)
-  types.ts / steps.ts       — StepDef union and buildStep() factory
-  ledger.ts                 — IStorageAdapter, MemoryAdapter, NdjsonAdapter, LedgerEvent
-  workflow.ts               — Workflow class (run, rollback, resumeFromLedger), WorkflowHooks
+packages/core/                    — Workflow engine (no runtime deps outside opensandbox)
+  src/steps/
+    types.ts                      — StepDef union, StepType enum, Encoding enum, Backoff enum, Predicate, SnapshotConfig
+    utils.ts                      — getPath, interpolate, evaluate, runWithConcurrency (internal)
+    sandbox.ts                    — create_sandbox / delete_sandbox builders; resolveExecClient()
+    exec.ts                       — exec_command / exec_code builders
+    file.ts                       — write_file / read_file builders
+    snapshot.ts                   — snapshot builder; shouldSnapshot(), waitForSnapshot()
+    control-flow.ts               — retry / conditional / loop / parallel / sequence builders
+    index.ts                      — buildStep() router + barrel exports
+  src/ledger.ts                   — IStorageAdapter, LedgerEvent, RunStatus, RunDetails, ListRunsOptions
+  src/workflow.ts                 — Workflow class (run, rollback, resumeFromLedger), WorkflowHooks, WorkflowDeps
+  src/errors.ts                   — WorkflowError, SandboxError, ExecConnectionError, CommandError
+  src/validate.ts                 — validateWorkflow() (checks execCode requires code-interpreter image)
+  src/logger.ts                   — ILogger, ConsoleLogger, noopLogger
 
-packages/opensandbox/       — OpenSandbox HTTP clients
-  control.ts                — ControlClient (sandbox lifecycle via REST)
-  exec.ts                   — ExecClient (code/command execution via SSE)
-  types.ts                  — Full OpenSandbox API type system
+packages/opensandbox/             — OpenSandbox HTTP clients
+  src/control.ts                  — ControlClient (sandbox lifecycle via REST)
+  src/exec.ts                     — ExecClient (code/command execution via SSE)
+  src/types.ts                    — Full OpenSandbox API type system
 
-packages/sdks/typescript/   — Public TypeScript SDK (published to npm as "drej")
-  client.ts                 — DrejClient: runs workflows in-process, exposes sandbox/snapshot mgmt
-  workflow.ts               — WorkflowBuilder, SandboxStepBuilder (fluent builder API)
+packages/sdks/typescript/         — Public TypeScript SDK (published to npm as "drej")
+  src/types.ts                    — DrejError, WorkflowRun, DrejClientOptions, RunOptions, WorkflowEvent
+  src/stream.ts                   — makeStream() — async generator pipeline (tee adapter + event queue)
+  src/client.ts                   — DrejClient: run, resumeRun, replayFromSnapshot, sandbox/snapshot/run mgmt
+  src/builder/
+    types.ts                      — SandboxOpts, LoopItem, wrapSteps(), createLoopVar()
+    sandbox-step.ts               — SandboxStepBuilder, SandboxParallelBuilder
+    workflow.ts                   — WorkflowBuilder, WorkflowParallelBuilder, workflow()
+    index.ts                      — builder barrel exports
 
-packages/adapters/postgres/ — Postgres storage adapter (published as "@drej/postgres")
-  src/adapter.ts            — PostgresAdapter implementing IStorageAdapter
-  src/migrations.ts         — Idempotent CREATE TABLE IF NOT EXISTS schema
+packages/adapters/postgres/       — Postgres storage adapter (published as "@drej/postgres")
+  src/adapter.ts                  — PostgresAdapter implementing IStorageAdapter
+  src/migrations.ts               — Idempotent CREATE TABLE IF NOT EXISTS schema
 
-packages/adapters/sqlite/   — SQLite storage adapter (published as "@drej/sqlite")
-  src/adapter.ts            — SQLiteAdapter via bun:sqlite (zero extra deps, WAL mode enabled)
-  src/migrations.ts         — Idempotent CREATE TABLE IF NOT EXISTS schema
+packages/adapters/sqlite/         — SQLite storage adapter (published as "@drej/sqlite")
+  src/adapter.ts                  — SQLiteAdapter via bun:sqlite (zero extra deps, WAL mode enabled)
+  src/migrations.ts               — Idempotent CREATE TABLE IF NOT EXISTS schema
+
+packages/adapters/otel/           — OpenTelemetry hooks adapter (published as "@drej/otel")
+  src/index.ts                    — otelHooks(tracer, opts?) → WorkflowHooks
 ```
 
 ### Key design points
 
 **In-process execution**: `DrejClient` runs workflows directly in the calling process. No HTTP server, no separate drej daemon. Instantiate `DrejClient` with your OpenSandbox URL and call `client.run(workflow(...))`.
 
-**Fluent builder API**: Workflows are constructed via `workflow(name).sandbox(opts, s => s.exec(...).writeFile(...))`. The builder compiles down to a `StepDef[]` which the core engine executes. Step types include `exec_command`, `exec_code`, `write_file`, `retry`, `conditional`, `loop`, `parallel`, and `sequence`.
+**Fluent builder API**: Workflows are constructed via `workflow(name).sandbox(opts, s => s.exec(...).writeFile(...))`. The builder compiles down to a `StepDef[]` which the core engine executes. Step types are defined by the `StepType` enum (`StepType.ExecCommand`, `StepType.Loop`, etc.). File encoding uses the `Encoding` enum (`Encoding.UTF8`, `Encoding.Base64`). Retry backoff uses the `Backoff` enum (`Backoff.Fixed`, `Backoff.Exponential`).
 
-**Async event stream**: `client.run()` returns a `WorkflowRun` which is an `AsyncIterable<WorkflowEvent>`. Callers `for await` over events in real-time as steps execute. Every event is also persisted to the ledger simultaneously (tee pattern inside `DrejClient._makeStream`).
+**Async event stream**: `client.run()` returns a `WorkflowRun` which is an `AsyncIterable<WorkflowEvent>`. Callers `for await` over events in real-time as steps execute. Every event is also persisted to the ledger simultaneously. The streaming engine lives in `stream.ts` as a standalone `makeStream()` function. `WorkflowRun.status` tracks `Running → Completed | Failed | Cancelled` as the iterator is consumed.
 
-**Storage adapter**: `DrejClientOptions.adapter` accepts any `IStorageAdapter` implementation — pass `new PostgresAdapter(connectionString)` for production. `ledgerDir` is shorthand for an `NdjsonAdapter`. Omit both for an in-memory `MemoryAdapter`. Call `await client.connect()` before first use when using a DB-backed adapter; `await client.close()` on shutdown. The adapter backs `resumeRun()`, `replayFromSnapshot()`, `listRuns()`, and `getRunLedger()`.
+**Storage adapter**: `DrejClientOptions.adapter` accepts any `IStorageAdapter` implementation — pass `new SQLiteAdapter("./drej.db")` for local dev or `new PostgresAdapter(connectionString)` for production. Call `await client.connect()` before first use; `await client.close()` on shutdown.
 
-**Hooks**: `WorkflowHooks` (defined in `packages/core/workflow.ts`) provides lifecycle callbacks: `onStepStart`, `onStepComplete`, `onStepFailed`, `onStepRolledBack`, `onWorkflowComplete`, `onWorkflowFailed`. Pass via `WorkflowDeps.hooks`.
+**Run management**: `IStorageAdapter` and `DrejClient` expose `listRunDetails(workflowName, opts?)`, `listAllRunDetails(opts?)`, `getRunDetails(workflowName, runId)`, and `deleteRun(workflowName, runId)`. Run details are derived from ledger events via a single SQL aggregation query — no full event scan. `RunStatus` (`Running | Completed | Failed | Cancelled`) and `RunDetails` are exported from both `@drej/core` and `drej`.
 
-**Saga rollback**: If any step throws, `Workflow.rollback()` runs completed steps in reverse. `create_sandbox` has a rollback that calls `deleteSandbox`, preventing sandbox leaks on failure.
+**Concurrency limits**: `DrejClientOptions.maxConcurrency` caps simultaneous workflow runs. `run()` awaits a semaphore slot before starting; the slot is released via a `finally`-wrapped generator when the `WorkflowRun` is exhausted or cancelled. Within a workflow, `parallel()` and `forEach()` accept `{ concurrency: N }` to throttle branch/iteration parallelism using a worker-pool pattern.
 
-**Resumption**: `Workflow.resumeFromLedger()` reads the last `checkpoint` entry from the ledger to reconstruct completed-step state and restart from the next step.
+**Hooks**: `WorkflowHooks` (in `packages/core/src/workflow.ts`) provides lifecycle callbacks: `onWorkflowStart`, `onStepStart`, `onStepComplete`, `onStepFailed`, `onStepRolledBack`, `onWorkflowComplete`, `onWorkflowFailed`. Pass via `RunOptions.hooks`. Use `otelHooks(tracer)` from `@drej/otel` for OpenTelemetry tracing.
+
+**Saga rollback**: If any step throws, `Workflow.rollback()` runs completed steps in reverse order using their optional `rollback()` method.
+
+**Resumption**: `Workflow.resumeFromLedger()` reads the last `checkpoint` entry from the ledger to reconstruct completed-step state and restart from the next step. Use `client.resumeRun(name, runId, workflow)` to resume an interrupted run.
 
 **execd readiness**: OpenSandbox reports a sandbox as "Running" before the execd process inside is ready to accept connections. `resolveExecClient()` calls `getEndpoint()` exactly once (each call returns a different ephemeral proxy port) then polls `listContexts()` until execd responds.
 
-**Sandbox entrypoint**: Use `["tail", "-f", "/dev/null"]` as the sandbox entrypoint — `/bin/bash` exits immediately without a TTY, killing the container.
+**Sandbox entrypoint**: Use `["tail", "-f", "/dev/null"]` as the sandbox entrypoint — `/bin/bash` exits immediately without a TTY, killing the container. The builder sets this automatically.
+
+**`buildStep` is a router, not a monolith**: Each step type has its own builder function in `steps/`. The `buildStep()` factory in `steps/index.ts` delegates to them. Control-flow step builders (`retry`, `conditional`, `loop`, `parallel`, `sequence`) receive `buildStep` as a `BuildStepFn` parameter to avoid a circular import on `steps/index.ts`.
 
 ## Environment variables
 
@@ -99,8 +125,8 @@ packages/adapters/sqlite/   — SQLite storage adapter (published as "@drej/sqli
 |---|---|
 | `baseUrl` | OpenSandbox server URL (e.g. `http://localhost:8080`) |
 | `apiKey` | OpenSandbox API key (empty string for local dev) |
-| `adapter` | Custom `IStorageAdapter` (e.g. `new PostgresAdapter(url)`) |
-| `ledgerDir` | Shorthand for `new NdjsonAdapter(dir)` — durable NDJSON on disk |
+| `adapter` | `IStorageAdapter` implementation (SQLiteAdapter or PostgresAdapter) |
+| `maxConcurrency` | Max simultaneous workflow runs (default: unlimited) |
 
 ## Local OpenSandbox setup
 

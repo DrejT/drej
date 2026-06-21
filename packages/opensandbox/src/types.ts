@@ -111,7 +111,7 @@ export interface SSEEvent {
   type: SSEEventType;
   text?: string;
   results?: Record<string, string>;
-  error?: { name?: string; message: string };
+  error?: { name?: string; message: string; evalue?: string };
   execution_count?: number;
   execution_time?: number;
   timestamp: number;

@@ -26,6 +26,7 @@ export type StepDef =
   | { type: "exec_command"; command: string; cwd?: string; envs?: Record<string, string> }
   | { type: "delete_sandbox" }
   | { type: "write_file"; path: string; content: string; encoding?: "utf8" | "base64" }
+  | { type: "snapshot" }
   | { type: "retry"; step: StepDef; maxAttempts: number; delayMs?: number; backoff?: "fixed" | "exponential" }
   | { type: "conditional"; condition: Predicate; then: StepDef[]; else?: StepDef[] }
   | { type: "loop"; over?: string; items?: unknown[]; as: string; steps: StepDef[]; concurrently?: boolean }
@@ -231,6 +232,26 @@ export function buildStep(def: StepDef): WorkflowStep {
             : def.content;
           await exec.uploadFile(def.path, content);
           return state;
+        },
+      };
+
+    case "snapshot":
+      return {
+        id: "snapshot",
+        async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
+          const state = (input ?? {}) as WorkflowState;
+          if (!state.sandboxId) throw new Error("snapshot requires sandboxId in workflow state");
+          const snap = await ctx.control.createSnapshot(state.sandboxId);
+          await waitForSnapshot(ctx.control, snap.id);
+          await ctx.emit({
+            ts: Date.now(),
+            workflowName: ctx.workflowName,
+            runId: ctx.runId,
+            stepIndex: ctx.stepIndex,
+            event: LedgerEvent.Snapshot,
+            payload: { snapshotId: snap.id, sandboxId: state.sandboxId },
+          });
+          return { ...state, snapshotId: snap.id };
         },
       };
 

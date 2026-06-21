@@ -285,8 +285,9 @@ export class DrejClient {
    * The new run boots from the snapshot image, skipping any steps that ran
    * before the snapshot was taken (e.g. dependency installs).
    *
-   * The original run must have been executed with `snapshotConfig` set so
-   * that a `LedgerEvent.Snapshot` entry exists in the ledger.
+   * The original run must contain a `LedgerEvent.Snapshot` entry — produced
+   * either by a `s.snapshot()` step in the workflow or by the
+   * `snapshotConfig` option passed to `client.run()`.
    */
   async replayFromSnapshot(
     name: string,

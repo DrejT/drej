@@ -31,8 +31,8 @@ export type StepDef =
   | { type: "snapshot" }
   | { type: "retry"; step: StepDef; maxAttempts: number; delayMs?: number; backoff?: "fixed" | "exponential" }
   | { type: "conditional"; condition: Predicate; then: StepDef[]; else?: StepDef[] }
-  | { type: "loop"; over?: string; items?: unknown[]; as: string; steps: StepDef[]; concurrently?: boolean }
-  | { type: "parallel"; steps: StepDef[] }
+  | { type: "loop"; over?: string; items?: unknown[]; as: string; steps: StepDef[]; maxConcurrency?: number }
+  | { type: "parallel"; steps: StepDef[]; maxConcurrency?: number }
   | { type: "sequence"; steps: StepDef[] };
 
 export type WorkflowState = Record<string, unknown> & { sandboxId?: string };
@@ -121,6 +121,21 @@ function evaluate(predicate: Predicate, state: unknown): boolean {
     case "and": return predicate.predicates.every((p) => evaluate(p, state));
     case "or":  return predicate.predicates.some((p) => evaluate(p, state));
   }
+}
+
+// ── Concurrency helper ─────────────────────────────────────────────────────
+
+async function runWithConcurrency<T>(tasks: Array<() => Promise<T>>, max: number): Promise<T[]> {
+  const results: T[] = new Array(tasks.length);
+  let nextIndex = 0;
+  const worker = async () => {
+    while (nextIndex < tasks.length) {
+      const i = nextIndex++;
+      results[i] = await tasks[i]();
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(max, tasks.length) }, worker));
+  return results;
 }
 
 // ── Step builder ───────────────────────────────────────────────────────────
@@ -354,13 +369,11 @@ export function buildStep(def: StepDef): WorkflowStep {
             return current;
           };
 
-          const loopResults = def.concurrently
-            ? await Promise.all(arr.map((item, i) => runIteration(item, i)))
-            : await arr.reduce<Promise<unknown[]>>(async (accP, item, i) => {
-                const acc = await accP;
-                acc.push(await runIteration(item, i));
-                return acc;
-              }, Promise.resolve([]));
+          const max = def.maxConcurrency ?? 1;
+          const tasks = arr.map((item, i) => () => runIteration(item, i));
+          const loopResults = max === 1
+            ? await tasks.reduce<Promise<unknown[]>>(async (accP, t) => { const acc = await accP; acc.push(await t()); return acc; }, Promise.resolve([]))
+            : await runWithConcurrency(tasks, max);
 
           return { ...(input as WorkflowState), loopResults };
         },
@@ -371,16 +384,17 @@ export function buildStep(def: StepDef): WorkflowStep {
       return {
         id: "parallel",
         async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
-          const results = await Promise.all(
-            def.steps.map((stepDef, branchIndex) => {
-              const branchCtx: WorkflowRunContext = {
-                ...ctx,
-                stepIndex: ctx.stepIndex * 1000 + branchIndex,
-                emit: (entry) => ctx.emit({ ...entry, branch: branchIndex }),
-              };
-              return buildStep(stepDef).run(input, branchCtx);
-            }),
-          );
+          const branchedTasks = def.steps.map((stepDef, branchIndex) => {
+            const branchCtx: WorkflowRunContext = {
+              ...ctx,
+              stepIndex: ctx.stepIndex * 1000 + branchIndex,
+              emit: (entry) => ctx.emit({ ...entry, branch: branchIndex }),
+            };
+            return () => buildStep(stepDef).run(input, branchCtx);
+          });
+          const results = def.maxConcurrency
+            ? await runWithConcurrency(branchedTasks, def.maxConcurrency)
+            : await Promise.all(branchedTasks.map((t) => t()));
 
           const merged = results.reduce<WorkflowState>(
             (acc, result) => ({ ...acc, ...(result as WorkflowState) }),

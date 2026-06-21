@@ -80,6 +80,12 @@ export interface DrejClientOptions {
    * You can also supply any custom `IStorageAdapter` implementation.
    */
   adapter: IStorageAdapter;
+  /**
+   * Maximum number of workflow runs that may execute simultaneously.
+   * When at capacity, `run()` awaits until a slot is free before starting.
+   * Omit or set to `undefined` for no limit.
+   */
+  maxConcurrency?: number;
 }
 
 /** Options passed to {@link DrejClient.run}. */
@@ -174,6 +180,9 @@ export class WorkflowRun implements AsyncIterable<WorkflowEvent> {
 export class DrejClient {
   private readonly control: ControlClient;
   private readonly adapter: IStorageAdapter;
+  private readonly _maxConcurrency: number | undefined;
+  private _activeRuns = 0;
+  private readonly _waiters: Array<() => void> = [];
 
   constructor(options: DrejClientOptions) {
     this.control = new ControlClient({
@@ -181,6 +190,7 @@ export class DrejClient {
       apiKey: options.apiKey ?? "",
     });
     this.adapter = options.adapter;
+    this._maxConcurrency = options.maxConcurrency;
   }
 
   /**
@@ -316,9 +326,10 @@ export class DrejClient {
     w: WorkflowBuilder,
     options?: RunOptions,
   ): Promise<WorkflowRun> {
+    await this._acquireSlot();
     const { name, steps, initialState } = w.build();
     const runId = crypto.randomUUID();
-    return new WorkflowRun(name, runId, this._execute(name, runId, steps, options, initialState));
+    return new WorkflowRun(name, runId, this._withRelease(this._execute(name, runId, steps, options, initialState)));
   }
 
   /**
@@ -406,6 +417,29 @@ export class DrejClient {
   }
 
   // ── Internal ──────────────────────────────────────────────────────────────
+
+  private async _acquireSlot(): Promise<void> {
+    if (!this._maxConcurrency || this._activeRuns < this._maxConcurrency) {
+      this._activeRuns++;
+      return;
+    }
+    await new Promise<void>((resolve) => this._waiters.push(resolve));
+    this._activeRuns++;
+  }
+
+  private _releaseSlot(): void {
+    this._activeRuns--;
+    const next = this._waiters.shift();
+    next?.();
+  }
+
+  private async *_withRelease(gen: AsyncGenerator<WorkflowEvent>): AsyncGenerator<WorkflowEvent> {
+    try {
+      yield* gen;
+    } finally {
+      this._releaseSlot();
+    }
+  }
 
   private _execute(
     name: string,

@@ -12,7 +12,8 @@
   ],
   "scripts": {
     "build": "bunx tsc --project packages/opensandbox/tsconfig.build.json && bunx tsc --project packages/core/tsconfig.build.json && bun run --cwd packages/sdks/typescript build",
-    "typecheck": "bunx tsc --noEmit --strict --project packages/opensandbox/tsconfig.json && bunx tsc --noEmit --strict --project packages/core/tsconfig.json && bunx tsc --noEmit --strict --project packages/sdks/typescript/tsconfig.json && bunx tsc --noEmit --strict --project packages/adapters/postgres/tsconfig.json && bunx tsc --noEmit --strict --project packages/adapters/sqlite/tsconfig.json && bunx tsc --noEmit --strict --project packages/adapters/otel/tsconfig.json"
+    "typecheck": "bunx tsc --noEmit --strict --project packages/opensandbox/tsconfig.json && bunx tsc --noEmit --strict --project packages/core/tsconfig.json && bunx tsc --noEmit --strict --project packages/sdks/typescript/tsconfig.json && bunx tsc --noEmit --strict --project packages/adapters/postgres/tsconfig.json && bunx tsc --noEmit --strict --project packages/adapters/sqlite/tsconfig.json && bunx tsc --noEmit --strict --project packages/adapters/otel/tsconfig.json",
+    "test": "bun run --cwd packages/core test && bun run --cwd packages/sdks/typescript test && bun run --cwd packages/adapters/sqlite test"
   },
   "devDependencies": {
     "@changesets/cli": "2.31.0"

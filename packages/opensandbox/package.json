@@ -6,6 +6,7 @@
   "files": [
     "dist"
   ],
+  "publishConfig": { "access": "public" },
   "scripts": {
     "typecheck": "bunx tsc --noEmit",
     "build:types": "tsc --project tsconfig.build.json"

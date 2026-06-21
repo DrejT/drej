@@ -1,7 +1,7 @@
 {
   "name": "@drejt/sqlite",
   "version": "0.1.2",
-  "private": false,
+  "publishConfig": { "access": "public" },
   "main": "./src/index.ts",
   "dependencies": {
     "@drejt/core": "workspace:*"

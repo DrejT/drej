@@ -6,6 +6,9 @@
   "dependencies": {
     "@drej/core": "workspace:*"
   },
+  "scripts": {
+    "test": "bun test"
+  },
   "devDependencies": {
     "bun-types": "1.3.14",
     "typescript": "6.0.3"

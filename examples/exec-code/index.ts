@@ -6,7 +6,7 @@
  *   stateful   — calls sharing the same context id see each other's variables
  */
 import { DrejClient, workflow } from "drej";
-import { SQLiteAdapter } from "@drejt/sqlite";
+import { SQLiteAdapter } from "@drej/sqlite";
 
 const client = new DrejClient({
   baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://localhost:8080",

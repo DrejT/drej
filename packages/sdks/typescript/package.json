@@ -18,8 +18,8 @@
     "build": "tsup"
   },
   "dependencies": {
-    "@drejt/core": "workspace:*",
-    "@drejt/opensandbox": "workspace:*"
+    "@drej/core": "workspace:*",
+    "@drej/opensandbox": "workspace:*"
   },
   "devDependencies": {
     "bun-types": "latest",

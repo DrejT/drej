@@ -1,5 +1,5 @@
 {
-  "name": "@drejt/opensandbox",
+  "name": "@drej/opensandbox",
   "version": "0.1.2",
   "main": "./src/index.ts",
   "types": "./dist/index.d.ts",

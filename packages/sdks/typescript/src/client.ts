@@ -1,6 +1,7 @@
 import {
   Workflow,
   LedgerEvent,
+  RunStatus,
   buildStep,
   resolveExecClient,
   shouldSnapshot,
@@ -12,8 +13,10 @@ import {
   type LedgerEntry,
   type SnapshotConfig,
   type StepDef,
+  type RunDetails,
+  type ListRunsOptions,
 } from "@drej/core";
-export { WorkflowError, SandboxError, ExecConnectionError, CommandError, WorkflowStatus } from "@drej/core";
+export { WorkflowError, SandboxError, ExecConnectionError, CommandError, WorkflowStatus, RunStatus } from "@drej/core";
 export type {
   WorkflowHooks,
   WorkflowHookInfo,
@@ -22,6 +25,8 @@ export type {
   StepFailedHookInfo,
   WorkflowCompleteHookInfo,
   WorkflowFailedHookInfo,
+  RunDetails,
+  ListRunsOptions,
 } from "@drej/core";
 import {
   ControlClient,
@@ -106,6 +111,11 @@ export type WorkflowEvent = LedgerEntry;
  * ```
  */
 export class WorkflowRun implements AsyncIterable<WorkflowEvent> {
+  private _status: RunStatus = RunStatus.Running;
+
+  /** Current execution status. Updates as events are consumed via `for await`. */
+  get status(): RunStatus { return this._status; }
+
   constructor(
     /** The workflow name passed to `workflow(name)`. */
     public readonly name: string,
@@ -115,7 +125,24 @@ export class WorkflowRun implements AsyncIterable<WorkflowEvent> {
   ) {}
 
   [Symbol.asyncIterator](): AsyncIterator<WorkflowEvent> {
-    return this._events;
+    const self = this;
+    const gen = this._events;
+    return {
+      async next() {
+        try {
+          const r = await gen.next();
+          if (r.done) self._status = RunStatus.Completed;
+          return r;
+        } catch (e) {
+          self._status = RunStatus.Failed;
+          throw e;
+        }
+      },
+      return(v) {
+        self._status = RunStatus.Cancelled;
+        return gen.return?.(v) ?? Promise.resolve({ done: true as const, value: v as WorkflowEvent });
+      },
+    };
   }
 }
 
@@ -349,16 +376,33 @@ export class DrejClient {
     return new WorkflowRun(name, runId, stream);
   }
 
-  // ── Adapter access ────────────────────────────────────────────────────────
+  // ── Run management ────────────────────────────────────────────────────────
 
-  /** Return all run IDs recorded under a workflow name. */
-  listRuns(workflowName: string): Promise<string[]> {
-    return this.adapter.listRuns(workflowName);
+  /** Return details for all runs of a workflow, newest first. */
+  listRunDetails(workflowName: string, opts?: ListRunsOptions): Promise<RunDetails[]> {
+    return this.adapter.listRunDetails(workflowName, opts);
+  }
+
+  /** Return details for runs across all workflows, newest first. */
+  listAllRunDetails(opts?: ListRunsOptions): Promise<RunDetails[]> {
+    return this.adapter.listAllRunDetails(opts);
+  }
+
+  /** Return details for a single run. Throws if the run does not exist. */
+  async getRunDetails(workflowName: string, runId: string): Promise<RunDetails> {
+    const details = await this.adapter.getRunDetails(workflowName, runId);
+    if (!details) throw new DrejError(`Run ${runId} not found under workflow "${workflowName}"`, 404);
+    return details;
   }
 
   /** Return all ledger events for a specific run, in ascending order. */
   getRunLedger(workflowName: string, runId: string): Promise<WorkflowEvent[]> {
     return this.adapter.readAll(workflowName, runId) as Promise<WorkflowEvent[]>;
+  }
+
+  /** Delete all ledger events for a run. */
+  deleteRun(workflowName: string, runId: string): Promise<void> {
+    return this.adapter.deleteRun(workflowName, runId);
   }
 
   // ── Internal ──────────────────────────────────────────────────────────────
@@ -427,7 +471,10 @@ export class DrejClient {
       },
       readAll: (n, id) => this.adapter.readAll(n, id),
       lastCheckpoint: (n, id) => this.adapter.lastCheckpoint(n, id),
-      listRuns: (n) => this.adapter.listRuns(n),
+      listRunDetails: (n, o) => this.adapter.listRunDetails(n, o),
+      listAllRunDetails: (o) => this.adapter.listAllRunDetails(o),
+      getRunDetails: (n, id) => this.adapter.getRunDetails(n, id),
+      deleteRun: (n, id) => this.adapter.deleteRun(n, id),
     };
 
     const teeDeps: WorkflowDeps = {

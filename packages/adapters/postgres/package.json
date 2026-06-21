@@ -1,7 +1,7 @@
 {
   "name": "@drejt/postgres",
   "version": "0.1.2",
-  "private": false,
+  "publishConfig": { "access": "public" },
   "main": "./src/index.ts",
   "dependencies": {
     "postgres": "^3.4.5",

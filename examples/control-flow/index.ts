@@ -32,11 +32,13 @@ const w = workflow("control-flow").sandbox(
         { delayMs: 200, backoff: "exponential" },
       )
 
-      // when: sandboxId is in state after sandbox boots, so then-branch runs
+      // when: branch on the exit code of the previous exec step
+      // test -f exits 0 if the file exists, 1 if it doesn't
+      .exec('test -f /etc/hostname')
       .when(
-        { op: "exists", field: "sandboxId" },
-        (s) => s.exec('echo "[when] then-branch: sandbox is alive"'),
-        (s) => s.exec('echo "[when] else-branch: no sandbox"'),
+        { op: "eq", field: "exitCode", value: 0 },
+        (s) => s.exec('echo "[when] then-branch: /etc/hostname exists"'),
+        (s) => s.exec('echo "[when] else-branch: /etc/hostname missing"'),
       )
 
       // forEach: item is a LoopVar — use directly in a template literal

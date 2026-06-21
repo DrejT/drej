@@ -3,12 +3,12 @@ import type { SSEEvent } from "@drej/opensandbox";
 import { LedgerEvent } from "../ledger";
 import { CommandError } from "../errors";
 import type { WorkflowRunContext, WorkflowStep } from "../workflow";
-import type { StepDef, WorkflowState } from "./types";
+import { StepType, type StepDef, type WorkflowState } from "./types";
 import { interpolate } from "./utils";
 
-export function buildExecCommandStep(def: Extract<StepDef, { type: "exec_command" }>): WorkflowStep {
+export function buildExecCommandStep(def: Extract<StepDef, { type: StepType.ExecCommand }>): WorkflowStep {
   return {
-    id: "exec_command",
+    id: StepType.ExecCommand,
     async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
       const state = (input ?? {}) as WorkflowState;
       if (!state.sandboxId) throw new Error("exec_command requires sandboxId in workflow state");
@@ -47,9 +47,9 @@ export function buildExecCommandStep(def: Extract<StepDef, { type: "exec_command
   };
 }
 
-export function buildExecCodeStep(def: Extract<StepDef, { type: "exec_code" }>): WorkflowStep {
+export function buildExecCodeStep(def: Extract<StepDef, { type: StepType.ExecCode }>): WorkflowStep {
   return {
-    id: "exec_code",
+    id: StepType.ExecCode,
     async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
       const state = (input ?? {}) as WorkflowState;
       if (!state.sandboxId) throw new Error("exec_code requires sandboxId in workflow state");

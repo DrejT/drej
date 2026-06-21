@@ -1,4 +1,4 @@
-import { validateWorkflow, type StepDef } from "@drej/core";
+import { StepType, validateWorkflow, type StepDef } from "@drej/core";
 import type { Sandbox } from "@drej/opensandbox";
 import { wrapSteps, type SandboxOpts } from "./types";
 import { SandboxStepBuilder } from "./sandbox-step";
@@ -11,10 +11,10 @@ class WorkflowParallelBuilder {
     fn(sb);
     const innerSteps = sb.build();
     this._branches.push({
-      type: "sequence",
+      type: StepType.Sequence,
       steps: "id" in optsOrSandbox
         ? innerSteps
-        : [{ type: "create_sandbox", entrypoint: ["tail", "-f", "/dev/null"], ...optsOrSandbox }, ...innerSteps],
+        : [{ type: StepType.CreateSandbox, entrypoint: ["tail", "-f", "/dev/null"], ...optsOrSandbox }, ...innerSteps],
     });
     return this;
   }
@@ -69,7 +69,7 @@ export class WorkflowBuilder {
       this._steps.push(...sb.build());
     } else {
       this._steps.push(
-        { type: "create_sandbox", entrypoint: ["tail", "-f", "/dev/null"], ...optsOrSandbox },
+        { type: StepType.CreateSandbox, entrypoint: ["tail", "-f", "/dev/null"], ...optsOrSandbox },
         ...sb.build(),
       );
     }
@@ -79,7 +79,7 @@ export class WorkflowBuilder {
   parallel(fn: (p: WorkflowParallelBuilder) => WorkflowParallelBuilder, opts?: { concurrency?: number }): this {
     const pb = new WorkflowParallelBuilder();
     fn(pb);
-    this._steps.push({ type: "parallel", steps: pb.build(), ...(opts?.concurrency ? { maxConcurrency: opts.concurrency } : {}) });
+    this._steps.push({ type: StepType.Parallel, steps: pb.build(), ...(opts?.concurrency ? { maxConcurrency: opts.concurrency } : {}) });
     return this;
   }
 

@@ -1,4 +1,4 @@
-import type { StepDef } from "@drej/core";
+import { StepType, type StepDef } from "@drej/core";
 import type { ImageSpec, Resources } from "@drej/opensandbox";
 
 /** Options for creating a sandbox within a workflow step. */
@@ -32,5 +32,5 @@ export function createLoopVar(name: string): LoopItem {
 }
 
 export function wrapSteps(steps: StepDef[]): StepDef {
-  return steps.length === 1 ? steps[0] : { type: "sequence", steps };
+  return steps.length === 1 ? steps[0] : { type: StepType.Sequence, steps };
 }

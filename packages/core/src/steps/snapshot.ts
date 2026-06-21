@@ -2,7 +2,7 @@ import { SnapshotState } from "@drej/opensandbox";
 import type { ControlClient } from "@drej/opensandbox";
 import { LedgerEvent } from "../ledger";
 import type { WorkflowRunContext, WorkflowStep } from "../workflow";
-import type { WorkflowState, SnapshotConfig } from "./types";
+import { StepType, type WorkflowState, type SnapshotConfig } from "./types";
 
 export function shouldSnapshot(config: SnapshotConfig, stepIndex: number): boolean {
   if (config.afterSteps?.includes(stepIndex)) return true;
@@ -27,7 +27,7 @@ export async function waitForSnapshot(
 
 export function buildSnapshotStep(): WorkflowStep {
   return {
-    id: "snapshot",
+    id: StepType.Snapshot,
     async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
       const state = (input ?? {}) as WorkflowState;
       if (!state.sandboxId) throw new Error("snapshot requires sandboxId in workflow state");

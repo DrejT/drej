@@ -1,4 +1,5 @@
 import type { StepDef, Predicate } from "@drej/core";
+import { StepType, Encoding, Backoff } from "@drej/core";
 import { CodeLanguage } from "@drej/opensandbox";
 import { createLoopVar, wrapSteps, type LoopItem } from "./types";
 
@@ -31,7 +32,7 @@ export class SandboxStepBuilder {
    * ```
    */
   exec(command: string, opts?: { cwd?: string; envs?: Record<string, string>; capture?: string; strict?: boolean }): this {
-    this._steps.push({ type: "exec_command", command, ...opts });
+    this._steps.push({ type: StepType.ExecCommand, command, ...opts });
     return this;
   }
 
@@ -47,7 +48,7 @@ export class SandboxStepBuilder {
    * ```
    */
   execCode(code: string, opts?: { context?: { id: string; language: CodeLanguage } }): this {
-    this._steps.push({ type: "exec_code", code, ...(opts?.context ? { context: opts.context } : {}) });
+    this._steps.push({ type: StepType.ExecCode, code, ...(opts?.context ? { context: opts.context } : {}) });
     return this;
   }
 
@@ -61,8 +62,8 @@ export class SandboxStepBuilder {
    *  .exec("echo Result was {{result}}")
    * ```
    */
-  readFile(path: string, opts: { as: string; encoding?: "utf8" | "base64" }): this {
-    this._steps.push({ type: "read_file", path, as: opts.as, ...(opts.encoding ? { encoding: opts.encoding } : {}) });
+  readFile(path: string, opts: { as: string; encoding?: Encoding }): this {
+    this._steps.push({ type: StepType.ReadFile, path, as: opts.as, ...(opts.encoding ? { encoding: opts.encoding } : {}) });
     return this;
   }
 
@@ -75,7 +76,7 @@ export class SandboxStepBuilder {
    * ```
    */
   snapshot(): this {
-    this._steps.push({ type: "snapshot" });
+    this._steps.push({ type: StepType.Snapshot });
     return this;
   }
 
@@ -85,10 +86,11 @@ export class SandboxStepBuilder {
    * @example
    * ```ts
    * s.writeFile("/app/config.json", JSON.stringify(config))
+   * s.writeFile("/app/data.bin", b64data, Encoding.Base64)
    * ```
    */
-  writeFile(path: string, content: string, encoding?: "utf8" | "base64"): this {
-    this._steps.push({ type: "write_file", path, content, ...(encoding ? { encoding } : {}) });
+  writeFile(path: string, content: string, encoding?: Encoding): this {
+    this._steps.push({ type: StepType.WriteFile, path, content, ...(encoding ? { encoding } : {}) });
     return this;
   }
 
@@ -97,17 +99,17 @@ export class SandboxStepBuilder {
    *
    * @example
    * ```ts
-   * s.retry(3, (r) => r.exec("flaky-command"), { backoff: "exponential" })
+   * s.retry(3, (r) => r.exec("flaky-command"), { backoff: Backoff.Exponential })
    * ```
    */
   retry(
     maxAttempts: number,
     fn: (s: SandboxStepBuilder) => SandboxStepBuilder,
-    opts?: { delayMs?: number; backoff?: "fixed" | "exponential" },
+    opts?: { delayMs?: number; backoff?: Backoff },
   ): this {
     const inner = new SandboxStepBuilder();
     fn(inner);
-    this._steps.push({ type: "retry", step: wrapSteps(inner.build()), maxAttempts, ...opts });
+    this._steps.push({ type: StepType.Retry, step: wrapSteps(inner.build()), maxAttempts, ...opts });
     return this;
   }
 
@@ -140,11 +142,11 @@ export class SandboxStepBuilder {
 
     const steps: StepDef[] =
       typeof result === "string"
-        ? [{ type: "exec_command", command: result }]
+        ? [{ type: StepType.ExecCommand, command: result }]
         : result.build();
 
     this._steps.push({
-      type: "loop",
+      type: StepType.Loop,
       as: varName,
       steps,
       ...(Array.isArray(source) ? { items: source } : { over: source.from }),
@@ -182,7 +184,7 @@ export class SandboxStepBuilder {
       : undefined;
 
     this._steps.push({
-      type: "conditional",
+      type: StepType.Conditional,
       condition,
       then: thenBuilder.build(),
       ...(elseSteps ? { else: elseSteps } : {}),
@@ -205,7 +207,7 @@ export class SandboxStepBuilder {
   parallel(fn: (p: SandboxParallelBuilder) => SandboxParallelBuilder, opts?: { concurrency?: number }): this {
     const pb = new SandboxParallelBuilder();
     fn(pb);
-    this._steps.push({ type: "parallel", steps: pb.build(), ...(opts?.concurrency ? { maxConcurrency: opts.concurrency } : {}) });
+    this._steps.push({ type: StepType.Parallel, steps: pb.build(), ...(opts?.concurrency ? { maxConcurrency: opts.concurrency } : {}) });
     return this;
   }
 

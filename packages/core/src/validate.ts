@@ -1,6 +1,6 @@
-import type { StepDef } from "./steps";
+import { StepType, type StepDef } from "./steps";
 
-type CreateSandboxStep = Extract<StepDef, { type: "create_sandbox" }>;
+type CreateSandboxStep = Extract<StepDef, { type: StepType.CreateSandbox }>;
 
 function isCodeInterpreterSandbox(step: CreateSandboxStep): boolean {
   return (step.entrypoint ?? []).some((e) => e.includes("code-interpreter.sh"));
@@ -16,11 +16,11 @@ function walkSteps(
 
   for (const step of steps) {
     switch (step.type) {
-      case "create_sandbox":
+      case StepType.CreateSandbox:
         currentSandbox = step;
         break;
 
-      case "exec_code":
+      case StepType.ExecCode:
         if (currentSandbox && !isCodeInterpreterSandbox(currentSandbox)) {
           errors.push(
             `Workflow "${workflowName}": execCode() requires the opensandbox/code-interpreter image.\n` +
@@ -29,34 +29,34 @@ function walkSteps(
         }
         break;
 
-      case "retry":
+      case StepType.Retry:
         errors.push(...walkSteps(
-          step.step.type === "sequence" ? step.step.steps : [step.step],
+          step.step.type === StepType.Sequence ? step.step.steps : [step.step],
           workflowName,
           currentSandbox,
         ));
         break;
 
-      case "conditional":
+      case StepType.Conditional:
         errors.push(...walkSteps(step.then, workflowName, currentSandbox));
         if (step.else) errors.push(...walkSteps(step.else, workflowName, currentSandbox));
         break;
 
-      case "loop":
+      case StepType.Loop:
         errors.push(...walkSteps(step.steps, workflowName, currentSandbox));
         break;
 
-      case "parallel":
+      case StepType.Parallel:
         for (const branch of step.steps) {
           errors.push(...walkSteps(
-            branch.type === "sequence" ? branch.steps : [branch],
+            branch.type === StepType.Sequence ? branch.steps : [branch],
             workflowName,
             currentSandbox,
           ));
         }
         break;
 
-      case "sequence":
+      case StepType.Sequence:
         errors.push(...walkSteps(step.steps, workflowName, currentSandbox));
         break;
     }

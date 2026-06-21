@@ -1,8 +1,11 @@
 import {
   Workflow,
   LedgerEvent,
+  StepType,
   buildStep,
   mergeHooks,
+  shouldSnapshot,
+  waitForSnapshot,
   type WorkflowDeps,
   type WorkflowHooks,
   type IStorageAdapter,
@@ -10,10 +13,8 @@ import {
   type StepDef,
   type RunDetails,
   type ListRunsOptions,
-  shouldSnapshot,
-  waitForSnapshot,
 } from "@drej/core";
-export { WorkflowError, SandboxError, ExecConnectionError, CommandError, WorkflowStatus, RunStatus } from "@drej/core";
+export { WorkflowError, SandboxError, ExecConnectionError, CommandError, WorkflowStatus, RunStatus, StepType, Encoding, Backoff } from "@drej/core";
 export type {
   WorkflowHooks,
   WorkflowHookInfo,
@@ -249,7 +250,7 @@ export class DrejClient {
 
     const { name: wfName, steps } = w.build();
     const replaySteps: StepDef[] = steps.map((s) =>
-      s.type === "create_sandbox" ? { ...s, snapshotId } : s,
+      s.type === StepType.CreateSandbox ? { ...s, snapshotId } : s,
     );
     const replayRunId = crypto.randomUUID();
     return new WorkflowRun(wfName, replayRunId, this._execute(wfName, replayRunId, replaySteps));

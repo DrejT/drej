@@ -1,7 +1,7 @@
 import { ControlClient, ExecClient, SandboxState } from "@drej/opensandbox";
 import { SandboxError, ExecConnectionError } from "../errors";
 import type { WorkflowRunContext, WorkflowStep } from "../workflow";
-import type { StepDef, WorkflowState } from "./types";
+import { StepType, type StepDef, type WorkflowState } from "./types";
 
 // Calls getEndpoint once (each call returns a different ephemeral proxy port)
 // then polls listContexts until execd accepts connections.
@@ -27,9 +27,9 @@ export async function resolveExecClient(
   throw new Error("unreachable");
 }
 
-export function buildCreateSandboxStep(def: Extract<StepDef, { type: "create_sandbox" }>): WorkflowStep {
+export function buildCreateSandboxStep(def: Extract<StepDef, { type: StepType.CreateSandbox }>): WorkflowStep {
   return {
-    id: "create_sandbox",
+    id: StepType.CreateSandbox,
     async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
       const state = (input ?? {}) as WorkflowState;
       const sb = await ctx.control.createSandbox({
@@ -65,7 +65,7 @@ export function buildCreateSandboxStep(def: Extract<StepDef, { type: "create_san
 
 export function buildDeleteSandboxStep(): WorkflowStep {
   return {
-    id: "delete_sandbox",
+    id: StepType.DeleteSandbox,
     async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
       const state = (input ?? {}) as WorkflowState;
       if (state.sandboxId) await ctx.control.deleteSandbox(state.sandboxId);

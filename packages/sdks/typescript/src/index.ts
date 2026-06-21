@@ -1,4 +1,4 @@
-export { DrejClient, DrejError, WorkflowRun, LedgerEvent, RunStatus } from "./client";
+export { DrejClient, DrejError, WorkflowRun, LedgerEvent, RunStatus, StepType, Encoding, Backoff } from "./client";
 export type {
   DrejClientOptions,
   RunOptions,

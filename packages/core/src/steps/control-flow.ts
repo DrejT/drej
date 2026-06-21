@@ -1,17 +1,17 @@
 import { LedgerEvent } from "../ledger";
 import type { WorkflowRunContext, WorkflowStep } from "../workflow";
-import type { StepDef, WorkflowState } from "./types";
+import { StepType, Backoff, type StepDef, type WorkflowState } from "./types";
 import { evaluate, getPath, runWithConcurrency } from "./utils";
 
 type BuildStepFn = (def: StepDef) => WorkflowStep;
 
 export function buildRetryStep(
-  def: Extract<StepDef, { type: "retry" }>,
+  def: Extract<StepDef, { type: StepType.Retry }>,
   buildStepFn: BuildStepFn,
 ): WorkflowStep {
   const child = buildStepFn(def.step);
   return {
-    id: "retry",
+    id: StepType.Retry,
     rollback: child.rollback,
     async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
       let lastErr: unknown;
@@ -22,7 +22,7 @@ export function buildRetryStep(
           lastErr = err;
           if (attempt < def.maxAttempts - 1) {
             const base = def.delayMs ?? 500;
-            const delay = def.backoff === "exponential" ? base * Math.pow(2, attempt) : base;
+            const delay = def.backoff === Backoff.Exponential ? base * Math.pow(2, attempt) : base;
             await ctx.emit({
               ts: Date.now(),
               workflowName: ctx.workflowName,
@@ -41,13 +41,13 @@ export function buildRetryStep(
 }
 
 export function buildConditionalStep(
-  def: Extract<StepDef, { type: "conditional" }>,
+  def: Extract<StepDef, { type: StepType.Conditional }>,
   buildStepFn: BuildStepFn,
 ): WorkflowStep {
   const thenSteps = def.then.map(buildStepFn);
   const elseSteps = (def.else ?? []).map(buildStepFn);
   return {
-    id: "conditional",
+    id: StepType.Conditional,
     async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
       const branch = evaluate(def.condition, input) ? thenSteps : elseSteps;
       let current = input;
@@ -60,11 +60,11 @@ export function buildConditionalStep(
 }
 
 export function buildLoopStep(
-  def: Extract<StepDef, { type: "loop" }>,
+  def: Extract<StepDef, { type: StepType.Loop }>,
   buildStepFn: BuildStepFn,
 ): WorkflowStep {
   return {
-    id: "loop",
+    id: StepType.Loop,
     async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
       const arr = def.items ?? (def.over ? getPath(input, def.over) : undefined);
       if (!Array.isArray(arr)) throw new Error(`loop: must provide either "items" or "over" pointing to an array in workflow state`);
@@ -90,11 +90,11 @@ export function buildLoopStep(
 }
 
 export function buildParallelStep(
-  def: Extract<StepDef, { type: "parallel" }>,
+  def: Extract<StepDef, { type: StepType.Parallel }>,
   buildStepFn: BuildStepFn,
 ): WorkflowStep {
   return {
-    id: "parallel",
+    id: StepType.Parallel,
     async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
       const branchedTasks = def.steps.map((stepDef, branchIndex) => {
         const branchCtx: WorkflowRunContext = {
@@ -118,12 +118,12 @@ export function buildParallelStep(
 }
 
 export function buildSequenceStep(
-  def: Extract<StepDef, { type: "sequence" }>,
+  def: Extract<StepDef, { type: StepType.Sequence }>,
   buildStepFn: BuildStepFn,
 ): WorkflowStep {
   const childSteps = def.steps.map(buildStepFn);
   return {
-    id: "sequence",
+    id: StepType.Sequence,
     async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
       let current = input;
       for (const step of childSteps) {

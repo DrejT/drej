@@ -1,0 +1,17 @@
+{
+  "name": "@drej/otel",
+  "version": "0.1.0",
+  "publishConfig": { "access": "public" },
+  "main": "./src/index.ts",
+  "peerDependencies": {
+    "@opentelemetry/api": "^1.0.0"
+  },
+  "dependencies": {
+    "@drej/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "bun-types": "latest",
+    "typescript": "latest"
+  }
+}

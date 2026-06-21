@@ -125,9 +125,18 @@ export interface SSEEvent {
   timestamp: number;
 }
 
+export enum CodeLanguage {
+  Python = "python",
+  JavaScript = "javascript",
+  TypeScript = "typescript",
+  Go = "go",
+  Java = "java",
+  Bash = "bash",
+}
+
 export interface CodeContext {
   id: string;
-  language: string;
+  language: CodeLanguage;
 }
 
 // POST /code body
@@ -135,7 +144,7 @@ export interface ExecuteCodeOptions {
   code: string;
   context?: {
     id: string;
-    language: string;
+    language: CodeLanguage;
   };
 }
 

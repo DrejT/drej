@@ -1,6 +1,6 @@
 export { ControlClient, OpenSandboxError } from "./control";
 export { ExecClient } from "./exec";
-export { SandboxState, SnapshotState, SSEEventType } from "./types";
+export { SandboxState, SnapshotState, SSEEventType, CodeLanguage } from "./types";
 export type {
   Resources,
   ImageAuth,

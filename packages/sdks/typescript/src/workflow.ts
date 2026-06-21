@@ -92,6 +92,27 @@ export class SandboxStepBuilder {
   }
 
   /**
+   * Read a file from the sandbox filesystem into workflow state.
+   *
+   * The file contents are stored under `as` and available for interpolation
+   * in subsequent steps via `{{key}}`, or accessible on `WorkflowState` after
+   * the run completes.
+   *
+   * @param encoding Defaults to `utf8`. Use `base64` for binary files.
+   *
+   * @example
+   * ```ts
+   * s.exec("node -e 'console.log(42)' > /tmp/result.txt")
+   *  .readFile("/tmp/result.txt", { as: "result" })
+   *  .exec("echo Result was {{result}}")
+   * ```
+   */
+  readFile(path: string, opts: { as: string; encoding?: "utf8" | "base64" }): this {
+    this._steps.push({ type: "read_file", path, as: opts.as, ...(opts.encoding ? { encoding: opts.encoding } : {}) });
+    return this;
+  }
+
+  /**
    * Capture a snapshot of the sandbox at this point in the workflow.
    *
    * The snapshot ID is stored in workflow state as `snapshotId` and persisted

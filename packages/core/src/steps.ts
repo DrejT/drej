@@ -26,6 +26,7 @@ export type StepDef =
   | { type: "exec_command"; command: string; cwd?: string; envs?: Record<string, string> }
   | { type: "delete_sandbox" }
   | { type: "write_file"; path: string; content: string; encoding?: "utf8" | "base64" }
+  | { type: "read_file"; path: string; as: string; encoding?: "utf8" | "base64" }
   | { type: "snapshot" }
   | { type: "retry"; step: StepDef; maxAttempts: number; delayMs?: number; backoff?: "fixed" | "exponential" }
   | { type: "conditional"; condition: Predicate; then: StepDef[]; else?: StepDef[] }
@@ -232,6 +233,31 @@ export function buildStep(def: StepDef): WorkflowStep {
             : def.content;
           await exec.uploadFile(def.path, content);
           return state;
+        },
+      };
+
+    case "read_file":
+      return {
+        id: "read_file",
+        async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
+          const state = (input ?? {}) as WorkflowState;
+          if (!state.sandboxId) throw new Error("read_file requires sandboxId in workflow state");
+          const exec = await ctx.resolveExec(state.sandboxId);
+          const stream = await exec.downloadFile(def.path);
+          const chunks: Uint8Array[] = [];
+          const reader = stream.getReader();
+          try {
+            for (;;) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              chunks.push(value);
+            }
+          } finally {
+            reader.releaseLock();
+          }
+          const bytes = Buffer.concat(chunks);
+          const content = def.encoding === "base64" ? bytes.toString("base64") : bytes.toString("utf8");
+          return { ...state, [def.as]: content };
         },
       };
 

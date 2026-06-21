@@ -8,13 +8,16 @@
   ],
   "publishConfig": { "access": "public" },
   "scripts": {
-    "build:types": "tsc --project tsconfig.build.json"
+    "build:types": "tsc --project tsconfig.build.json",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@drej/opensandbox": "workspace:*"
   },
   "devDependencies": {
-    "bun-types": "latest",
-    "typescript": "latest"
+    "bun-types": "1.3.14",
+    "typescript": "6.0.3",
+    "vitest": "4.1.9"
   }
 }

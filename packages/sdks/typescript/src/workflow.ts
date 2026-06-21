@@ -217,7 +217,7 @@ export class SandboxStepBuilder {
       as: varName,
       steps,
       ...(Array.isArray(source) ? { items: source } : { over: source.from }),
-      ...(opts.concurrency !== undefined && opts.concurrency > 1 ? { concurrently: true } : {}),
+      ...(opts.concurrency !== undefined && opts.concurrency > 1 ? { maxConcurrency: opts.concurrency } : {}),
     });
 
     return this;
@@ -274,10 +274,10 @@ export class SandboxStepBuilder {
    * )
    * ```
    */
-  parallel(fn: (p: SandboxParallelBuilder) => SandboxParallelBuilder): this {
+  parallel(fn: (p: SandboxParallelBuilder) => SandboxParallelBuilder, opts?: { concurrency?: number }): this {
     const pb = new SandboxParallelBuilder();
     fn(pb);
-    this._steps.push({ type: "parallel", steps: pb.build() });
+    this._steps.push({ type: "parallel", steps: pb.build(), ...(opts?.concurrency ? { maxConcurrency: opts.concurrency } : {}) });
     return this;
   }
 
@@ -389,10 +389,10 @@ export class WorkflowBuilder {
     return this;
   }
 
-  parallel(fn: (p: WorkflowParallelBuilder) => WorkflowParallelBuilder): this {
+  parallel(fn: (p: WorkflowParallelBuilder) => WorkflowParallelBuilder, opts?: { concurrency?: number }): this {
     const pb = new WorkflowParallelBuilder();
     fn(pb);
-    this._steps.push({ type: "parallel", steps: pb.build() });
+    this._steps.push({ type: "parallel", steps: pb.build(), ...(opts?.concurrency ? { maxConcurrency: opts.concurrency } : {}) });
     return this;
   }
 

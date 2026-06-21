@@ -57,15 +57,19 @@ export class SandboxStepBuilder {
    *
    * @param opts.capture Store stdout in workflow state under this key, making it
    *   available for interpolation in subsequent steps via `{{key}}`.
+   * @param opts.strict Throw a `CommandError` if the command exits with a non-zero
+   *   code. When `false` (default), the exit code is stored in state as `exitCode`
+   *   and the workflow continues — use `when({ field: "exitCode", eq: 0 }, ...)` to branch.
    *
    * @example
    * ```ts
    * s.exec("npm ci").exec("npm test")
    * s.exec("python script.py", { cwd: "/app" })
    * s.exec("git rev-parse HEAD", { capture: "sha" }).exec("echo deploying {{sha}}")
+   * s.exec("npm test", { strict: true }) // throws CommandError on non-zero exit
    * ```
    */
-  exec(command: string, opts?: { cwd?: string; envs?: Record<string, string>; capture?: string }): this {
+  exec(command: string, opts?: { cwd?: string; envs?: Record<string, string>; capture?: string; strict?: boolean }): this {
     this._steps.push({ type: "exec_command", command, ...opts });
     return this;
   }

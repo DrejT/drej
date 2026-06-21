@@ -1,6 +1,7 @@
 import { ControlClient, ExecClient } from "@drejt/opensandbox";
 import type { SSEEvent } from "@drejt/opensandbox";
 import { LedgerEvent } from "./ledger";
+import { SandboxError, ExecConnectionError, CommandError } from "./errors";
 import type { WorkflowRunContext, WorkflowStep } from "./workflow";
 
 // ── Step types ─────────────────────────────────────────────────────────────
@@ -23,7 +24,7 @@ export type StepDef =
       resourceLimits?: { cpu?: string; memory?: string; gpu?: string };
     }
   | { type: "exec_code"; code: string; context?: { id: string; language: string } }
-  | { type: "exec_command"; command: string; cwd?: string; envs?: Record<string, string>; capture?: string }
+  | { type: "exec_command"; command: string; cwd?: string; envs?: Record<string, string>; capture?: string; strict?: boolean }
   | { type: "delete_sandbox" }
   | { type: "write_file"; path: string; content: string; encoding?: "utf8" | "base64" }
   | { type: "read_file"; path: string; as: string; encoding?: "utf8" | "base64" }
@@ -61,7 +62,7 @@ export async function resolveExecClient(
       await client.listContexts();
       return client;
     } catch {
-      if (attempt === retries) throw new Error(`execd not ready after ${retries}s for sandbox ${sandboxId}`);
+      if (attempt === retries) throw new ExecConnectionError(sandboxId);
       await new Promise<void>((r) => setTimeout(r, delayMs));
     }
   }
@@ -146,9 +147,15 @@ export function buildStep(def: StepDef): WorkflowStep {
             const s = await ctx.control.getSandbox(sb.id);
             if (s.status.state === "Running") break;
             if (s.status.state === "Failed" || s.status.state === "Terminated") {
-              throw new Error(`Sandbox ${sb.id} entered state ${s.status.state}: ${s.status.message ?? ""}`);
+              throw new SandboxError(
+                `Sandbox entered state ${s.status.state}: ${s.status.message ?? ""}`,
+                sb.id,
+              );
             }
             await new Promise<void>((r) => setTimeout(r, 1_000));
+          }
+          if ((await ctx.control.getSandbox(sb.id)).status.state !== "Running") {
+            throw new SandboxError(`Sandbox timed out waiting to reach Running state`, sb.id);
           }
 
           return { ...state, sandboxId: sb.id };
@@ -209,6 +216,9 @@ export function buildStep(def: StepDef): WorkflowStep {
           }
           const next: WorkflowState = { ...state, commandEvents: events, exitCode };
           if (def.capture) next[def.capture] = stdoutChunks.join("").trimEnd();
+          if (def.strict && exitCode !== 0) {
+            throw new CommandError(exitCode, def.command, state.sandboxId!);
+          }
           return next;
         },
       };

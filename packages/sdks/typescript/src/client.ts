@@ -11,6 +11,7 @@ import {
   type SnapshotConfig,
   type StepDef,
 } from "@drejt/core";
+export { WorkflowError, SandboxError, ExecConnectionError, CommandError } from "@drejt/core";
 import {
   ControlClient,
   type Sandbox,
@@ -381,8 +382,9 @@ export class DrejClient {
       const wf = new Workflow(name, runId, steps.map(buildStep), deps);
       try {
         await wf.run(initialState);
-      } catch {
+      } catch (err) {
         try { await wf.rollback(); } catch { /* ignore */ }
+        throw err;
       }
     });
   }
@@ -424,12 +426,11 @@ export class DrejClient {
     // Emit run_started before kicking off execution
     enqueue({ ts: Date.now(), workflowName: name, runId, stepIndex: -1, event: LedgerEvent.RunStarted, payload: { workflowName: name, runId } });
 
-    execute(teeDeps).finally(() => {
-      done = true;
-      const fn = wakeup;
-      wakeup = null;
-      fn?.();
-    });
+    let executionError: unknown = undefined;
+    execute(teeDeps).then(
+      () => { done = true; const fn = wakeup; wakeup = null; fn?.(); },
+      (err) => { executionError = err; done = true; const fn = wakeup; wakeup = null; fn?.(); },
+    );
 
     return (async function* () {
       while (true) {
@@ -438,6 +439,7 @@ export class DrejClient {
         await new Promise<void>((r) => { wakeup = r; });
       }
       while (queue.length > 0) yield queue.shift()!;
+      if (executionError !== undefined) throw executionError;
     })();
   }
 }

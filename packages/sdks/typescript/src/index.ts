@@ -23,3 +23,4 @@ export type {
 
 export { workflow, WorkflowBuilder, SandboxStepBuilder } from "./workflow";
 export type { SandboxOpts, LoopItem } from "./workflow";
+export type { CodeContext } from "@drejt/opensandbox";

@@ -190,6 +190,7 @@ export function buildStep(def: StepDef): WorkflowStep {
           // base64-encode so newlines, quotes, special chars survive the JSON boundary
           const command = `echo ${Buffer.from(raw).toString("base64")} | base64 -d | bash`;
           const events: SSEEvent[] = [];
+          let exitCode = 0;
           for await (const ev of exec.executeCommand({ command, cwd: def.cwd, envs: def.envs })) {
             await ctx.emit({
               ts: Date.now(),
@@ -199,8 +200,12 @@ export function buildStep(def: StepDef): WorkflowStep {
               payload: ev,
             });
             events.push(ev as unknown as SSEEvent);
+            if (ev.type === "error" && ev.error?.evalue !== undefined) {
+              const code = Number(ev.error.evalue);
+              if (!isNaN(code)) exitCode = code;
+            }
           }
-          return { ...state, commandEvents: events };
+          return { ...state, commandEvents: events, exitCode };
         },
       };
 

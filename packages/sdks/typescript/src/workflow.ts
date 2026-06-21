@@ -66,6 +66,28 @@ export class SandboxStepBuilder {
   }
 
   /**
+   * Execute code inside the sandbox using a stateful interpreter context.
+   * Supports Python, Node.js, and other languages depending on the execd image.
+   *
+   * @param context.id   Reuse a named context across calls to share state (variables, imports).
+   * @param context.language  Language identifier (e.g. `"python"`, `"node"`).
+   *
+   * @example
+   * ```ts
+   * // Stateless one-shot execution
+   * s.execCode("print('hello')")
+   *
+   * // Stateful session: second call sees x defined by the first
+   * s.execCode("x = 42", { context: { id: "repl", language: "python" } })
+   * s.execCode("print(x)", { context: { id: "repl", language: "python" } })
+   * ```
+   */
+  execCode(code: string, opts?: { context?: { id: string; language: string } }): this {
+    this._steps.push({ type: "exec_code", code, ...(opts?.context ? { context: opts.context } : {}) });
+    return this;
+  }
+
+  /**
    * Write a file into the sandbox filesystem.
    *
    * @param encoding Defaults to `utf8`. Use `base64` for binary content.

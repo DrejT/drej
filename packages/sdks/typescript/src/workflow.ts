@@ -1,4 +1,5 @@
 import type { StepDef, Predicate } from "@drejt/core";
+import { validateWorkflow } from "@drejt/core";
 import type { ImageSpec, Resources } from "@drejt/opensandbox";
 
 // Placeholder that serialises to {{name}} inside template literals.
@@ -323,6 +324,7 @@ export class WorkflowBuilder {
   }
 
   build(): { name: string; steps: StepDef[] } {
+    validateWorkflow(this._name, this._steps);
     return { name: this._name, steps: this._steps };
   }
 }

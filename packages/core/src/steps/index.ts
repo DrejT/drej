@@ -2,7 +2,7 @@ import type { WorkflowStep } from "../workflow";
 import { StepType, type StepDef } from "./types";
 import { buildCreateSandboxStep, buildDeleteSandboxStep } from "./sandbox";
 import { buildExecCommandStep, buildExecCodeStep } from "./exec";
-import { buildWriteFileStep, buildReadFileStep } from "./file";
+import { buildWriteFileStep, buildReadFileStep, buildDeleteFileStep, buildMoveFileStep, buildListDirectoryStep, buildSearchFilesStep } from "./file";
 import { buildSnapshotStep } from "./snapshot";
 import {
   buildRetryStep,
@@ -20,6 +20,10 @@ export function buildStep(def: StepDef): WorkflowStep {
     case StepType.ExecCode:      return buildExecCodeStep(def);
     case StepType.WriteFile:     return buildWriteFileStep(def);
     case StepType.ReadFile:      return buildReadFileStep(def);
+    case StepType.DeleteFile:    return buildDeleteFileStep(def);
+    case StepType.MoveFile:      return buildMoveFileStep(def);
+    case StepType.ListDirectory: return buildListDirectoryStep(def);
+    case StepType.SearchFiles:   return buildSearchFilesStep(def);
     case StepType.Snapshot:      return buildSnapshotStep();
     case StepType.Retry:         return buildRetryStep(def, buildStep);
     case StepType.Conditional:   return buildConditionalStep(def, buildStep);

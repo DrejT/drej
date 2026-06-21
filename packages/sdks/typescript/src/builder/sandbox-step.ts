@@ -1,12 +1,12 @@
 import type { StepDef, Predicate } from "@drej/core";
 import { StepType, Encoding, Backoff } from "@drej/core";
 import { CodeLanguage } from "@drej/opensandbox";
-import { createLoopVar, wrapSteps, type LoopItem } from "./types";
+import { createLoopVar, wrapSteps, refKey, refStr, Ref, type LoopItem } from "./types";
 
 export { CodeLanguage };
 
 type ForEachOpts = { concurrency?: number; as?: string };
-type ForEachSource = unknown[] | { from: string };
+type ForEachSource = unknown[] | { from: string } | Ref<unknown[]>;
 type ForEachCallback = (s: SandboxStepBuilder, item: LoopItem) => SandboxStepBuilder | string;
 
 /**
@@ -31,8 +31,15 @@ export class SandboxStepBuilder {
    * s.exec("npm test", { strict: true })
    * ```
    */
-  exec(command: string, opts?: { cwd?: string; envs?: Record<string, string>; capture?: string; strict?: boolean }): this {
-    this._steps.push({ type: StepType.ExecCommand, command, ...opts });
+  exec(command: string, opts?: { cwd?: string; envs?: Record<string, Ref<string> | string>; capture?: Ref<string> | string; strict?: boolean }): this {
+    this._steps.push({
+      type: StepType.ExecCommand,
+      command,
+      ...(opts?.cwd !== undefined ? { cwd: opts.cwd } : {}),
+      ...(opts?.envs ? { envs: Object.fromEntries(Object.entries(opts.envs).map(([k, v]) => [k, refStr(v)])) } : {}),
+      ...(opts?.capture !== undefined ? { capture: refKey(opts.capture) } : {}),
+      ...(opts?.strict !== undefined ? { strict: opts.strict } : {}),
+    });
     return this;
   }
 
@@ -62,8 +69,8 @@ export class SandboxStepBuilder {
    *  .exec("echo Result was {{result}}")
    * ```
    */
-  readFile(path: string, opts: { as: string; encoding?: Encoding }): this {
-    this._steps.push({ type: StepType.ReadFile, path, as: opts.as, ...(opts.encoding ? { encoding: opts.encoding } : {}) });
+  readFile(path: string, opts: { as: Ref<string> | string; encoding?: Encoding }): this {
+    this._steps.push({ type: StepType.ReadFile, path, as: refKey(opts.as), ...(opts.encoding ? { encoding: opts.encoding } : {}) });
     return this;
   }
 
@@ -89,8 +96,8 @@ export class SandboxStepBuilder {
    * s.writeFile("/app/data.bin", b64data, Encoding.Base64)
    * ```
    */
-  writeFile(path: string, content: string, encoding?: Encoding): this {
-    this._steps.push({ type: StepType.WriteFile, path, content, ...(encoding ? { encoding } : {}) });
+  writeFile(path: string, content: Ref<string> | string, encoding?: Encoding): this {
+    this._steps.push({ type: StepType.WriteFile, path, content: refStr(content), ...(encoding ? { encoding } : {}) });
     return this;
   }
 
@@ -145,11 +152,14 @@ export class SandboxStepBuilder {
         ? [{ type: StepType.ExecCommand, command: result }]
         : result.build();
 
+    const over = Array.isArray(source) ? { items: source }
+      : source instanceof Ref ? { over: source.key }
+      : { over: (source as { from: string }).from };
     this._steps.push({
       type: StepType.Loop,
       as: varName,
       steps,
-      ...(Array.isArray(source) ? { items: source } : { over: source.from }),
+      ...over,
       ...(opts.concurrency !== undefined && opts.concurrency > 1 ? { maxConcurrency: opts.concurrency } : {}),
     });
 
@@ -190,6 +200,65 @@ export class SandboxStepBuilder {
       ...(elseSteps ? { else: elseSteps } : {}),
     });
 
+    return this;
+  }
+
+  /**
+   * Delete a file from the sandbox filesystem.
+   *
+   * @example
+   * ```ts
+   * s.deleteFile("/tmp/build.log")
+   * s.deleteFile(`/tmp/${sha}.tar.gz`)
+   * ```
+   */
+  deleteFile(path: string): this {
+    this._steps.push({ type: StepType.DeleteFile, path });
+    return this;
+  }
+
+  /**
+   * Move or rename a file inside the sandbox filesystem.
+   *
+   * @example
+   * ```ts
+   * s.moveFile("/app/dist", "/app/release")
+   * s.moveFile(`/tmp/${sha}`, "/app/current")
+   * ```
+   */
+  moveFile(from: string, to: string): this {
+    this._steps.push({ type: StepType.MoveFile, from, to });
+    return this;
+  }
+
+  /**
+   * List a directory inside the sandbox and store the entries in workflow state.
+   *
+   * @example
+   * ```ts
+   * const entries = ref<DirectoryEntry[]>("entries")
+   * s.listDirectory("/app/dist", { as: entries })
+   *  .forEach(entries, (s, entry) => s.exec(`echo ${entry}`))
+   * ```
+   */
+  listDirectory(path: string, opts: { as: Ref<unknown[]> | string; depth?: number }): this {
+    this._steps.push({ type: StepType.ListDirectory, path, as: refKey(opts.as), ...(opts.depth !== undefined ? { depth: opts.depth } : {}) });
+    return this;
+  }
+
+  /**
+   * Search for files matching a glob pattern and store the matching paths in workflow state.
+   * The result is a `string[]` that can be passed directly to `forEach`.
+   *
+   * @example
+   * ```ts
+   * const tsFiles = ref<string[]>("tsFiles")
+   * s.searchFiles("**\/*.ts", { as: tsFiles })
+   *  .forEach(tsFiles, (s, file) => s.exec(`tsc --noEmit ${file}`))
+   * ```
+   */
+  searchFiles(pattern: string, opts: { as: Ref<string[]> | string; dir?: string }): this {
+    this._steps.push({ type: StepType.SearchFiles, pattern, as: refKey(opts.as), ...(opts.dir !== undefined ? { dir: opts.dir } : {}) });
     return this;
   }
 

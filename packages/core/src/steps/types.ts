@@ -13,6 +13,10 @@ export enum StepType {
   DeleteSandbox = "delete_sandbox",
   WriteFile     = "write_file",
   ReadFile      = "read_file",
+  DeleteFile    = "delete_file",
+  MoveFile      = "move_file",
+  ListDirectory = "list_directory",
+  SearchFiles   = "search_files",
   Snapshot      = "snapshot",
   Retry         = "retry",
   Conditional   = "conditional",
@@ -47,6 +51,10 @@ export type StepDef =
   | { type: StepType.DeleteSandbox }
   | { type: StepType.WriteFile; path: string; content: string; encoding?: Encoding }
   | { type: StepType.ReadFile; path: string; as: string; encoding?: Encoding }
+  | { type: StepType.DeleteFile; path: string }
+  | { type: StepType.MoveFile; from: string; to: string }
+  | { type: StepType.ListDirectory; path: string; as: string; depth?: number }
+  | { type: StepType.SearchFiles; pattern: string; as: string; dir?: string }
   | { type: StepType.Snapshot }
   | { type: StepType.Retry; step: StepDef; maxAttempts: number; delayMs?: number; backoff?: Backoff }
   | { type: StepType.Conditional; condition: Predicate; then: StepDef[]; else?: StepDef[] }

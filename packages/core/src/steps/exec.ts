@@ -16,10 +16,14 @@ export function buildExecCommandStep(def: Extract<StepDef, { type: StepType.Exec
       const raw = interpolate(def.command, state);
       // base64-encode so newlines, quotes, special chars survive the JSON boundary
       const command = `echo ${Buffer.from(raw).toString("base64")} | base64 -d | bash`;
+      const cwd = def.cwd ? interpolate(def.cwd, state) : undefined;
+      const envs = def.envs
+        ? Object.fromEntries(Object.entries(def.envs).map(([k, v]) => [k, interpolate(v, state)]))
+        : undefined;
       const events: SSEEvent[] = [];
       let exitCode = 0;
       const stdoutChunks: string[] = [];
-      for await (const ev of exec.executeCommand({ command, cwd: def.cwd, envs: def.envs })) {
+      for await (const ev of exec.executeCommand({ command, cwd, envs })) {
         await ctx.emit({
           ts: Date.now(),
           workflowName: ctx.workflowName,

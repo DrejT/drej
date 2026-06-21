@@ -6,7 +6,8 @@
     "packages/opensandbox",
     "packages/sdks/typescript",
     "packages/adapters/postgres",
-    "packages/adapters/sqlite"
+    "packages/adapters/sqlite",
+    "examples/*"
   ],
   "scripts": {
     "build": "bunx tsc --project packages/opensandbox/tsconfig.build.json && bunx tsc --project packages/core/tsconfig.build.json && bun run --cwd packages/sdks/typescript build",

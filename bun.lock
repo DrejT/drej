@@ -8,9 +8,73 @@
         "@changesets/cli": "^2.31.0",
       },
     },
+    "examples/capture": {
+      "name": "drej-example-capture",
+      "version": "0.0.0",
+      "dependencies": {
+        "@drejt/sqlite": "workspace:*",
+        "drej": "workspace:*",
+      },
+    },
+    "examples/control-flow": {
+      "name": "drej-example-control-flow",
+      "version": "0.0.0",
+      "dependencies": {
+        "@drejt/sqlite": "workspace:*",
+        "drej": "workspace:*",
+      },
+    },
+    "examples/error-handling": {
+      "name": "drej-example-error-handling",
+      "version": "0.0.0",
+      "dependencies": {
+        "@drejt/sqlite": "workspace:*",
+        "drej": "workspace:*",
+      },
+    },
+    "examples/exec-code": {
+      "name": "drej-example-exec-code",
+      "version": "0.0.0",
+      "dependencies": {
+        "@drejt/sqlite": "workspace:*",
+        "drej": "workspace:*",
+      },
+    },
+    "examples/hello-world": {
+      "name": "drej-example-hello-world",
+      "version": "0.0.0",
+      "dependencies": {
+        "@drejt/sqlite": "workspace:*",
+        "drej": "workspace:*",
+      },
+    },
+    "examples/read-file": {
+      "name": "drej-example-read-file",
+      "version": "0.0.0",
+      "dependencies": {
+        "@drejt/sqlite": "workspace:*",
+        "drej": "workspace:*",
+      },
+    },
+    "examples/run-bash-script": {
+      "name": "drej-example-run-bash-script",
+      "version": "0.0.0",
+      "dependencies": {
+        "@drejt/sqlite": "workspace:*",
+        "drej": "workspace:*",
+      },
+    },
+    "examples/snapshot-replay": {
+      "name": "drej-example-snapshot-replay",
+      "version": "0.0.0",
+      "dependencies": {
+        "@drejt/sqlite": "workspace:*",
+        "drej": "workspace:*",
+      },
+    },
     "packages/adapters/postgres": {
       "name": "@drejt/postgres",
-      "version": "0.0.1",
+      "version": "0.1.1",
       "dependencies": {
         "@drejt/core": "workspace:*",
         "postgres": "^3.4.5",
@@ -22,7 +86,7 @@
     },
     "packages/adapters/sqlite": {
       "name": "@drejt/sqlite",
-      "version": "0.0.1",
+      "version": "0.1.1",
       "dependencies": {
         "@drejt/core": "workspace:*",
       },
@@ -33,7 +97,7 @@
     },
     "packages/core": {
       "name": "@drejt/core",
-      "version": "0.0.1",
+      "version": "0.1.1",
       "dependencies": {
         "@drejt/opensandbox": "workspace:*",
       },
@@ -44,7 +108,7 @@
     },
     "packages/opensandbox": {
       "name": "@drejt/opensandbox",
-      "version": "0.0.1",
+      "version": "0.1.1",
       "devDependencies": {
         "bun-types": "latest",
         "typescript": "latest",
@@ -52,7 +116,7 @@
     },
     "packages/sdks/typescript": {
       "name": "drej",
-      "version": "0.4.0",
+      "version": "0.5.1",
       "dependencies": {
         "@drejt/core": "workspace:*",
         "@drejt/opensandbox": "workspace:*",
@@ -276,6 +340,22 @@
     "dir-glob": ["dir-glob@3.0.1", "", { "dependencies": { "path-type": "^4.0.0" } }, "sha512-WkrWp9GR4KXfKGYzOLmTuGVi1UWFfws377n9cc55/tb6DuqyF6pcQ5AbiHEshaDpY9v6oaSr2XCDidGmMwdzIA=="],
 
     "drej": ["drej@workspace:packages/sdks/typescript"],
+
+    "drej-example-capture": ["drej-example-capture@workspace:examples/capture"],
+
+    "drej-example-control-flow": ["drej-example-control-flow@workspace:examples/control-flow"],
+
+    "drej-example-error-handling": ["drej-example-error-handling@workspace:examples/error-handling"],
+
+    "drej-example-exec-code": ["drej-example-exec-code@workspace:examples/exec-code"],
+
+    "drej-example-hello-world": ["drej-example-hello-world@workspace:examples/hello-world"],
+
+    "drej-example-read-file": ["drej-example-read-file@workspace:examples/read-file"],
+
+    "drej-example-run-bash-script": ["drej-example-run-bash-script@workspace:examples/run-bash-script"],
+
+    "drej-example-snapshot-replay": ["drej-example-snapshot-replay@workspace:examples/snapshot-replay"],
 
     "enquirer": ["enquirer@2.4.1", "", { "dependencies": { "ansi-colors": "^4.1.1", "strip-ansi": "^6.0.1" } }, "sha512-rRqJg/6gd538VHvR3PSrdRBb/1Vy2YfzHqzvbhGIQpDRKIa4FgV/54b5Q1xYSxOOwKvjXweS26E0Q+nAMwp2pQ=="],
 

@@ -108,21 +108,21 @@
 - Updated dependencies [ce173be]
 - Updated dependencies [86c2dde]
 - Updated dependencies [82094ae]
-  - @drejt/core@0.2.0
-  - @drejt/opensandbox@0.1.2
+  - @drej/core@0.2.0
+  - @drej/opensandbox@0.1.2
 
 ## 0.5.1
 
 ### Patch Changes
 
-- 0ea4c33: Rename npm scope from `@drej/*` to `@drejt/*` and add TSDoc to all public API surfaces.
+- 0ea4c33: Rename npm scope from `@drej/*` to `@drej/*` and add TSDoc to all public API surfaces.
 
-  - All workspace packages now published under `@drejt/*` (e.g. `@drejt/sqlite`, `@drejt/postgres`)
+  - All workspace packages now published under `@drej/*` (e.g. `@drej/sqlite`, `@drej/postgres`)
   - `DrejClient`, `WorkflowBuilder`, `SandboxStepBuilder`, `IStorageAdapter`, `LedgerEvent`, `SandboxOpts` and all their members now have hover documentation visible in VS Code
 
 - Updated dependencies [0ea4c33]
-  - @drejt/core@0.1.1
-  - @drejt/opensandbox@0.1.1
+  - @drej/core@0.1.1
+  - @drej/opensandbox@0.1.1
 
 ## 0.5.0
 
@@ -207,7 +207,7 @@
   - Add `WorkflowHooks` interface with `onStepStart`, `onStepComplete`, `onStepFailed`, `onStepRolledBack`, `onWorkflowComplete`, `onWorkflowFailed` callbacks on `WorkflowDeps`
   - Fix `NdjsonLedger.append` to use `appendFileSync` (O_APPEND) instead of read-then-overwrite (O_TRUNC), preventing ledger truncation on crash
   - Make `NdjsonLedger.readAll` resilient to malformed lines from partial writes
-  - Add `OpenSandboxControlAdapter` and `OpenSandboxExecFactory` to `@drejt/opensandbox` — concrete implementations of `ISandboxControl` and `IExecClientFactory` that encapsulate execd readiness polling
+  - Add `OpenSandboxControlAdapter` and `OpenSandboxExecFactory` to `@drej/opensandbox` — concrete implementations of `ISandboxControl` and `IExecClientFactory` that encapsulate execd readiness polling
   - Remove `as unknown as` double-cast from `apps/api`; adapter wiring is now explicit and type-safe
 
 ## 0.3.0

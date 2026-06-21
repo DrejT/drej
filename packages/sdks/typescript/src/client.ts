@@ -10,8 +10,8 @@ import {
   type LedgerEntry,
   type SnapshotConfig,
   type StepDef,
-} from "@drejt/core";
-export { WorkflowError, SandboxError, ExecConnectionError, CommandError, WorkflowStatus } from "@drejt/core";
+} from "@drej/core";
+export { WorkflowError, SandboxError, ExecConnectionError, CommandError, WorkflowStatus } from "@drej/core";
 import {
   ControlClient,
   SandboxState,
@@ -22,7 +22,7 @@ import {
   type ListSnapshotsOptions,
   type DiagnosticLog,
   type DiagnosticEvent,
-} from "@drejt/opensandbox";
+} from "@drej/opensandbox";
 import type { WorkflowBuilder } from "./workflow";
 
 export { LedgerEvent };
@@ -35,9 +35,9 @@ export type {
   ListSnapshotsOptions,
   DiagnosticLog,
   DiagnosticEvent,
-} from "@drejt/opensandbox";
-export { SandboxState, SnapshotState, SSEEventType } from "@drejt/opensandbox";
-export type { SandboxStatus, Resources, ImageSpec, ImageAuth } from "@drejt/opensandbox";
+} from "@drej/opensandbox";
+export { SandboxState, SnapshotState, SSEEventType } from "@drej/opensandbox";
+export type { SandboxStatus, Resources, ImageSpec, ImageAuth } from "@drej/opensandbox";
 
 /** Thrown when an OpenSandbox API call returns a non-2xx response. */
 export class DrejError extends Error {
@@ -59,8 +59,8 @@ export interface DrejClientOptions {
   /**
    * Storage adapter for persisting workflow events.
    *
-   * Pass `new SQLiteAdapter("./drej.db")` from `@drejt/sqlite` for local use, or
-   * `new PostgresAdapter(connectionString)` from `@drejt/postgres` for production.
+   * Pass `new SQLiteAdapter("./drej.db")` from `@drej/sqlite` for local use, or
+   * `new PostgresAdapter(connectionString)` from `@drej/postgres` for production.
    * You can also supply any custom `IStorageAdapter` implementation.
    */
   adapter: IStorageAdapter;
@@ -113,7 +113,7 @@ export class WorkflowRun implements AsyncIterable<WorkflowEvent> {
  * @example
  * ```ts
  * import { DrejClient, workflow } from "drej";
- * import { SQLiteAdapter } from "@drejt/sqlite";
+ * import { SQLiteAdapter } from "@drej/sqlite";
  *
  * const client = new DrejClient({
  *   baseUrl: "http://localhost:8080",

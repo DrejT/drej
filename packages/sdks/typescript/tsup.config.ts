@@ -11,6 +11,6 @@ export default defineConfig({
   target: "node20",
   platform: "node",
   bundle: true,
-  noExternal: ["@drejt/core", "@drejt/opensandbox"],
+  noExternal: ["@drej/core", "@drej/opensandbox"],
   tsconfig: "tsconfig.build.json",
 });

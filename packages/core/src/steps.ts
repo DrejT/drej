@@ -1,5 +1,5 @@
-import { ControlClient, ExecClient, SandboxState, SnapshotState, SSEEventType } from "@drejt/opensandbox";
-import type { SSEEvent } from "@drejt/opensandbox";
+import { ControlClient, ExecClient, SandboxState, SnapshotState, SSEEventType } from "@drej/opensandbox";
+import type { SSEEvent } from "@drej/opensandbox";
 import { LedgerEvent } from "./ledger";
 import { SandboxError, ExecConnectionError, CommandError } from "./errors";
 import type { WorkflowRunContext, WorkflowStep } from "./workflow";

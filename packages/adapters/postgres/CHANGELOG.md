@@ -10,19 +10,19 @@
 - Updated dependencies [ce173be]
 - Updated dependencies [86c2dde]
 - Updated dependencies [82094ae]
-  - @drejt/core@0.2.0
+  - @drej/core@0.2.0
 
 ## 0.1.1
 
 ### Patch Changes
 
-- 0ea4c33: Rename npm scope from `@drej/*` to `@drejt/*` and add TSDoc to all public API surfaces.
+- 0ea4c33: Rename npm scope from `@drej/*` to `@drej/*` and add TSDoc to all public API surfaces.
 
-  - All workspace packages now published under `@drejt/*` (e.g. `@drejt/sqlite`, `@drejt/postgres`)
+  - All workspace packages now published under `@drej/*` (e.g. `@drej/sqlite`, `@drej/postgres`)
   - `DrejClient`, `WorkflowBuilder`, `SandboxStepBuilder`, `IStorageAdapter`, `LedgerEvent`, `SandboxOpts` and all their members now have hover documentation visible in VS Code
 
 - Updated dependencies [0ea4c33]
-  - @drejt/core@0.1.1
+  - @drej/core@0.1.1
 
 ## 0.1.0
 

@@ -1,5 +1,5 @@
 import postgres from "postgres";
-import type { IStorageAdapter, LedgerEntry, LedgerEvent } from "@drejt/core";
+import type { IStorageAdapter, LedgerEntry, LedgerEvent } from "@drej/core";
 import { MIGRATION_SQL } from "./migrations";
 
 type Row = {

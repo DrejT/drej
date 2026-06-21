@@ -1,6 +1,6 @@
-import type { StepDef, Predicate } from "@drejt/core";
-import { validateWorkflow } from "@drejt/core";
-import type { ImageSpec, Resources, Sandbox } from "@drejt/opensandbox";
+import type { StepDef, Predicate } from "@drej/core";
+import { validateWorkflow } from "@drej/core";
+import type { ImageSpec, Resources, Sandbox } from "@drej/opensandbox";
 
 // Placeholder that serialises to {{name}} inside template literals.
 // Used as the `item` parameter in forEach callbacks so users write

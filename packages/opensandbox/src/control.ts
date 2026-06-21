@@ -1,9 +1,9 @@
+import { SnapshotState } from "./types";
 import type {
   Sandbox,
   CreateSandboxOptions,
   ListSandboxesOptions,
   Snapshot,
-  SnapshotState,
   ListSnapshotsOptions,
   SandboxEndpoint,
   DiagnosticLog,

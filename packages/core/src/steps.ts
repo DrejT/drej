@@ -1,4 +1,4 @@
-import { ControlClient, ExecClient } from "@drejt/opensandbox";
+import { ControlClient, ExecClient, SandboxState, SnapshotState, SSEEventType } from "@drejt/opensandbox";
 import type { SSEEvent } from "@drejt/opensandbox";
 import { LedgerEvent } from "./ledger";
 import { SandboxError, ExecConnectionError, CommandError } from "./errors";
@@ -85,8 +85,8 @@ export async function waitForSnapshot(
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const snap = await control.getSnapshot(snapshotId);
-    if (snap.state === "Ready") return;
-    if (snap.state === "Failed") throw new Error(`Snapshot ${snapshotId} failed`);
+    if (snap.state === SnapshotState.Ready) return;
+    if (snap.state === SnapshotState.Failed) throw new Error(`Snapshot ${snapshotId} failed`);
     await new Promise<void>((r) => setTimeout(r, 2_000));
   }
   throw new Error(`Snapshot ${snapshotId} did not become ready within ${timeoutMs}ms`);
@@ -145,8 +145,8 @@ export function buildStep(def: StepDef): WorkflowStep {
           const deadline = Date.now() + 120_000;
           while (Date.now() < deadline) {
             const s = await ctx.control.getSandbox(sb.id);
-            if (s.status.state === "Running") break;
-            if (s.status.state === "Failed" || s.status.state === "Terminated") {
+            if (s.status.state === SandboxState.Running) break;
+            if (s.status.state === SandboxState.Failed || s.status.state === SandboxState.Terminated) {
               throw new SandboxError(
                 `Sandbox entered state ${s.status.state}: ${s.status.message ?? ""}`,
                 sb.id,
@@ -154,7 +154,7 @@ export function buildStep(def: StepDef): WorkflowStep {
             }
             await new Promise<void>((r) => setTimeout(r, 1_000));
           }
-          if ((await ctx.control.getSandbox(sb.id)).status.state !== "Running") {
+          if ((await ctx.control.getSandbox(sb.id)).status.state !== SandboxState.Running) {
             throw new SandboxError(`Sandbox timed out waiting to reach Running state`, sb.id);
           }
 
@@ -206,11 +206,11 @@ export function buildStep(def: StepDef): WorkflowStep {
               payload: ev,
             });
             events.push(ev as unknown as SSEEvent);
-            if (ev.type === "error" && ev.error?.evalue !== undefined) {
+            if (ev.type === SSEEventType.Error && ev.error?.evalue !== undefined) {
               const code = Number(ev.error.evalue);
               if (!isNaN(code)) exitCode = code;
             }
-            if (def.capture && ev.type === "stdout" && ev.text) {
+            if (def.capture && ev.type === SSEEventType.Stdout && ev.text) {
               stdoutChunks.push(ev.text);
             }
           }

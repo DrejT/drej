@@ -1,6 +1,6 @@
+import { SSEEventType } from "./types";
 import type {
   SSEEvent,
-  SSEEventType,
   CodeContext,
   ExecuteCodeOptions,
   ExecuteCommandOptions,
@@ -37,7 +37,7 @@ async function* parseSSE(stream: ReadableStream<Uint8Array>): AsyncGenerator<SSE
             else if (line.startsWith("data:")) data = line.slice(5).trim();
           }
           if (data !== undefined) {
-            yield { type: (type ?? "message") as SSEEventType, ...JSON.parse(data) };
+            yield { type: (type ?? SSEEventType.Message) as SSEEventType, ...JSON.parse(data) };
           }
         }
       }

@@ -11,11 +11,11 @@ import {
   type SnapshotConfig,
   type StepDef,
 } from "@drejt/core";
-export { WorkflowError, SandboxError, ExecConnectionError, CommandError } from "@drejt/core";
+export { WorkflowError, SandboxError, ExecConnectionError, CommandError, WorkflowStatus } from "@drejt/core";
 import {
   ControlClient,
+  SandboxState,
   type Sandbox,
-  type SandboxState,
   type CreateSandboxOptions,
   type ListSandboxesOptions,
   type Snapshot,
@@ -29,7 +29,6 @@ export { LedgerEvent };
 export type { LedgerEntry, SnapshotConfig, StepDef, IStorageAdapter };
 export type {
   Sandbox,
-  SandboxState,
   CreateSandboxOptions,
   ListSandboxesOptions,
   Snapshot,
@@ -37,7 +36,8 @@ export type {
   DiagnosticLog,
   DiagnosticEvent,
 } from "@drejt/opensandbox";
-export type { SandboxStatus, SnapshotState, Resources, ImageSpec, ImageAuth } from "@drejt/opensandbox";
+export { SandboxState, SnapshotState, SSEEventType } from "@drejt/opensandbox";
+export type { SandboxStatus, Resources, ImageSpec, ImageAuth } from "@drejt/opensandbox";
 
 /** Thrown when an OpenSandbox API call returns a non-2xx response. */
 export class DrejError extends Error {
@@ -209,8 +209,8 @@ export class DrejClient {
     while (Date.now() < deadline) {
       const sandbox = await this.control.getSandbox(id);
       const { state } = sandbox.status;
-      if (state === "Running") return sandbox;
-      if (state === "Failed" || state === "Terminated") {
+      if (state === SandboxState.Running) return sandbox;
+      if (state === SandboxState.Failed || state === SandboxState.Terminated) {
         throw new DrejError(`Sandbox ${id} entered state ${state}`, 500);
       }
       await new Promise<void>((r) => setTimeout(r, pollIntervalMs));

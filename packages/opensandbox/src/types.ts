@@ -14,16 +14,17 @@ export interface ImageSpec {
   auth?: ImageAuth;
 }
 
-export type SandboxState =
-  | "Pending"
-  | "Running"
-  | "Pausing"
-  | "Paused"
-  | "Resuming"
-  | "Stopping"
-  | "Terminated"
-  | "Failed"
-  | "Unknown";
+export enum SandboxState {
+  Pending = "Pending",
+  Running = "Running",
+  Pausing = "Pausing",
+  Paused = "Paused",
+  Resuming = "Resuming",
+  Stopping = "Stopping",
+  Terminated = "Terminated",
+  Failed = "Failed",
+  Unknown = "Unknown",
+}
 
 export interface SandboxStatus {
   state: SandboxState;
@@ -61,7 +62,13 @@ export interface ListSandboxesOptions {
   offset?: number;
 }
 
-export type SnapshotState = "Pending" | "Committing" | "Pushing" | "Ready" | "Failed";
+export enum SnapshotState {
+  Pending = "Pending",
+  Committing = "Committing",
+  Pushing = "Pushing",
+  Ready = "Ready",
+  Failed = "Failed",
+}
 
 export interface Snapshot {
   id: string;
@@ -95,17 +102,18 @@ export interface DiagnosticEvent {
   message: string;
 }
 
-export type SSEEventType =
-  | "init"
-  | "status"
-  | "stdout"
-  | "stderr"
-  | "result"
-  | "execution_complete"
-  | "execution_count"
-  | "error"
-  | "ping"
-  | "message";
+export enum SSEEventType {
+  Init = "init",
+  Status = "status",
+  Stdout = "stdout",
+  Stderr = "stderr",
+  Result = "result",
+  ExecutionComplete = "execution_complete",
+  ExecutionCount = "execution_count",
+  Error = "error",
+  Ping = "ping",
+  Message = "message",
+}
 
 export interface SSEEvent {
   type: SSEEventType;

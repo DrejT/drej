@@ -1,6 +1,7 @@
-import { ControlClient, ExecClient } from "@drejt/opensandbox";
+import { ControlClient, ExecClient, SandboxState, SnapshotState, SSEEventType } from "@drejt/opensandbox";
 import type { SSEEvent } from "@drejt/opensandbox";
 import { LedgerEvent } from "./ledger";
+import { SandboxError, ExecConnectionError, CommandError } from "./errors";
 import type { WorkflowRunContext, WorkflowStep } from "./workflow";
 
 // ── Step types ─────────────────────────────────────────────────────────────
@@ -23,7 +24,7 @@ export type StepDef =
       resourceLimits?: { cpu?: string; memory?: string; gpu?: string };
     }
   | { type: "exec_code"; code: string; context?: { id: string; language: string } }
-  | { type: "exec_command"; command: string; cwd?: string; envs?: Record<string, string>; capture?: string }
+  | { type: "exec_command"; command: string; cwd?: string; envs?: Record<string, string>; capture?: string; strict?: boolean }
   | { type: "delete_sandbox" }
   | { type: "write_file"; path: string; content: string; encoding?: "utf8" | "base64" }
   | { type: "read_file"; path: string; as: string; encoding?: "utf8" | "base64" }
@@ -61,7 +62,7 @@ export async function resolveExecClient(
       await client.listContexts();
       return client;
     } catch {
-      if (attempt === retries) throw new Error(`execd not ready after ${retries}s for sandbox ${sandboxId}`);
+      if (attempt === retries) throw new ExecConnectionError(sandboxId);
       await new Promise<void>((r) => setTimeout(r, delayMs));
     }
   }
@@ -84,8 +85,8 @@ export async function waitForSnapshot(
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const snap = await control.getSnapshot(snapshotId);
-    if (snap.state === "Ready") return;
-    if (snap.state === "Failed") throw new Error(`Snapshot ${snapshotId} failed`);
+    if (snap.state === SnapshotState.Ready) return;
+    if (snap.state === SnapshotState.Failed) throw new Error(`Snapshot ${snapshotId} failed`);
     await new Promise<void>((r) => setTimeout(r, 2_000));
   }
   throw new Error(`Snapshot ${snapshotId} did not become ready within ${timeoutMs}ms`);
@@ -144,11 +145,17 @@ export function buildStep(def: StepDef): WorkflowStep {
           const deadline = Date.now() + 120_000;
           while (Date.now() < deadline) {
             const s = await ctx.control.getSandbox(sb.id);
-            if (s.status.state === "Running") break;
-            if (s.status.state === "Failed" || s.status.state === "Terminated") {
-              throw new Error(`Sandbox ${sb.id} entered state ${s.status.state}: ${s.status.message ?? ""}`);
+            if (s.status.state === SandboxState.Running) break;
+            if (s.status.state === SandboxState.Failed || s.status.state === SandboxState.Terminated) {
+              throw new SandboxError(
+                `Sandbox entered state ${s.status.state}: ${s.status.message ?? ""}`,
+                sb.id,
+              );
             }
             await new Promise<void>((r) => setTimeout(r, 1_000));
+          }
+          if ((await ctx.control.getSandbox(sb.id)).status.state !== SandboxState.Running) {
+            throw new SandboxError(`Sandbox timed out waiting to reach Running state`, sb.id);
           }
 
           return { ...state, sandboxId: sb.id };
@@ -199,16 +206,19 @@ export function buildStep(def: StepDef): WorkflowStep {
               payload: ev,
             });
             events.push(ev as unknown as SSEEvent);
-            if (ev.type === "error" && ev.error?.evalue !== undefined) {
+            if (ev.type === SSEEventType.Error && ev.error?.evalue !== undefined) {
               const code = Number(ev.error.evalue);
               if (!isNaN(code)) exitCode = code;
             }
-            if (def.capture && ev.type === "stdout" && ev.text) {
+            if (def.capture && ev.type === SSEEventType.Stdout && ev.text) {
               stdoutChunks.push(ev.text);
             }
           }
           const next: WorkflowState = { ...state, commandEvents: events, exitCode };
           if (def.capture) next[def.capture] = stdoutChunks.join("").trimEnd();
+          if (def.strict && exitCode !== 0) {
+            throw new CommandError(exitCode, def.command, state.sandboxId!);
+          }
           return next;
         },
       };

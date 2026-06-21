@@ -27,7 +27,13 @@ export interface WorkflowCheckpoint {
   timestamp: number;
 }
 
-export type WorkflowStatus = "idle" | "running" | "completed" | "failed" | "rolled_back";
+export enum WorkflowStatus {
+  Idle = "idle",
+  Running = "running",
+  Completed = "completed",
+  Failed = "failed",
+  RolledBack = "rolled_back",
+}
 
 export interface WorkflowHooks {
   onStepStart?(info: { workflowName: string; runId: string; stepIndex: number; stepId: string }): void | Promise<void>;
@@ -49,7 +55,7 @@ export interface WorkflowDeps {
 export class Workflow {
   readonly name: string;
   readonly runId: string;
-  private _status: WorkflowStatus = "idle";
+  private _status: WorkflowStatus = WorkflowStatus.Idle;
   private readonly completedSteps = new Map<number, { output: unknown; completedAt: number }>();
   private readonly log: ILogger;
 
@@ -82,7 +88,7 @@ export class Workflow {
   }
 
   async run(input: unknown, startFromStep = 0): Promise<unknown> {
-    this._status = "running";
+    this._status = WorkflowStatus.Running;
     this.log.info("workflow started", { workflowName: this.name, runId: this.runId, startFromStep, totalSteps: this.steps.length });
 
     let current: unknown =
@@ -121,7 +127,7 @@ export class Workflow {
           payload: this.snapshot(),
         });
       } catch (err) {
-        this._status = "failed";
+        this._status = WorkflowStatus.Failed;
         const error = err instanceof Error ? err : new Error(String(err));
         this.log.error("step failed", { workflowName: this.name, runId: this.runId, stepIndex: i, stepId: step.id, error: error.message });
         await this.callHook("onStepFailed", { workflowName: this.name, runId: this.runId, stepIndex: i, stepId: step.id, error });
@@ -138,7 +144,7 @@ export class Workflow {
       }
     }
 
-    this._status = "completed";
+    this._status = WorkflowStatus.Completed;
     this.log.info("workflow complete", { workflowName: this.name, runId: this.runId });
     await this.deps.adapter.append({
       ts: Date.now(),
@@ -175,7 +181,7 @@ export class Workflow {
       }
     }
 
-    this._status = "rolled_back";
+    this._status = WorkflowStatus.RolledBack;
     this.log.info("workflow rolled back", { workflowName: this.name, runId: this.runId });
     await this.deps.adapter.append({
       ts: Date.now(),

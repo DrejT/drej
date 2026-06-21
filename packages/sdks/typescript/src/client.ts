@@ -11,10 +11,11 @@ import {
   type SnapshotConfig,
   type StepDef,
 } from "@drejt/core";
+export { WorkflowError, SandboxError, ExecConnectionError, CommandError, WorkflowStatus } from "@drejt/core";
 import {
   ControlClient,
+  SandboxState,
   type Sandbox,
-  type SandboxState,
   type CreateSandboxOptions,
   type ListSandboxesOptions,
   type Snapshot,
@@ -28,7 +29,6 @@ export { LedgerEvent };
 export type { LedgerEntry, SnapshotConfig, StepDef, IStorageAdapter };
 export type {
   Sandbox,
-  SandboxState,
   CreateSandboxOptions,
   ListSandboxesOptions,
   Snapshot,
@@ -36,7 +36,8 @@ export type {
   DiagnosticLog,
   DiagnosticEvent,
 } from "@drejt/opensandbox";
-export type { SandboxStatus, SnapshotState, Resources, ImageSpec, ImageAuth } from "@drejt/opensandbox";
+export { SandboxState, SnapshotState, SSEEventType } from "@drejt/opensandbox";
+export type { SandboxStatus, Resources, ImageSpec, ImageAuth } from "@drejt/opensandbox";
 
 /** Thrown when an OpenSandbox API call returns a non-2xx response. */
 export class DrejError extends Error {
@@ -208,8 +209,8 @@ export class DrejClient {
     while (Date.now() < deadline) {
       const sandbox = await this.control.getSandbox(id);
       const { state } = sandbox.status;
-      if (state === "Running") return sandbox;
-      if (state === "Failed" || state === "Terminated") {
+      if (state === SandboxState.Running) return sandbox;
+      if (state === SandboxState.Failed || state === SandboxState.Terminated) {
         throw new DrejError(`Sandbox ${id} entered state ${state}`, 500);
       }
       await new Promise<void>((r) => setTimeout(r, pollIntervalMs));
@@ -381,8 +382,9 @@ export class DrejClient {
       const wf = new Workflow(name, runId, steps.map(buildStep), deps);
       try {
         await wf.run(initialState);
-      } catch {
+      } catch (err) {
         try { await wf.rollback(); } catch { /* ignore */ }
+        throw err;
       }
     });
   }
@@ -424,12 +426,11 @@ export class DrejClient {
     // Emit run_started before kicking off execution
     enqueue({ ts: Date.now(), workflowName: name, runId, stepIndex: -1, event: LedgerEvent.RunStarted, payload: { workflowName: name, runId } });
 
-    execute(teeDeps).finally(() => {
-      done = true;
-      const fn = wakeup;
-      wakeup = null;
-      fn?.();
-    });
+    let executionError: unknown = undefined;
+    execute(teeDeps).then(
+      () => { done = true; const fn = wakeup; wakeup = null; fn?.(); },
+      (err) => { executionError = err; done = true; const fn = wakeup; wakeup = null; fn?.(); },
+    );
 
     return (async function* () {
       while (true) {
@@ -438,6 +439,7 @@ export class DrejClient {
         await new Promise<void>((r) => { wakeup = r; });
       }
       while (queue.length > 0) yield queue.shift()!;
+      if (executionError !== undefined) throw executionError;
     })();
   }
 }

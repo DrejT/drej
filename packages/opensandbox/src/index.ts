@@ -1,22 +1,20 @@
 export { ControlClient, OpenSandboxError } from "./control";
 export { ExecClient } from "./exec";
+export { SandboxState, SnapshotState, SSEEventType } from "./types";
 export type {
   Resources,
   ImageAuth,
   ImageSpec,
   Sandbox,
-  SandboxState,
   SandboxStatus,
   CreateSandboxOptions,
   ListSandboxesOptions,
   Snapshot,
-  SnapshotState,
   ListSnapshotsOptions,
   SandboxEndpoint,
   DiagnosticLog,
   DiagnosticEvent,
   SSEEvent,
-  SSEEventType,
   CodeContext,
   ExecuteCodeOptions,
   ExecuteCommandOptions,

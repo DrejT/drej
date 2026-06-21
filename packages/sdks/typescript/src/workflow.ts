@@ -55,13 +55,17 @@ export class SandboxStepBuilder {
   /**
    * Run a shell command inside the sandbox.
    *
+   * @param opts.capture Store stdout in workflow state under this key, making it
+   *   available for interpolation in subsequent steps via `{{key}}`.
+   *
    * @example
    * ```ts
    * s.exec("npm ci").exec("npm test")
    * s.exec("python script.py", { cwd: "/app" })
+   * s.exec("git rev-parse HEAD", { capture: "sha" }).exec("echo deploying {{sha}}")
    * ```
    */
-  exec(command: string, opts?: { cwd?: string; envs?: Record<string, string> }): this {
+  exec(command: string, opts?: { cwd?: string; envs?: Record<string, string>; capture?: string }): this {
     this._steps.push({ type: "exec_command", command, ...opts });
     return this;
   }

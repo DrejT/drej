@@ -1,0 +1,12 @@
+{
+  "name": "drej-example-capture",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "start": "bun index.ts"
+  },
+  "dependencies": {
+    "drej": "^0.5.0",
+    "@drejt/sqlite": "^0.0.1"
+  }
+}

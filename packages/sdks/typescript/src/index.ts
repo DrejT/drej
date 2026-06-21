@@ -1,4 +1,4 @@
-export { DrejClient, DrejError, WorkflowRun, LedgerEvent, RunStatus } from "./client";
+export { DrejClient, DrejError, WorkflowRun, LedgerEvent, RunStatus, StepType, Encoding, Backoff } from "./client";
 export type {
   DrejClientOptions,
   RunOptions,
@@ -30,6 +30,6 @@ export type {
   WorkflowFailedHookInfo,
 } from "./client";
 
-export { workflow, WorkflowBuilder, SandboxStepBuilder, CodeLanguage } from "./workflow";
-export type { SandboxOpts, LoopItem } from "./workflow";
+export { workflow, WorkflowBuilder, SandboxStepBuilder, CodeLanguage } from "./builder/index";
+export type { SandboxOpts, LoopItem } from "./builder/index";
 export type { CodeContext } from "@drej/opensandbox";

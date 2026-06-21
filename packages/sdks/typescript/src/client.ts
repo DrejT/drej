@@ -1,22 +1,20 @@
 import {
   Workflow,
   LedgerEvent,
-  RunStatus,
+  StepType,
   buildStep,
-  resolveExecClient,
+  mergeHooks,
   shouldSnapshot,
   waitForSnapshot,
-  mergeHooks,
   type WorkflowDeps,
   type WorkflowHooks,
   type IStorageAdapter,
-  type LedgerEntry,
   type SnapshotConfig,
   type StepDef,
   type RunDetails,
   type ListRunsOptions,
 } from "@drej/core";
-export { WorkflowError, SandboxError, ExecConnectionError, CommandError, WorkflowStatus, RunStatus } from "@drej/core";
+export { WorkflowError, SandboxError, ExecConnectionError, CommandError, WorkflowStatus, RunStatus, StepType, Encoding, Backoff } from "@drej/core";
 export type {
   WorkflowHooks,
   WorkflowHookInfo,
@@ -39,10 +37,12 @@ import {
   type DiagnosticLog,
   type DiagnosticEvent,
 } from "@drej/opensandbox";
-import type { WorkflowBuilder } from "./workflow";
+import { DrejError, WorkflowRun, type DrejClientOptions, type RunOptions, type WorkflowEvent } from "./types";
+import { makeStream } from "./stream";
+import type { WorkflowBuilder } from "./builder/index";
 
 export { LedgerEvent };
-export type { LedgerEntry, SnapshotConfig, StepDef, IStorageAdapter };
+export type { LedgerEntry, SnapshotConfig, StepDef, IStorageAdapter } from "@drej/core";
 export type {
   Sandbox,
   CreateSandboxOptions,
@@ -54,103 +54,7 @@ export type {
 } from "@drej/opensandbox";
 export { SandboxState, SnapshotState, SSEEventType } from "@drej/opensandbox";
 export type { SandboxStatus, Resources, ImageSpec, ImageAuth } from "@drej/opensandbox";
-
-/** Thrown when an OpenSandbox API call returns a non-2xx response. */
-export class DrejError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number,
-  ) {
-    super(message);
-    this.name = "DrejError";
-  }
-}
-
-/** Options for constructing a {@link DrejClient}. */
-export interface DrejClientOptions {
-  /** Base URL of your OpenSandbox server (e.g. `http://localhost:8080`). */
-  baseUrl: string;
-  /** OpenSandbox API key. Pass an empty string for local dev with no auth. */
-  apiKey?: string;
-  /**
-   * Storage adapter for persisting workflow events.
-   *
-   * Pass `new SQLiteAdapter("./drej.db")` from `@drej/sqlite` for local use, or
-   * `new PostgresAdapter(connectionString)` from `@drej/postgres` for production.
-   * You can also supply any custom `IStorageAdapter` implementation.
-   */
-  adapter: IStorageAdapter;
-  /**
-   * Maximum number of workflow runs that may execute simultaneously.
-   * When at capacity, `run()` awaits until a slot is free before starting.
-   * Omit or set to `undefined` for no limit.
-   */
-  maxConcurrency?: number;
-}
-
-/** Options passed to {@link DrejClient.run}. */
-export interface RunOptions {
-  /** Capture a sandbox snapshot after specific step indices complete. */
-  snapshotConfig?: SnapshotConfig;
-  /** Lifecycle hooks for observability (e.g. pass `otelHooks(tracer)` from `@drej/otel`). */
-  hooks?: WorkflowHooks;
-}
-
-/**
- * A single event emitted and persisted during a workflow run.
- * The shape is identical to `LedgerEntry` — every event stored in the adapter
- * is also yielded to the caller in real-time.
- */
-export type WorkflowEvent = LedgerEntry;
-
-/**
- * An active or completed workflow execution. Implements `AsyncIterable<WorkflowEvent>`
- * so you can stream events as they happen with `for await`.
- *
- * @example
- * ```ts
- * const run = await client.run(workflow("build").sandbox(...));
- * console.log(run.id); // UUID for this run
- * for await (const ev of run) {
- *   if (ev.event === LedgerEvent.ExecEvent) process.stdout.write(ev.payload.text);
- * }
- * ```
- */
-export class WorkflowRun implements AsyncIterable<WorkflowEvent> {
-  private _status: RunStatus = RunStatus.Running;
-
-  /** Current execution status. Updates as events are consumed via `for await`. */
-  get status(): RunStatus { return this._status; }
-
-  constructor(
-    /** The workflow name passed to `workflow(name)`. */
-    public readonly name: string,
-    /** UUID identifying this specific execution. */
-    public readonly id: string,
-    private readonly _events: AsyncGenerator<WorkflowEvent>,
-  ) {}
-
-  [Symbol.asyncIterator](): AsyncIterator<WorkflowEvent> {
-    const self = this;
-    const gen = this._events;
-    return {
-      async next() {
-        try {
-          const r = await gen.next();
-          if (r.done) self._status = RunStatus.Completed;
-          return r;
-        } catch (e) {
-          self._status = RunStatus.Failed;
-          throw e;
-        }
-      },
-      return(v) {
-        self._status = RunStatus.Cancelled;
-        return gen.return?.(v) ?? Promise.resolve({ done: true as const, value: v as WorkflowEvent });
-      },
-    };
-  }
-}
+export { DrejError, WorkflowRun, type DrejClientOptions, type RunOptions, type WorkflowEvent } from "./types";
 
 /**
  * Main entry point for drej. Manages workflow execution, sandbox lifecycle,
@@ -322,10 +226,7 @@ export class DrejClient {
    * }
    * ```
    */
-  async run(
-    w: WorkflowBuilder,
-    options?: RunOptions,
-  ): Promise<WorkflowRun> {
+  async run(w: WorkflowBuilder, options?: RunOptions): Promise<WorkflowRun> {
     await this._acquireSlot();
     const { name, steps, initialState } = w.build();
     const runId = crypto.randomUUID();
@@ -341,11 +242,7 @@ export class DrejClient {
    * either by a `s.snapshot()` step in the workflow or by the
    * `snapshotConfig` option passed to `client.run()`.
    */
-  async replayFromSnapshot(
-    name: string,
-    runId: string,
-    w: WorkflowBuilder,
-  ): Promise<WorkflowRun> {
+  async replayFromSnapshot(name: string, runId: string, w: WorkflowBuilder): Promise<WorkflowRun> {
     const entries = await this.adapter.readAll(name, runId);
     const snapEntry = [...entries].reverse().find((e) => e.event === LedgerEvent.Snapshot);
     if (!snapEntry) throw new DrejError(`No snapshot found in ledger for ${name}/${runId}`, 404);
@@ -353,7 +250,7 @@ export class DrejClient {
 
     const { name: wfName, steps } = w.build();
     const replaySteps: StepDef[] = steps.map((s) =>
-      s.type === "create_sandbox" ? { ...s, snapshotId } : s,
+      s.type === StepType.CreateSandbox ? { ...s, snapshotId } : s,
     );
     const replayRunId = crypto.randomUUID();
     return new WorkflowRun(wfName, replayRunId, this._execute(wfName, replayRunId, replaySteps));
@@ -370,7 +267,7 @@ export class DrejClient {
     const { steps } = w.build();
     const workflowSteps = steps.map(buildStep);
 
-    const stream = this._makeStream(name, runId, async (teeDeps) => {
+    const stream = makeStream(name, runId, this.adapter, this.control, async (teeDeps) => {
       const { workflow, nextStep, lastOutput } = await Workflow.resumeFromLedger(
         name,
         runId,
@@ -448,7 +345,7 @@ export class DrejClient {
     options?: RunOptions,
     initialState: Record<string, unknown> = {},
   ): AsyncGenerator<WorkflowEvent> {
-    return this._makeStream(name, runId, async (teeDeps) => {
+    return makeStream(name, runId, this.adapter, this.control, async (teeDeps) => {
       const snapshotHook: WorkflowDeps["hooks"] = options?.snapshotConfig
         ? {
             async onStepComplete({ workflowName: wfName, runId: rid, stepIndex, output }) {
@@ -478,62 +375,5 @@ export class DrejClient {
         throw err;
       }
     });
-  }
-
-  // Runs `execute` in the background and returns an async generator that
-  // yields WorkflowEvents in real-time as they are appended to the adapter.
-  private _makeStream(
-    name: string,
-    runId: string,
-    execute: (deps: WorkflowDeps) => Promise<void>,
-  ): AsyncGenerator<WorkflowEvent> {
-    const queue: WorkflowEvent[] = [];
-    let wakeup: (() => void) | null = null;
-    let done = false;
-
-    const enqueue = (entry: LedgerEntry) => {
-      queue.push(entry);
-      const fn = wakeup;
-      wakeup = null;
-      fn?.();
-    };
-
-    const teeAdapter: IStorageAdapter = {
-      append: async (entry) => {
-        await this.adapter.append(entry);
-        enqueue(entry);
-      },
-      readAll: (n, id) => this.adapter.readAll(n, id),
-      lastCheckpoint: (n, id) => this.adapter.lastCheckpoint(n, id),
-      listRunDetails: (n, o) => this.adapter.listRunDetails(n, o),
-      listAllRunDetails: (o) => this.adapter.listAllRunDetails(o),
-      getRunDetails: (n, id) => this.adapter.getRunDetails(n, id),
-      deleteRun: (n, id) => this.adapter.deleteRun(n, id),
-    };
-
-    const teeDeps: WorkflowDeps = {
-      control: this.control,
-      resolveExec: (sandboxId) => resolveExecClient(this.control, sandboxId),
-      adapter: teeAdapter,
-    };
-
-    // Emit run_started before kicking off execution
-    enqueue({ ts: Date.now(), workflowName: name, runId, stepIndex: -1, event: LedgerEvent.RunStarted, payload: { workflowName: name, runId } });
-
-    let executionError: unknown = undefined;
-    execute(teeDeps).then(
-      () => { done = true; const fn = wakeup; wakeup = null; fn?.(); },
-      (err) => { executionError = err; done = true; const fn = wakeup; wakeup = null; fn?.(); },
-    );
-
-    return (async function* () {
-      while (true) {
-        while (queue.length > 0) yield queue.shift()!;
-        if (done) break;
-        await new Promise<void>((r) => { wakeup = r; });
-      }
-      while (queue.length > 0) yield queue.shift()!;
-      if (executionError !== undefined) throw executionError;
-    })();
   }
 }

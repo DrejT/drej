@@ -19,7 +19,7 @@ export type {
   WorkflowFailedHookInfo,
 } from "./workflow";
 
-export { buildStep, resolveExecClient, shouldSnapshot, waitForSnapshot } from "./steps";
+export { buildStep, resolveExecClient, shouldSnapshot, waitForSnapshot, StepType, Encoding, Backoff } from "./steps";
 export type { StepDef, Predicate, WorkflowState, SnapshotConfig } from "./steps";
 
 export { validateWorkflow } from "./validate";

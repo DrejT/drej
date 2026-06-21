@@ -23,7 +23,7 @@ export type StepDef =
       resourceLimits?: { cpu?: string; memory?: string; gpu?: string };
     }
   | { type: "exec_code"; code: string; context?: { id: string; language: string } }
-  | { type: "exec_command"; command: string; cwd?: string; envs?: Record<string, string> }
+  | { type: "exec_command"; command: string; cwd?: string; envs?: Record<string, string>; capture?: string }
   | { type: "delete_sandbox" }
   | { type: "write_file"; path: string; content: string; encoding?: "utf8" | "base64" }
   | { type: "snapshot" }
@@ -192,6 +192,7 @@ export function buildStep(def: StepDef): WorkflowStep {
           const command = `echo ${Buffer.from(raw).toString("base64")} | base64 -d | bash`;
           const events: SSEEvent[] = [];
           let exitCode = 0;
+          const stdoutChunks: string[] = [];
           for await (const ev of exec.executeCommand({ command, cwd: def.cwd, envs: def.envs })) {
             await ctx.emit({
               ts: Date.now(),
@@ -205,8 +206,13 @@ export function buildStep(def: StepDef): WorkflowStep {
               const code = Number(ev.error.evalue);
               if (!isNaN(code)) exitCode = code;
             }
+            if (def.capture && ev.type === "stdout" && ev.text) {
+              stdoutChunks.push(ev.text);
+            }
           }
-          return { ...state, commandEvents: events, exitCode };
+          const next: WorkflowState = { ...state, commandEvents: events, exitCode };
+          if (def.capture) next[def.capture] = stdoutChunks.join("").trimEnd();
+          return next;
         },
       };
 

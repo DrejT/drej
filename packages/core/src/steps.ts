@@ -153,10 +153,6 @@ export function buildStep(def: StepDef): WorkflowStep {
 
           return { ...state, sandboxId: sb.id };
         },
-        async rollback(output: unknown, ctx: WorkflowRunContext): Promise<void> {
-          const state = output as WorkflowState;
-          if (state.sandboxId) await ctx.control.deleteSandbox(state.sandboxId);
-        },
       };
 
     case "exec_code":

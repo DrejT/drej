@@ -1,6 +1,6 @@
 import type { StepDef, Predicate } from "@drejt/core";
 import { validateWorkflow } from "@drejt/core";
-import type { ImageSpec, Resources } from "@drejt/opensandbox";
+import type { ImageSpec, Resources, Sandbox } from "@drejt/opensandbox";
 
 // Placeholder that serialises to {{name}} inside template literals.
 // Used as the `item` parameter in forEach callbacks so users write
@@ -303,16 +303,15 @@ class SandboxParallelBuilder {
 class WorkflowParallelBuilder {
   private _branches: StepDef[] = [];
 
-  sandbox(opts: SandboxOpts, fn: (s: SandboxStepBuilder) => SandboxStepBuilder): this {
+  sandbox(optsOrSandbox: SandboxOpts | Sandbox, fn: (s: SandboxStepBuilder) => SandboxStepBuilder): this {
     const sb = new SandboxStepBuilder();
     fn(sb);
+    const innerSteps = sb.build();
     this._branches.push({
       type: "sequence",
-      steps: [
-        { type: "create_sandbox", entrypoint: ["tail", "-f", "/dev/null"], ...opts },
-        ...sb.build(),
-        { type: "delete_sandbox" },
-      ],
+      steps: "id" in optsOrSandbox
+        ? innerSteps
+        : [{ type: "create_sandbox", entrypoint: ["tail", "-f", "/dev/null"], ...optsOrSandbox }, ...innerSteps],
     });
     return this;
   }
@@ -344,21 +343,42 @@ class WorkflowParallelBuilder {
  */
 export class WorkflowBuilder {
   private _steps: StepDef[] = [];
+  private _initialState: Record<string, unknown> = {};
 
   constructor(private _name: string) {}
 
   /**
-   * Add a sandbox step: creates a fresh sandbox, runs the steps defined in `fn`,
-   * then deletes the sandbox. The sandbox is torn down even if a step fails.
+   * Run steps inside a sandbox. Accepts either sandbox options to create a new
+   * sandbox, or an existing `Sandbox` object returned by `client.createSandbox()`.
+   *
+   * The sandbox is NOT deleted when the workflow completes — call
+   * `client.deleteSandbox(id)` explicitly when you are done with it.
+   *
+   * @example
+   * ```ts
+   * // Create a fresh sandbox for this workflow
+   * workflow("build").sandbox({ image: { uri: "node:20-slim" } }, (s) =>
+   *   s.exec("npm ci").exec("npm test"),
+   * )
+   *
+   * // Reuse an existing sandbox
+   * const sb = await client.createSandbox({ image: { uri: "node:20-slim" } });
+   * workflow("build").sandbox(sb, (s) => s.exec("npm test"))
+   * await client.deleteSandbox(sb.id);
+   * ```
    */
-  sandbox(opts: SandboxOpts, fn: (s: SandboxStepBuilder) => SandboxStepBuilder): this {
+  sandbox(optsOrSandbox: SandboxOpts | Sandbox, fn: (s: SandboxStepBuilder) => SandboxStepBuilder): this {
     const sb = new SandboxStepBuilder();
     fn(sb);
-    this._steps.push(
-      { type: "create_sandbox", entrypoint: ["tail", "-f", "/dev/null"], ...opts },
-      ...sb.build(),
-      { type: "delete_sandbox" },
-    );
+    if ("id" in optsOrSandbox) {
+      this._initialState.sandboxId = optsOrSandbox.id;
+      this._steps.push(...sb.build());
+    } else {
+      this._steps.push(
+        { type: "create_sandbox", entrypoint: ["tail", "-f", "/dev/null"], ...optsOrSandbox },
+        ...sb.build(),
+      );
+    }
     return this;
   }
 
@@ -369,9 +389,9 @@ export class WorkflowBuilder {
     return this;
   }
 
-  build(): { name: string; steps: StepDef[] } {
+  build(): { name: string; steps: StepDef[]; initialState: Record<string, unknown> } {
     validateWorkflow(this._name, this._steps);
-    return { name: this._name, steps: this._steps };
+    return { name: this._name, steps: this._steps, initialState: this._initialState };
   }
 }
 

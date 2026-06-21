@@ -92,6 +92,27 @@ export class SandboxStepBuilder {
   }
 
   /**
+   * Capture a snapshot of the sandbox at this point in the workflow.
+   *
+   * The snapshot ID is stored in workflow state as `snapshotId` and persisted
+   * to the ledger. Use {@link DrejClient.replayFromSnapshot} to boot a future
+   * run from this checkpoint, skipping any steps that ran before it.
+   *
+   * @example
+   * ```ts
+   * workflow("build").sandbox({ image: { uri: "node:20-slim" } }, (s) =>
+   *   s.exec("npm ci")
+   *    .snapshot()          // checkpoint after deps installed
+   *    .exec("npm test"),
+   * )
+   * ```
+   */
+  snapshot(): this {
+    this._steps.push({ type: "snapshot" });
+    return this;
+  }
+
+  /**
    * Write a file into the sandbox filesystem.
    *
    * @param encoding Defaults to `utf8`. Use `base64` for binary content.

@@ -1,5 +1,6 @@
 import { Database } from "bun:sqlite";
-import type { IStorageAdapter, LedgerEntry, LedgerEvent } from "@drej/core";
+import type { IStorageAdapter, LedgerEntry, LedgerEvent, RunDetails, ListRunsOptions } from "@drej/core";
+import { RunStatus } from "@drej/core";
 import { MIGRATION_SQL } from "./migrations";
 
 type Row = {
@@ -12,6 +13,59 @@ type Row = {
   error: string | null;
   ts: number;
 };
+
+type AggRow = {
+  wf_name: string;
+  run_id: string;
+  started_at: number | null;
+  completed_at: number | null;
+  terminal_event: string | null;
+  error_msg: string | null;
+  step_count: number;
+};
+
+const AGG_SQL = (whereClause: string) => `
+  WITH agg AS (
+    SELECT
+      wf_name,
+      run_id,
+      MIN(CASE WHEN event = 'run_started' THEN ts END) AS started_at,
+      MAX(CASE WHEN event IN ('workflow_complete', 'workflow_failed') THEN ts END) AS completed_at,
+      MAX(CASE WHEN event IN ('workflow_complete', 'workflow_failed') THEN event END) AS terminal_event,
+      MAX(CASE WHEN event = 'workflow_failed' THEN error END) AS error_msg,
+      CAST(COUNT(CASE WHEN event = 'step_complete' THEN 1 END) AS INTEGER) AS step_count
+    FROM drej_events
+    ${whereClause}
+    GROUP BY wf_name, run_id
+  )
+  SELECT * FROM agg WHERE started_at IS NOT NULL ORDER BY started_at DESC
+`;
+
+function terminalToStatus(event: string | null): RunStatus {
+  if (event === "workflow_complete") return RunStatus.Completed;
+  if (event === "workflow_failed") return RunStatus.Failed;
+  return RunStatus.Running;
+}
+
+function aggRowToDetails(row: AggRow): RunDetails {
+  return {
+    workflowName: row.wf_name,
+    runId: row.run_id,
+    status: terminalToStatus(row.terminal_event),
+    startedAt: row.started_at!,
+    completedAt: row.completed_at ?? undefined,
+    stepCount: row.step_count,
+    error: row.error_msg ?? undefined,
+  };
+}
+
+function applyOpts(details: RunDetails[], opts?: ListRunsOptions): RunDetails[] {
+  let result = details;
+  if (opts?.before != null) result = result.filter((d) => d.startedAt < opts.before!);
+  if (opts?.status != null) result = result.filter((d) => d.status === opts.status);
+  if (opts?.limit != null) result = result.slice(0, opts.limit);
+  return result;
+}
 
 function rowToEntry(row: Row): LedgerEntry {
   return {
@@ -86,12 +140,28 @@ export class SQLiteAdapter implements IStorageAdapter {
     return row ? rowToEntry(row) : null;
   }
 
-  async listRuns(workflowName: string): Promise<string[]> {
+  async listRunDetails(workflowName: string, opts?: ListRunsOptions): Promise<RunDetails[]> {
     const rows = this.db
-      .prepare<{ run_id: string }, [string]>(
-        `SELECT DISTINCT run_id FROM drej_events WHERE wf_name = ?`,
-      )
+      .prepare<AggRow, [string]>(AGG_SQL("WHERE wf_name = ?"))
       .all(workflowName);
-    return rows.map((r) => r.run_id);
+    return applyOpts(rows.map(aggRowToDetails), opts);
+  }
+
+  async listAllRunDetails(opts?: ListRunsOptions): Promise<RunDetails[]> {
+    const rows = this.db.prepare<AggRow, []>(AGG_SQL("")).all();
+    return applyOpts(rows.map(aggRowToDetails), opts);
+  }
+
+  async getRunDetails(workflowName: string, runId: string): Promise<RunDetails | null> {
+    const row = this.db
+      .prepare<AggRow, [string, string]>(AGG_SQL("WHERE wf_name = ? AND run_id = ?"))
+      .get(workflowName, runId);
+    return row ? aggRowToDetails(row) : null;
+  }
+
+  async deleteRun(workflowName: string, runId: string): Promise<void> {
+    this.db
+      .prepare<void, [string, string]>(`DELETE FROM drej_events WHERE wf_name = ? AND run_id = ?`)
+      .run(workflowName, runId);
   }
 }

@@ -1,3 +1,34 @@
+/** Status of a workflow run derived from its ledger events. */
+export enum RunStatus {
+  Running   = "running",
+  Completed = "completed",
+  Failed    = "failed",
+  Cancelled = "cancelled",
+}
+
+/** Derived metadata for a workflow run, computed from its ledger events. */
+export interface RunDetails {
+  workflowName: string;
+  runId: string;
+  status: RunStatus;
+  /** Unix timestamp (ms) of the `run_started` event. */
+  startedAt: number;
+  /** Unix timestamp (ms) of the terminal event, if the run has ended. */
+  completedAt?: number;
+  /** Number of steps that completed successfully. */
+  stepCount: number;
+  /** Error message, present when status is `Failed`. */
+  error?: string;
+}
+
+/** Options for filtering run listings. */
+export interface ListRunsOptions {
+  status?: RunStatus;
+  /** Max number of results to return. */
+  limit?: number;
+  /** Return only runs that started before this Unix timestamp (ms). */
+  before?: number;
+}
 
 /** Events emitted during workflow execution and stored in the ledger. */
 export enum LedgerEvent {
@@ -65,6 +96,12 @@ export interface IStorageAdapter {
   readAll(workflowName: string, runId: string): Promise<LedgerEntry[]>;
   /** Return the most recent checkpoint entry for a run, or `null` if none exists. */
   lastCheckpoint(workflowName: string, runId: string): Promise<LedgerEntry | null>;
-  /** Return all run IDs recorded under a workflow name. */
-  listRuns(workflowName: string): Promise<string[]>;
+  /** Return details for all runs of a workflow, newest first. */
+  listRunDetails(workflowName: string, opts?: ListRunsOptions): Promise<RunDetails[]>;
+  /** Return details for runs across all workflows, newest first. */
+  listAllRunDetails(opts?: ListRunsOptions): Promise<RunDetails[]>;
+  /** Return details for a single run, or `null` if not found. */
+  getRunDetails(workflowName: string, runId: string): Promise<RunDetails | null>;
+  /** Delete all ledger events for a run. */
+  deleteRun(workflowName: string, runId: string): Promise<void>;
 }

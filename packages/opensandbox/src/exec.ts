@@ -57,6 +57,7 @@ export class ExecClient {
     this.signal = options.signal;
   }
 
+  /** Return a new `ExecClient` instance that passes `signal` to every fetch call. */
   withSignal(signal: AbortSignal): ExecClient {
     return new ExecClient({ baseUrl: this.baseUrl, accessToken: this.accessToken, signal });
   }

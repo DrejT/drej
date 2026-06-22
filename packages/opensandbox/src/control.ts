@@ -44,6 +44,7 @@ export class ControlClient {
     this.signal = options.signal;
   }
 
+  /** Return a new `ControlClient` instance that passes `signal` to every fetch call. */
   withSignal(signal: AbortSignal): ControlClient {
     return new ControlClient({ baseUrl: this.baseUrl, apiKey: this.apiKey, signal });
   }

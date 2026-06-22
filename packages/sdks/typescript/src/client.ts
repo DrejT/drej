@@ -222,7 +222,10 @@ export class DrejClient {
    *   ),
    * );
    * for await (const ev of run) {
-   *   if (ev.event === LedgerEvent.ExecEvent) process.stdout.write(ev.payload.text);
+   *   if (ev.event === "exec_event") {
+   *     const { text } = ev.payload as { text?: string };
+   *     if (text) process.stdout.write(text);
+   *   }
    * }
    * ```
    */

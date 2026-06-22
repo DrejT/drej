@@ -68,12 +68,19 @@ export type WorkflowEvent = LedgerEntry;
  * An active or completed workflow execution. Implements `AsyncIterable<WorkflowEvent>`
  * so you can stream events as they happen with `for await`.
  *
+ * Call `run.cancel()` to abort the in-flight step and stop the loop cleanly —
+ * no error is thrown and `run.status` becomes `"cancelled"`. Breaking out of
+ * the `for await` loop has the same effect.
+ *
  * @example
  * ```ts
  * const run = await client.run(workflow("build").sandbox(...));
  * console.log(run.id); // UUID for this run
  * for await (const ev of run) {
- *   if (ev.event === LedgerEvent.ExecEvent) process.stdout.write(ev.payload.text);
+ *   if (ev.event === "exec_event") {
+ *     const { text } = ev.payload as { text?: string };
+ *     if (text) process.stdout.write(text);
+ *   }
  * }
  * ```
  */

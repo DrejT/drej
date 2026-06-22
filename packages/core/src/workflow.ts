@@ -16,6 +16,12 @@ export interface WorkflowRunContext {
 
 export interface WorkflowStep {
   readonly id: string;
+  /**
+   * Maximum milliseconds this step may run. When exceeded, an `AbortSignal`
+   * fires on the step's execution context and `StepTimeoutError` is thrown.
+   * Set per-step in the builder (`exec("cmd", { timeoutMs: 5000 })`) or as a
+   * global default via `RunOptions.stepTimeoutMs`.
+   */
   readonly timeoutMs?: number;
   run(input: unknown, ctx: WorkflowRunContext): Promise<unknown>;
   rollback?(output: unknown, ctx: WorkflowRunContext): Promise<void>;
@@ -103,7 +109,13 @@ export interface WorkflowDeps {
   adapter: IStorageAdapter;
   logger?: ILogger;
   hooks?: WorkflowHooks;
+  /** Global per-step timeout in ms. Applied to any step that does not set its own `timeoutMs`. */
   stepTimeoutMs?: number;
+  /**
+   * External abort signal. When fired, the current in-flight step is aborted
+   * via its per-step `AbortController` and `StepTimeoutError` (or the signal's
+   * reason) propagates out of `Workflow.run()`.
+   */
   signal?: AbortSignal;
 }
 

@@ -18,12 +18,17 @@ type ForEachCallback = (s: SandboxStepBuilder, item: LoopItem) => void;
  * Methods that produce output (readFile, searchFiles, etc.) return a `Ref<T>`
  * you can use in subsequent steps via template literals.
  *
+ * Most step methods accept `{ timeoutMs?: number }` to set a per-step abort
+ * deadline. When exceeded, `StepTimeoutError` is thrown and rollback runs.
+ * A global default can be set via `RunOptions.stepTimeoutMs` on `client.run()`.
+ *
  * @example
  * ```ts
  * workflow("build").sandbox({ image: { uri: "node:20-slim" } }, (s) => {
  *   s.exec("npm ci");
  *   const version = s.exec("node -e 'process.stdout.write(process.version)'", { capture: true });
  *   s.exec(`echo "Running on Node ${version}"`);
+ *   s.exec("npm test", { strict: true, timeoutMs: 60_000 });
  * });
  * ```
  */
@@ -38,15 +43,17 @@ export class SandboxStepBuilder {
   /**
    * Run a shell command inside the sandbox.
    *
-   * Pass `{ capture: true }` to store stdout in workflow state — the returned
-   * `Ref<string>` can be interpolated in subsequent steps via template literals.
+   * - `capture: true` — store stdout in workflow state and return a `Ref<string>`
+   *   you can interpolate in later steps via template literals.
+   * - `strict: true` — throw `CommandError` if the command exits non-zero.
+   * - `timeoutMs` — abort the step and throw `StepTimeoutError` after this many ms.
    *
    * @example
    * ```ts
    * s.exec("npm ci");
    * const sha = s.exec("git rev-parse HEAD", { capture: true });
    * s.exec(`echo "deploying ${sha}"`);
-   * s.exec("npm test", { strict: true });
+   * s.exec("npm test", { strict: true, timeoutMs: 120_000 });
    * ```
    */
   exec(command: string, opts: ExecOpts & { capture: true }): Ref<string>;

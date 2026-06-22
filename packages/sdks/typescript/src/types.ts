@@ -43,6 +43,18 @@ export interface RunOptions {
   snapshotConfig?: SnapshotConfig;
   /** Lifecycle hooks for observability (e.g. pass `otelHooks(tracer)` from `@drej/otel`). */
   hooks?: WorkflowHooks;
+  /**
+   * Default timeout in milliseconds for every step that does not set its own
+   * `timeoutMs`. When a step exceeds this limit the run fails with
+   * `StepTimeoutError` and rollback runs automatically.
+   */
+  stepTimeoutMs?: number;
+  /**
+   * An `AbortSignal` to cancel the run from outside. When the signal fires,
+   * the current in-flight step is aborted and rollback runs automatically.
+   * Compose with `AbortController` or `AbortSignal.timeout()`.
+   */
+  signal?: AbortSignal;
 }
 
 /**
@@ -56,17 +68,25 @@ export type WorkflowEvent = LedgerEntry;
  * An active or completed workflow execution. Implements `AsyncIterable<WorkflowEvent>`
  * so you can stream events as they happen with `for await`.
  *
+ * Call `run.cancel()` to abort the in-flight step and stop the loop cleanly —
+ * no error is thrown and `run.status` becomes `"cancelled"`. Breaking out of
+ * the `for await` loop has the same effect.
+ *
  * @example
  * ```ts
  * const run = await client.run(workflow("build").sandbox(...));
  * console.log(run.id); // UUID for this run
  * for await (const ev of run) {
- *   if (ev.event === LedgerEvent.ExecEvent) process.stdout.write(ev.payload.text);
+ *   if (ev.event === "exec_event") {
+ *     const { text } = ev.payload as { text?: string };
+ *     if (text) process.stdout.write(text);
+ *   }
  * }
  * ```
  */
 export class WorkflowRun implements AsyncIterable<WorkflowEvent> {
   private _status: RunStatus = RunStatus.Running;
+  private readonly _cancelFn: () => void;
 
   /** Current execution status. Updates as events are consumed via `for await`. */
   get status(): RunStatus { return this._status; }
@@ -77,7 +97,22 @@ export class WorkflowRun implements AsyncIterable<WorkflowEvent> {
     /** UUID identifying this specific execution. */
     public readonly id: string,
     private readonly _events: AsyncGenerator<WorkflowEvent>,
-  ) {}
+    /** Internal abort callback wired to the workflow's AbortController. */
+    cancelFn?: () => void,
+  ) {
+    this._cancelFn = cancelFn ?? (() => {});
+  }
+
+  /**
+   * Abort the run immediately. The current in-flight step is cancelled,
+   * rollback runs, and `run.status` becomes `Cancelled`.
+   *
+   * Equivalent to breaking out of the `for await` loop.
+   */
+  cancel(): void {
+    this._status = RunStatus.Cancelled;
+    this._cancelFn();
+  }
 
   [Symbol.asyncIterator](): AsyncIterator<WorkflowEvent> {
     const self = this;
@@ -86,15 +121,20 @@ export class WorkflowRun implements AsyncIterable<WorkflowEvent> {
       async next() {
         try {
           const r = await gen.next();
-          if (r.done) self._status = RunStatus.Completed;
+          if (r.done && self._status === RunStatus.Running) self._status = RunStatus.Completed;
           return r;
         } catch (e) {
+          if (self._status === RunStatus.Cancelled) {
+            // run.cancel() was called — end the loop cleanly, no error thrown
+            return { done: true as const, value: undefined as unknown as WorkflowEvent };
+          }
           self._status = RunStatus.Failed;
           throw e;
         }
       },
       return(v) {
         self._status = RunStatus.Cancelled;
+        self._cancelFn();
         return gen.return?.(v) ?? Promise.resolve({ done: true as const, value: v as WorkflowEvent });
       },
     };

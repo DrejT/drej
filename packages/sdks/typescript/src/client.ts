@@ -14,7 +14,7 @@ import {
   type RunDetails,
   type ListRunsOptions,
 } from "@drej/core";
-export { WorkflowError, SandboxError, ExecConnectionError, CommandError, WorkflowStatus, RunStatus, StepType, Encoding, Backoff } from "@drej/core";
+export { WorkflowError, SandboxError, ExecConnectionError, CommandError, StepTimeoutError, WorkflowStatus, RunStatus, StepType, Encoding, Backoff } from "@drej/core";
 export type {
   WorkflowHooks,
   WorkflowHookInfo,
@@ -222,7 +222,10 @@ export class DrejClient {
    *   ),
    * );
    * for await (const ev of run) {
-   *   if (ev.event === LedgerEvent.ExecEvent) process.stdout.write(ev.payload.text);
+   *   if (ev.event === "exec_event") {
+   *     const { text } = ev.payload as { text?: string };
+   *     if (text) process.stdout.write(text);
+   *   }
    * }
    * ```
    */
@@ -230,7 +233,14 @@ export class DrejClient {
     await this._acquireSlot();
     const { name, steps, initialState } = w.build();
     const runId = crypto.randomUUID();
-    return new WorkflowRun(name, runId, this._withRelease(this._execute(name, runId, steps, options, initialState)));
+    const ctrl = new AbortController();
+    options?.signal?.addEventListener("abort", () => ctrl.abort(options.signal!.reason), { once: true });
+    return new WorkflowRun(
+      name,
+      runId,
+      this._withRelease(this._execute(name, runId, steps, options, initialState, ctrl.signal)),
+      () => ctrl.abort(),
+    );
   }
 
   /**
@@ -242,7 +252,7 @@ export class DrejClient {
    * either by a `s.snapshot()` step in the workflow or by the
    * `snapshotConfig` option passed to `client.run()`.
    */
-  async replayFromSnapshot(name: string, runId: string, w: WorkflowBuilder): Promise<WorkflowRun> {
+  async replayFromSnapshot(name: string, runId: string, w: WorkflowBuilder, options?: RunOptions): Promise<WorkflowRun> {
     const entries = await this.adapter.readAll(name, runId);
     const snapEntry = [...entries].reverse().find((e) => e.event === LedgerEvent.Snapshot);
     if (!snapEntry) throw new DrejError(`No snapshot found in ledger for ${name}/${runId}`, 404);
@@ -253,7 +263,14 @@ export class DrejClient {
       s.type === StepType.CreateSandbox ? { ...s, snapshotId } : s,
     );
     const replayRunId = crypto.randomUUID();
-    return new WorkflowRun(wfName, replayRunId, this._execute(wfName, replayRunId, replaySteps));
+    const ctrl = new AbortController();
+    options?.signal?.addEventListener("abort", () => ctrl.abort(options.signal!.reason), { once: true });
+    return new WorkflowRun(
+      wfName,
+      replayRunId,
+      this._execute(wfName, replayRunId, replaySteps, options, {}, ctrl.signal),
+      () => ctrl.abort(),
+    );
   }
 
   /**
@@ -263,16 +280,20 @@ export class DrejClient {
    * the workflow starting from the next step. Steps that already completed
    * are not re-executed.
    */
-  async resumeRun(name: string, runId: string, w: WorkflowBuilder): Promise<WorkflowRun> {
+  async resumeRun(name: string, runId: string, w: WorkflowBuilder, options?: RunOptions): Promise<WorkflowRun> {
     const { steps } = w.build();
     const workflowSteps = steps.map(buildStep);
 
+    const ctrl = new AbortController();
+    options?.signal?.addEventListener("abort", () => ctrl.abort(options.signal!.reason), { once: true });
+
     const stream = makeStream(name, runId, this.adapter, this.control, async (teeDeps) => {
+      const deps: WorkflowDeps = { ...teeDeps, signal: ctrl.signal, stepTimeoutMs: options?.stepTimeoutMs };
       const { workflow, nextStep, lastOutput } = await Workflow.resumeFromLedger(
         name,
         runId,
         workflowSteps,
-        teeDeps,
+        deps,
       );
       try {
         await workflow.run(lastOutput, nextStep);
@@ -281,7 +302,7 @@ export class DrejClient {
       }
     });
 
-    return new WorkflowRun(name, runId, stream);
+    return new WorkflowRun(name, runId, stream, () => ctrl.abort());
   }
 
   // ── Run management ────────────────────────────────────────────────────────
@@ -344,6 +365,7 @@ export class DrejClient {
     steps: StepDef[],
     options?: RunOptions,
     initialState: Record<string, unknown> = {},
+    signal?: AbortSignal,
   ): AsyncGenerator<WorkflowEvent> {
     return makeStream(name, runId, this.adapter, this.control, async (teeDeps) => {
       const snapshotHook: WorkflowDeps["hooks"] = options?.snapshotConfig
@@ -366,7 +388,7 @@ export class DrejClient {
           }
         : undefined;
 
-      const deps: WorkflowDeps = { ...teeDeps, hooks: mergeHooks(snapshotHook, options?.hooks) };
+      const deps: WorkflowDeps = { ...teeDeps, hooks: mergeHooks(snapshotHook, options?.hooks), stepTimeoutMs: options?.stepTimeoutMs, signal };
       const wf = new Workflow(name, runId, steps.map(buildStep), deps);
       try {
         await wf.run(initialState);

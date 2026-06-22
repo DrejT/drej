@@ -6,7 +6,7 @@ import { Ref, createLoopVar, wrapSteps, type LoopItem } from "./types";
 
 export { CodeLanguage };
 
-type ExecOpts = { cwd?: string; envs?: Record<string, string>; strict?: boolean };
+type ExecOpts = { cwd?: string; envs?: Record<string, string>; strict?: boolean; timeoutMs?: number };
 type ForEachOpts = { concurrency?: number; as?: string };
 type ForEachSource = unknown[] | { from: string } | Ref<any>;
 type ForEachCallback = (s: SandboxStepBuilder, item: LoopItem) => void;
@@ -18,12 +18,17 @@ type ForEachCallback = (s: SandboxStepBuilder, item: LoopItem) => void;
  * Methods that produce output (readFile, searchFiles, etc.) return a `Ref<T>`
  * you can use in subsequent steps via template literals.
  *
+ * Most step methods accept `{ timeoutMs?: number }` to set a per-step abort
+ * deadline. When exceeded, `StepTimeoutError` is thrown and rollback runs.
+ * A global default can be set via `RunOptions.stepTimeoutMs` on `client.run()`.
+ *
  * @example
  * ```ts
  * workflow("build").sandbox({ image: { uri: "node:20-slim" } }, (s) => {
  *   s.exec("npm ci");
  *   const version = s.exec("node -e 'process.stdout.write(process.version)'", { capture: true });
  *   s.exec(`echo "Running on Node ${version}"`);
+ *   s.exec("npm test", { strict: true, timeoutMs: 60_000 });
  * });
  * ```
  */
@@ -38,15 +43,17 @@ export class SandboxStepBuilder {
   /**
    * Run a shell command inside the sandbox.
    *
-   * Pass `{ capture: true }` to store stdout in workflow state — the returned
-   * `Ref<string>` can be interpolated in subsequent steps via template literals.
+   * - `capture: true` — store stdout in workflow state and return a `Ref<string>`
+   *   you can interpolate in later steps via template literals.
+   * - `strict: true` — throw `CommandError` if the command exits non-zero.
+   * - `timeoutMs` — abort the step and throw `StepTimeoutError` after this many ms.
    *
    * @example
    * ```ts
    * s.exec("npm ci");
    * const sha = s.exec("git rev-parse HEAD", { capture: true });
    * s.exec(`echo "deploying ${sha}"`);
-   * s.exec("npm test", { strict: true });
+   * s.exec("npm test", { strict: true, timeoutMs: 120_000 });
    * ```
    */
   exec(command: string, opts: ExecOpts & { capture: true }): Ref<string>;
@@ -61,6 +68,7 @@ export class SandboxStepBuilder {
         ...(opts.envs ? { envs: opts.envs } : {}),
         capture: key,
         ...(opts.strict !== undefined ? { strict: opts.strict } : {}),
+        ...(opts.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}),
       });
       return new Ref<string>(key);
     }
@@ -70,6 +78,7 @@ export class SandboxStepBuilder {
       ...(opts?.cwd !== undefined ? { cwd: opts.cwd } : {}),
       ...(opts?.envs ? { envs: opts.envs } : {}),
       ...(opts?.strict !== undefined ? { strict: opts.strict } : {}),
+      ...(opts?.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}),
     });
     return this;
   }
@@ -85,8 +94,8 @@ export class SandboxStepBuilder {
    * s.execCode("print(x)", { context: { id: "repl", language: CodeLanguage.Python } });
    * ```
    */
-  execCode(code: string, opts?: { context?: { id: string; language: CodeLanguage } }): this {
-    this._steps.push({ type: StepType.ExecCode, code, ...(opts?.context ? { context: opts.context } : {}) });
+  execCode(code: string, opts?: { context?: { id: string; language: CodeLanguage }; timeoutMs?: number }): this {
+    this._steps.push({ type: StepType.ExecCode, code, ...(opts?.context ? { context: opts.context } : {}), ...(opts?.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}) });
     return this;
   }
 
@@ -101,9 +110,9 @@ export class SandboxStepBuilder {
    * s.exec(`echo "Result was ${result}"`);
    * ```
    */
-  readFile(path: string, opts?: { encoding?: Encoding }): Ref<string> {
+  readFile(path: string, opts?: { encoding?: Encoding; timeoutMs?: number }): Ref<string> {
     const key = this._nextKey();
-    this._steps.push({ type: StepType.ReadFile, path, as: key, ...(opts?.encoding ? { encoding: opts.encoding } : {}) });
+    this._steps.push({ type: StepType.ReadFile, path, as: key, ...(opts?.encoding ? { encoding: opts.encoding } : {}), ...(opts?.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}) });
     return new Ref<string>(key);
   }
 
@@ -134,8 +143,8 @@ export class SandboxStepBuilder {
    * s.writeFile("/app/version.txt", `${version}`);
    * ```
    */
-  writeFile(path: string, content: string, encoding?: Encoding): this {
-    this._steps.push({ type: StepType.WriteFile, path, content, ...(encoding ? { encoding } : {}) });
+  writeFile(path: string, content: string, encoding?: Encoding, opts?: { timeoutMs?: number }): this {
+    this._steps.push({ type: StepType.WriteFile, path, content, ...(encoding ? { encoding } : {}), ...(opts?.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}) });
     return this;
   }
 
@@ -245,8 +254,8 @@ export class SandboxStepBuilder {
    * s.deleteFile("/tmp/build.log");
    * ```
    */
-  deleteFile(path: string): this {
-    this._steps.push({ type: StepType.DeleteFile, path });
+  deleteFile(path: string, opts?: { timeoutMs?: number }): this {
+    this._steps.push({ type: StepType.DeleteFile, path, ...(opts?.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}) });
     return this;
   }
 
@@ -258,8 +267,8 @@ export class SandboxStepBuilder {
    * s.moveFile("/app/dist", "/app/release");
    * ```
    */
-  moveFile(from: string, to: string): this {
-    this._steps.push({ type: StepType.MoveFile, from, to });
+  moveFile(from: string, to: string, opts?: { timeoutMs?: number }): this {
+    this._steps.push({ type: StepType.MoveFile, from, to, ...(opts?.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}) });
     return this;
   }
 
@@ -273,9 +282,9 @@ export class SandboxStepBuilder {
    * s.forEach(entries, (s, entry) => { s.exec(`echo ${entry}`); });
    * ```
    */
-  listDirectory(path: string, opts?: { depth?: number }): Ref<FileInfo[]> {
+  listDirectory(path: string, opts?: { depth?: number; timeoutMs?: number }): Ref<FileInfo[]> {
     const key = this._nextKey();
-    this._steps.push({ type: StepType.ListDirectory, path, as: key, ...(opts?.depth !== undefined ? { depth: opts.depth } : {}) });
+    this._steps.push({ type: StepType.ListDirectory, path, as: key, ...(opts?.depth !== undefined ? { depth: opts.depth } : {}), ...(opts?.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}) });
     return new Ref<FileInfo[]>(key);
   }
 
@@ -289,9 +298,9 @@ export class SandboxStepBuilder {
    * s.forEach(tsFiles, (s, file) => { s.exec(`tsc --noEmit ${file}`); });
    * ```
    */
-  searchFiles(pattern: string, opts?: { dir?: string }): Ref<string[]> {
+  searchFiles(pattern: string, opts?: { dir?: string; timeoutMs?: number }): Ref<string[]> {
     const key = this._nextKey();
-    this._steps.push({ type: StepType.SearchFiles, pattern, as: key, ...(opts?.dir !== undefined ? { dir: opts.dir } : {}) });
+    this._steps.push({ type: StepType.SearchFiles, pattern, as: key, ...(opts?.dir !== undefined ? { dir: opts.dir } : {}), ...(opts?.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}) });
     return new Ref<string[]>(key);
   }
 
@@ -303,8 +312,8 @@ export class SandboxStepBuilder {
    * s.createDirectory("/app/logs");
    * ```
    */
-  createDirectory(path: string): this {
-    this._steps.push({ type: StepType.CreateDirectory, path });
+  createDirectory(path: string, opts?: { timeoutMs?: number }): this {
+    this._steps.push({ type: StepType.CreateDirectory, path, ...(opts?.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}) });
     return this;
   }
 
@@ -316,8 +325,8 @@ export class SandboxStepBuilder {
    * s.deleteDirectory("/app/dist");
    * ```
    */
-  deleteDirectory(path: string): this {
-    this._steps.push({ type: StepType.DeleteDirectory, path });
+  deleteDirectory(path: string, opts?: { timeoutMs?: number }): this {
+    this._steps.push({ type: StepType.DeleteDirectory, path, ...(opts?.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}) });
     return this;
   }
 
@@ -329,8 +338,8 @@ export class SandboxStepBuilder {
    * s.setPermissions("/app/entrypoint.sh", "755");
    * ```
    */
-  setPermissions(path: string, mode: string): this {
-    this._steps.push({ type: StepType.SetPermissions, path, mode });
+  setPermissions(path: string, mode: string, opts?: { timeoutMs?: number }): this {
+    this._steps.push({ type: StepType.SetPermissions, path, mode, ...(opts?.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}) });
     return this;
   }
 
@@ -343,8 +352,8 @@ export class SandboxStepBuilder {
    * s.replaceInFiles([{ path: "/app/version.txt", old: "0.0.0", new: "1.2.3" }]);
    * ```
    */
-  replaceInFiles(replacements: Array<{ path: string; old: string; new: string }>): this {
-    this._steps.push({ type: StepType.ReplaceInFiles, replacements });
+  replaceInFiles(replacements: Array<{ path: string; old: string; new: string }>, opts?: { timeoutMs?: number }): this {
+    this._steps.push({ type: StepType.ReplaceInFiles, replacements, ...(opts?.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}) });
     return this;
   }
 
@@ -358,9 +367,9 @@ export class SandboxStepBuilder {
    * s.exec(`echo "size: ${info}"`);
    * ```
    */
-  getFileInfo(path: string): Ref<FileInfo> {
+  getFileInfo(path: string, opts?: { timeoutMs?: number }): Ref<FileInfo> {
     const key = this._nextKey();
-    this._steps.push({ type: StepType.GetFileInfo, path, as: key });
+    this._steps.push({ type: StepType.GetFileInfo, path, as: key, ...(opts?.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}) });
     return new Ref<FileInfo>(key);
   }
 

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { buildExecCommandStep } from "../src/steps/exec.ts";
+import { buildStep } from "../src/steps/index.ts";
 import { StepType } from "../src/steps/types.ts";
 import type { WorkflowRunContext } from "../src/workflow.ts";
 
@@ -53,5 +54,30 @@ describe("buildExecCommandStep interpolation", () => {
     const step = buildExecCommandStep({ type: StepType.ExecCommand, command: "echo hi" });
     await step.run({ sandboxId: "sb-1" }, makeCtx(exec));
     expect(exec.executeCommand).toHaveBeenCalledWith(expect.objectContaining({ envs: undefined }));
+  });
+});
+
+describe("buildStep timeoutMs stamping", () => {
+  it("stamps timeoutMs from def onto the built step", () => {
+    const step = buildStep({ type: StepType.ExecCommand, command: "echo hi", timeoutMs: 5_000 });
+    expect(step.timeoutMs).toBe(5_000);
+  });
+
+  it("leaves timeoutMs undefined when not set", () => {
+    const step = buildStep({ type: StepType.ExecCommand, command: "echo hi" });
+    expect(step.timeoutMs).toBeUndefined();
+  });
+
+  it("stamps timeoutMs for file steps", () => {
+    const step = buildStep({ type: StepType.ReadFile, path: "/tmp/f", as: "k", timeoutMs: 3_000 });
+    expect(step.timeoutMs).toBe(3_000);
+  });
+
+  it("does not stamp timeoutMs for control-flow steps", () => {
+    const step = buildStep({
+      type: StepType.Sequence,
+      steps: [{ type: StepType.ExecCommand, command: "echo hi", timeoutMs: 5_000 }],
+    });
+    expect(step.timeoutMs).toBeUndefined();
   });
 });

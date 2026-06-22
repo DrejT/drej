@@ -49,10 +49,17 @@ async function* parseSSE(stream: ReadableStream<Uint8Array>): AsyncGenerator<SSE
 export class ExecClient {
   private baseUrl: string;
   private accessToken: string;
+  private signal?: AbortSignal;
 
-  constructor(options: { baseUrl?: string; accessToken: string }) {
+  constructor(options: { baseUrl?: string; accessToken: string; signal?: AbortSignal }) {
     this.baseUrl = (options.baseUrl ?? "http://localhost:44772").replace(/\/$/, "");
     this.accessToken = options.accessToken;
+    this.signal = options.signal;
+  }
+
+  /** Return a new `ExecClient` instance that passes `signal` to every fetch call. */
+  withSignal(signal: AbortSignal): ExecClient {
+    return new ExecClient({ baseUrl: this.baseUrl, accessToken: this.accessToken, signal });
   }
 
   private get authHeader(): Record<string, string> {
@@ -67,6 +74,7 @@ export class ExecClient {
         ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
       },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      signal: this.signal,
     });
     if (!res.ok) {
       const text = await res.text().catch(() => "");
@@ -84,6 +92,7 @@ export class ExecClient {
         ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
       },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      signal: this.signal,
     });
     if (!res.ok) {
       const text = await res.text().catch(() => "");
@@ -179,6 +188,7 @@ export class ExecClient {
       method: "POST",
       headers: this.authHeader,
       body: formData,
+      signal: this.signal,
     });
     if (!res.ok) {
       const text = await res.text().catch(() => "");
@@ -189,6 +199,7 @@ export class ExecClient {
   async downloadFile(path: string): Promise<ReadableStream<Uint8Array>> {
     const res = await fetch(`${this.baseUrl}/files/download?path=${encodeURIComponent(path)}`, {
       headers: this.authHeader,
+      signal: this.signal,
     });
     if (!res.ok) throw new Error(`execd error ${res.status}`);
     if (!res.body) throw new Error("empty response body");

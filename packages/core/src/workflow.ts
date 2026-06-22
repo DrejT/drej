@@ -3,6 +3,7 @@ import { LedgerEvent } from "./ledger";
 import type { ControlClient, ExecClient } from "@drej/opensandbox";
 import type { ILogger } from "./logger";
 import { noopLogger } from "./logger";
+import { StepTimeoutError } from "./errors";
 
 export interface WorkflowRunContext {
   readonly workflowName: string;
@@ -15,6 +16,13 @@ export interface WorkflowRunContext {
 
 export interface WorkflowStep {
   readonly id: string;
+  /**
+   * Maximum milliseconds this step may run. When exceeded, an `AbortSignal`
+   * fires on the step's execution context and `StepTimeoutError` is thrown.
+   * Set per-step in the builder (`exec("cmd", { timeoutMs: 5000 })`) or as a
+   * global default via `RunOptions.stepTimeoutMs`.
+   */
+  readonly timeoutMs?: number;
   run(input: unknown, ctx: WorkflowRunContext): Promise<unknown>;
   rollback?(output: unknown, ctx: WorkflowRunContext): Promise<void>;
 }
@@ -101,6 +109,14 @@ export interface WorkflowDeps {
   adapter: IStorageAdapter;
   logger?: ILogger;
   hooks?: WorkflowHooks;
+  /** Global per-step timeout in ms. Applied to any step that does not set its own `timeoutMs`. */
+  stepTimeoutMs?: number;
+  /**
+   * External abort signal. When fired, the current in-flight step is aborted
+   * via its per-step `AbortController` and `StepTimeoutError` (or the signal's
+   * reason) propagates out of `Workflow.run()`.
+   */
+  signal?: AbortSignal;
 }
 
 export class Workflow {
@@ -147,8 +163,27 @@ export class Workflow {
       startFromStep > 0 ? (this.completedSteps.get(startFromStep - 1)?.output ?? input) : input;
 
     for (let i = startFromStep; i < this.steps.length; i++) {
+      // Bail immediately if the global signal fired between steps
+      if (this.deps.signal?.aborted) {
+        const reason = this.deps.signal.reason;
+        throw reason instanceof Error ? reason : new Error("Workflow aborted");
+      }
+
       const step = this.steps[i];
-      const ctx = this.makeContext(i);
+
+      const stepTimeout = step.timeoutMs ?? this.deps.stepTimeoutMs;
+      const ctrl = new AbortController();
+      let timer: ReturnType<typeof setTimeout> | undefined;
+
+      // Chain global signal → per-step controller so either source aborts the step
+      const onGlobalAbort = () => ctrl.abort(this.deps.signal?.reason);
+      this.deps.signal?.addEventListener("abort", onGlobalAbort, { once: true });
+
+      if (stepTimeout !== undefined) {
+        timer = setTimeout(() => ctrl.abort(new StepTimeoutError(step.id, stepTimeout)), stepTimeout);
+      }
+
+      const ctx = this.makeContext(i, ctrl.signal);
 
       this.log.debug("step starting", { workflowName: this.name, runId: this.runId, stepIndex: i, stepId: step.id });
       await this.callHook("onStepStart", { workflowName: this.name, runId: this.runId, stepIndex: i, stepId: step.id });
@@ -193,6 +228,9 @@ export class Workflow {
         });
         await this.callHook("onWorkflowFailed", { workflowName: this.name, runId: this.runId, error });
         throw error;
+      } finally {
+        clearTimeout(timer);
+        this.deps.signal?.removeEventListener("abort", onGlobalAbort);
       }
     }
 
@@ -278,13 +316,13 @@ export class Workflow {
     return { workflow: wf, nextStep: 0, lastOutput: {} };
   }
 
-  private makeContext(stepIndex: number): WorkflowRunContext {
+  private makeContext(stepIndex: number, signal: AbortSignal = new AbortController().signal): WorkflowRunContext {
     return {
       workflowName: this.name,
       runId: this.runId,
       stepIndex,
-      control: this.deps.control,
-      resolveExec: this.deps.resolveExec,
+      control: this.deps.control.withSignal(signal),
+      resolveExec: (id) => this.deps.resolveExec(id).then((ec) => ec.withSignal(signal)),
       emit: (entry) => this.deps.adapter.append(entry),
     };
   }

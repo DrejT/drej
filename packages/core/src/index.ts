@@ -24,4 +24,4 @@ export type { StepDef, Predicate, WorkflowState, SnapshotConfig } from "./steps"
 
 export { validateWorkflow } from "./validate";
 
-export { WorkflowError, SandboxError, ExecConnectionError, CommandError } from "./errors";
+export { WorkflowError, SandboxError, ExecConnectionError, CommandError, StepTimeoutError } from "./errors";

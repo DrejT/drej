@@ -13,6 +13,12 @@ import {
 } from "./control-flow";
 
 export function buildStep(def: StepDef): WorkflowStep {
+  const step = _buildStep(def);
+  const timeoutMs = "timeoutMs" in def ? (def as { timeoutMs?: number }).timeoutMs : undefined;
+  return timeoutMs !== undefined ? { ...step, timeoutMs } : step;
+}
+
+function _buildStep(def: StepDef): WorkflowStep {
   switch (def.type) {
     case StepType.CreateSandbox: return buildCreateSandboxStep(def);
     case StepType.DeleteSandbox: return buildDeleteSandboxStep();

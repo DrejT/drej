@@ -2,28 +2,13 @@ import { StepType, type StepDef } from "@drej/core";
 import type { ImageSpec, Resources } from "@drej/opensandbox";
 
 /**
- * A typed reference to a workflow state key. Use `ref("name")` to create one.
- * Resolves to the value stored under `name` in workflow state at runtime.
- * Works naturally in template literals: `\`echo ${sha}\`` → `"echo {{sha}}"`.
+ * A typed reference to a workflow state key. Returned by output-producing step
+ * methods (readFile, searchFiles, etc.). Works in template literals — use
+ * `\`echo ${myRef}\`` to interpolate the captured value in later steps.
  */
 export class Ref<T> {
   constructor(readonly key: string) {}
   toString(): string { return `{{${this.key}}}`; }
-}
-
-/** Create a typed reference to a workflow state key. */
-export function ref<T>(name: string): Ref<T> {
-  return new Ref<T>(name);
-}
-
-/** @internal */
-export function refKey(val: Ref<unknown> | string): string {
-  return val instanceof Ref ? val.key : val;
-}
-
-/** @internal */
-export function refStr(val: Ref<unknown> | string): string {
-  return val instanceof Ref ? val.toString() : val;
 }
 
 /** Options for creating a sandbox within a workflow step. */

@@ -30,6 +30,6 @@ export type {
   WorkflowFailedHookInfo,
 } from "./client";
 
-export { workflow, WorkflowBuilder, SandboxStepBuilder, CodeLanguage, ref } from "./builder/index";
-export type { SandboxOpts, LoopItem, Ref } from "./builder/index";
+export { workflow, WorkflowBuilder, SandboxStepBuilder, CodeLanguage } from "./builder/index";
+export type { SandboxOpts, LoopItem } from "./builder/index";
 export type { CodeContext } from "@drej/opensandbox";

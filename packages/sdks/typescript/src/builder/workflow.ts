@@ -6,7 +6,7 @@ import { SandboxStepBuilder } from "./sandbox-step";
 class WorkflowParallelBuilder {
   private _branches: StepDef[] = [];
 
-  sandbox(optsOrSandbox: SandboxOpts | Sandbox, fn: (s: SandboxStepBuilder) => SandboxStepBuilder): this {
+  sandbox(optsOrSandbox: SandboxOpts | Sandbox, fn: (s: SandboxStepBuilder) => void): this {
     const sb = new SandboxStepBuilder();
     fn(sb);
     const innerSteps = sb.build();
@@ -19,7 +19,7 @@ class WorkflowParallelBuilder {
     return this;
   }
 
-  branch(fn: (s: SandboxStepBuilder) => SandboxStepBuilder): this {
+  branch(fn: (s: SandboxStepBuilder) => void): this {
     const sb = new SandboxStepBuilder();
     fn(sb);
     this._branches.push(wrapSteps(sb.build()));
@@ -61,7 +61,7 @@ export class WorkflowBuilder {
    * )
    * ```
    */
-  sandbox(optsOrSandbox: SandboxOpts | Sandbox, fn: (s: SandboxStepBuilder) => SandboxStepBuilder): this {
+  sandbox(optsOrSandbox: SandboxOpts | Sandbox, fn: (s: SandboxStepBuilder) => void): this {
     const sb = new SandboxStepBuilder();
     fn(sb);
     if ("id" in optsOrSandbox) {

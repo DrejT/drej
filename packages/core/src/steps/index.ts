@@ -2,7 +2,7 @@ import type { WorkflowStep } from "../workflow";
 import { StepType, type StepDef } from "./types";
 import { buildCreateSandboxStep, buildDeleteSandboxStep } from "./sandbox";
 import { buildExecCommandStep, buildExecCodeStep } from "./exec";
-import { buildWriteFileStep, buildReadFileStep, buildDeleteFileStep, buildMoveFileStep, buildListDirectoryStep, buildSearchFilesStep } from "./file";
+import { buildWriteFileStep, buildReadFileStep, buildDeleteFileStep, buildMoveFileStep, buildListDirectoryStep, buildSearchFilesStep, buildCreateDirectoryStep, buildDeleteDirectoryStep, buildSetPermissionsStep, buildReplaceInFilesStep, buildGetFileInfoStep } from "./file";
 import { buildSnapshotStep } from "./snapshot";
 import {
   buildRetryStep,
@@ -20,11 +20,16 @@ export function buildStep(def: StepDef): WorkflowStep {
     case StepType.ExecCode:      return buildExecCodeStep(def);
     case StepType.WriteFile:     return buildWriteFileStep(def);
     case StepType.ReadFile:      return buildReadFileStep(def);
-    case StepType.DeleteFile:    return buildDeleteFileStep(def);
-    case StepType.MoveFile:      return buildMoveFileStep(def);
-    case StepType.ListDirectory: return buildListDirectoryStep(def);
-    case StepType.SearchFiles:   return buildSearchFilesStep(def);
-    case StepType.Snapshot:      return buildSnapshotStep();
+    case StepType.DeleteFile:      return buildDeleteFileStep(def);
+    case StepType.MoveFile:        return buildMoveFileStep(def);
+    case StepType.ListDirectory:   return buildListDirectoryStep(def);
+    case StepType.SearchFiles:     return buildSearchFilesStep(def);
+    case StepType.CreateDirectory: return buildCreateDirectoryStep(def);
+    case StepType.DeleteDirectory: return buildDeleteDirectoryStep(def);
+    case StepType.SetPermissions:  return buildSetPermissionsStep(def);
+    case StepType.ReplaceInFiles:  return buildReplaceInFilesStep(def);
+    case StepType.GetFileInfo:     return buildGetFileInfoStep(def);
+    case StepType.Snapshot:        return buildSnapshotStep();
     case StepType.Retry:         return buildRetryStep(def, buildStep);
     case StepType.Conditional:   return buildConditionalStep(def, buildStep);
     case StepType.Loop:          return buildLoopStep(def, buildStep);

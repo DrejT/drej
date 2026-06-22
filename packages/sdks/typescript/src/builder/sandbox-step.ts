@@ -263,6 +263,80 @@ export class SandboxStepBuilder {
   }
 
   /**
+   * Create a directory inside the sandbox filesystem.
+   *
+   * @example
+   * ```ts
+   * s.createDirectory("/app/logs")
+   * ```
+   */
+  createDirectory(path: string): this {
+    this._steps.push({ type: StepType.CreateDirectory, path });
+    return this;
+  }
+
+  /**
+   * Recursively delete a directory inside the sandbox filesystem.
+   *
+   * @example
+   * ```ts
+   * s.deleteDirectory("/app/dist")
+   * ```
+   */
+  deleteDirectory(path: string): this {
+    this._steps.push({ type: StepType.DeleteDirectory, path });
+    return this;
+  }
+
+  /**
+   * Set file permissions inside the sandbox.
+   *
+   * @example
+   * ```ts
+   * s.setPermissions("/app/entrypoint.sh", "755")
+   * ```
+   */
+  setPermissions(path: string, mode: string): this {
+    this._steps.push({ type: StepType.SetPermissions, path, mode });
+    return this;
+  }
+
+  /**
+   * Perform batch text replacements across one or more files.
+   * All `path`, `old`, and `new` fields support `{{key}}` interpolation and `Ref` values.
+   *
+   * @example
+   * ```ts
+   * const sha = ref<string>("sha")
+   * s.replaceInFiles([
+   *   { path: "/app/version.txt", old: "0.0.0", new: sha },
+   * ])
+   * ```
+   */
+  replaceInFiles(replacements: Array<{ path: string; old: Ref<string> | string; new: Ref<string> | string }>): this {
+    this._steps.push({
+      type: StepType.ReplaceInFiles,
+      replacements: replacements.map((r) => ({ path: r.path, old: refStr(r.old), new: refStr(r.new) })),
+    });
+    return this;
+  }
+
+  /**
+   * Fetch metadata about a file and store it in workflow state.
+   * The result is a `FileInfo` object with `path`, `size`, `mode`, `modifiedAt`, and `isDirectory`.
+   *
+   * @example
+   * ```ts
+   * const info = ref("info")
+   * s.getFileInfo("/app/bundle.js", { as: info })
+   * ```
+   */
+  getFileInfo(path: string, opts: { as: Ref<unknown> | string }): this {
+    this._steps.push({ type: StepType.GetFileInfo, path, as: refKey(opts.as) });
+    return this;
+  }
+
+  /**
    * Run multiple branches concurrently inside the same sandbox.
    *
    * @example

@@ -97,3 +97,73 @@ export function buildSearchFilesStep(def: Extract<StepDef, { type: StepType.Sear
     },
   };
 }
+
+export function buildCreateDirectoryStep(def: Extract<StepDef, { type: StepType.CreateDirectory }>): WorkflowStep {
+  return {
+    id: StepType.CreateDirectory,
+    async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
+      const state = (input ?? {}) as WorkflowState;
+      if (!state.sandboxId) throw new Error("create_directory requires sandboxId in workflow state");
+      const exec = await ctx.resolveExec(state.sandboxId);
+      await exec.createDirectory(interpolate(def.path, state));
+      return state;
+    },
+  };
+}
+
+export function buildDeleteDirectoryStep(def: Extract<StepDef, { type: StepType.DeleteDirectory }>): WorkflowStep {
+  return {
+    id: StepType.DeleteDirectory,
+    async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
+      const state = (input ?? {}) as WorkflowState;
+      if (!state.sandboxId) throw new Error("delete_directory requires sandboxId in workflow state");
+      const exec = await ctx.resolveExec(state.sandboxId);
+      await exec.deleteDirectory(interpolate(def.path, state));
+      return state;
+    },
+  };
+}
+
+export function buildSetPermissionsStep(def: Extract<StepDef, { type: StepType.SetPermissions }>): WorkflowStep {
+  return {
+    id: StepType.SetPermissions,
+    async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
+      const state = (input ?? {}) as WorkflowState;
+      if (!state.sandboxId) throw new Error("set_permissions requires sandboxId in workflow state");
+      const exec = await ctx.resolveExec(state.sandboxId);
+      await exec.setPermissions(interpolate(def.path, state), interpolate(def.mode, state));
+      return state;
+    },
+  };
+}
+
+export function buildReplaceInFilesStep(def: Extract<StepDef, { type: StepType.ReplaceInFiles }>): WorkflowStep {
+  return {
+    id: StepType.ReplaceInFiles,
+    async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
+      const state = (input ?? {}) as WorkflowState;
+      if (!state.sandboxId) throw new Error("replace_in_files requires sandboxId in workflow state");
+      const exec = await ctx.resolveExec(state.sandboxId);
+      const replacements = def.replacements.map((r) => ({
+        path: interpolate(r.path, state),
+        old:  interpolate(r.old, state),
+        new:  interpolate(r.new, state),
+      }));
+      await exec.replaceInFiles(replacements);
+      return state;
+    },
+  };
+}
+
+export function buildGetFileInfoStep(def: Extract<StepDef, { type: StepType.GetFileInfo }>): WorkflowStep {
+  return {
+    id: StepType.GetFileInfo,
+    async run(input: unknown, ctx: WorkflowRunContext): Promise<unknown> {
+      const state = (input ?? {}) as WorkflowState;
+      if (!state.sandboxId) throw new Error("get_file_info requires sandboxId in workflow state");
+      const exec = await ctx.resolveExec(state.sandboxId);
+      const info = await exec.getFileInfo(interpolate(def.path, state));
+      return { ...state, [def.as]: info };
+    },
+  };
+}

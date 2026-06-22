@@ -247,6 +247,42 @@ describe("SandboxStepBuilder (ref + file ops)", () => {
     expect((step as any).dir).toBeUndefined();
   });
 
+  it("createDirectory produces a CreateDirectory step", () => {
+    const [step] = new SandboxStepBuilder().createDirectory("/app/logs").build();
+    expect(step).toEqual({ type: StepType.CreateDirectory, path: "/app/logs" });
+  });
+
+  it("deleteDirectory produces a DeleteDirectory step", () => {
+    const [step] = new SandboxStepBuilder().deleteDirectory("/app/dist").build();
+    expect(step).toEqual({ type: StepType.DeleteDirectory, path: "/app/dist" });
+  });
+
+  it("setPermissions produces a SetPermissions step", () => {
+    const [step] = new SandboxStepBuilder().setPermissions("/app/run.sh", "755").build();
+    expect(step).toEqual({ type: StepType.SetPermissions, path: "/app/run.sh", mode: "755" });
+  });
+
+  it("replaceInFiles resolves Ref values in replacements", () => {
+    const sha = ref<string>("sha");
+    const [step] = new SandboxStepBuilder()
+      .replaceInFiles([{ path: "/ver.txt", old: "0.0.0", new: sha }])
+      .build();
+    expect((step as any).replacements[0].new).toBe("{{sha}}");
+  });
+
+  it("replaceInFiles passes string values through unchanged", () => {
+    const [step] = new SandboxStepBuilder()
+      .replaceInFiles([{ path: "/a.txt", old: "foo", new: "bar" }])
+      .build();
+    expect((step as any).replacements).toEqual([{ path: "/a.txt", old: "foo", new: "bar" }]);
+  });
+
+  it("getFileInfo produces a GetFileInfo step with Ref as", () => {
+    const info = ref("info");
+    const [step] = new SandboxStepBuilder().getFileInfo("/app/bundle.js", { as: info }).build();
+    expect(step).toEqual({ type: StepType.GetFileInfo, path: "/app/bundle.js", as: "info" });
+  });
+
   it("forEach accepts a Ref source and uses over field", () => {
     const files = ref<string[]>("files");
     const [step] = new SandboxStepBuilder()

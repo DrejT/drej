@@ -1,5 +1,22 @@
 # @drej/postgres
 
+## 0.2.0
+
+### Minor Changes
+
+- 2fd33e0: feat: run management API
+
+  Add `RunStatus` enum, `RunDetails` type, and `ListRunsOptions` for filtering. Replace `listRuns()` with `listRunDetails()`, `listAllRunDetails()`, `getRunDetails()`, and `deleteRun()` on both `IStorageAdapter` and `DrejClient`. Add `WorkflowRun.status` property that tracks execution state as events are consumed.
+
+### Patch Changes
+
+- Updated dependencies [22b8a32]
+- Updated dependencies [799b6dd]
+- Updated dependencies [8d9d8bb]
+- Updated dependencies [2fd33e0]
+- Updated dependencies [0d94c2a]
+  - @drej/core@0.3.0
+
 ## 0.1.2
 
 ### Patch Changes

@@ -1,12 +1,14 @@
 {
   "name": "@drej/core",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "main": "./src/index.ts",
   "types": "./dist/index.d.ts",
   "files": [
     "dist"
   ],
-  "publishConfig": { "access": "public" },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build:types": "tsc --project tsconfig.build.json",
     "test": "vitest run",

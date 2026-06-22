@@ -1,7 +1,9 @@
 {
   "name": "@drej/otel",
-  "version": "0.1.0",
-  "publishConfig": { "access": "public" },
+  "version": "0.1.1",
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "./src/index.ts",
   "peerDependencies": {
     "@opentelemetry/api": "^1.0.0"

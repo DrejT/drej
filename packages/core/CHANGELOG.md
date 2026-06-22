@@ -1,5 +1,69 @@
 # @drej/core
 
+## 0.3.0
+
+### Minor Changes
+
+- 22b8a32: feat: concurrency limits
+
+  Add `maxConcurrency` to `DrejClientOptions` to cap simultaneous workflow runs — `run()` awaits a slot before starting when at capacity. Add `maxConcurrency` to `parallel` and `loop` StepDefs so branches and loop iterations are throttled via a worker-pool; the `parallel()` and `forEach()` builders expose this as an `opts.concurrency` argument.
+
+- 799b6dd: Add file ops steps and `ref()` builder API
+
+  New step types: `deleteFile`, `moveFile`, `listDirectory`, `searchFiles`.
+
+  `listDirectory` stores `DirectoryEntry[]` in state under the given key; `searchFiles` stores `string[]` which can be passed directly to `forEach`.
+
+  New `ref<T>(name)` function creates a typed state reference. Use it instead of raw `"{{name}}"` strings anywhere the builder accepts a captured value:
+
+  ```ts
+  const sha = ref<string>("sha");
+  const tsFiles = ref<string[]>("tsFiles");
+
+  workflow("build").sandbox({ image: { uri: "node:20" } }, (s) =>
+    s
+      .exec("git rev-parse HEAD", { capture: sha })
+      .searchFiles("**/*.ts", { as: tsFiles })
+      .forEach(tsFiles, (s, file) => s.exec(`tsc ${file}`))
+      .exec("deploy.sh", { envs: { GIT_SHA: sha } })
+  );
+  ```
+
+  `Ref<T>` objects also work naturally in template literals: `` `echo ${sha}` `` expands to `"echo {{sha}}"` at build time.
+
+  Also fixes: `cwd` and `envs` values in `exec()` are now interpolated against workflow state at runtime (previously passed verbatim).
+
+- 8d9d8bb: refactor: split large source files into focused modules
+
+  `@drej/core`: `steps.ts` (428 lines) split into `steps/` directory — `types.ts`, `utils.ts`, `sandbox.ts`, `exec.ts`, `file.ts`, `snapshot.ts`, `control-flow.ts`, `index.ts`. `buildStep` becomes a thin router that delegates to per-step-type builders; no circular dependencies.
+
+  `drej` SDK: `client.ts` split into `types.ts` (DrejError, WorkflowRun, option interfaces) and `stream.ts` (makeStream standalone function). `workflow.ts` split into `builder/` directory — `types.ts`, `sandbox-step.ts`, `workflow.ts`, `index.ts`. No public API changes.
+
+- 2fd33e0: feat: run management API
+
+  Add `RunStatus` enum, `RunDetails` type, and `ListRunsOptions` for filtering. Replace `listRuns()` with `listRunDetails()`, `listAllRunDetails()`, `getRunDetails()`, and `deleteRun()` on both `IStorageAdapter` and `DrejClient`. Add `WorkflowRun.status` property that tracks execution state as events are consumed.
+
+- 0d94c2a: Add per-step timeout and AbortSignal cancellation
+
+  **Per-step timeouts**: steps now accept `timeoutMs` to cap execution time. A
+  global fallback can be set via `RunOptions.stepTimeoutMs`. When exceeded, the
+  step fails with `StepTimeoutError` and rollback runs automatically.
+
+  **Cancellation**: `WorkflowRun.cancel()` aborts the run immediately. Breaking
+  out of the `for await` loop does the same. Pass `RunOptions.signal` to wire in
+  an external `AbortController` or `AbortSignal.timeout()`.
+
+  Both features share the same internal mechanism: a per-step `AbortController`
+  scoped to both `ControlClient` and `ExecClient` via `withSignal()`, so
+  in-flight HTTP calls and SSE exec streams are cancelled cleanly at the fetch
+  level. Rollback still runs with unscoped clients to ensure cleanup always
+  completes.
+
+### Patch Changes
+
+- Updated dependencies [0d94c2a]
+  - @drej/opensandbox@0.1.3
+
 ## 0.2.0
 
 ### Minor Changes

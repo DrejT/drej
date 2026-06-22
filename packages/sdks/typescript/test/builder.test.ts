@@ -1,7 +1,7 @@
 import { Backoff, Encoding, StepType } from "@drej/core";
 import { describe, expect, it } from "vitest";
 import { SandboxStepBuilder } from "../src/builder/sandbox-step.ts";
-import { createLoopVar, wrapSteps } from "../src/builder/types.ts";
+import { createLoopVar, ref, wrapSteps } from "../src/builder/types.ts";
 import { workflow } from "../src/builder/workflow.ts";
 
 // ── wrapSteps ────────────────────────────────────────────────────────────────
@@ -163,6 +163,97 @@ describe("SandboxStepBuilder", () => {
     expect(steps).toHaveLength(3);
     expect(steps[0]).toMatchObject({ command: "step1" });
     expect(steps[2]).toMatchObject({ command: "step3" });
+  });
+});
+
+// ── ref ───────────────────────────────────────────────────────────────────────
+
+describe("ref", () => {
+  it("toString returns the interpolation template", () => {
+    expect(String(ref("sha"))).toBe("{{sha}}");
+  });
+
+  it("key property holds the state key name", () => {
+    expect(ref("myKey").key).toBe("myKey");
+  });
+
+  it("works naturally in template literals", () => {
+    const sha = ref<string>("sha");
+    expect(`echo ${sha}`).toBe("echo {{sha}}");
+  });
+});
+
+// ── SandboxStepBuilder — ref + new file methods ───────────────────────────────
+
+describe("SandboxStepBuilder (ref + file ops)", () => {
+  it("exec: Ref capture resolves to its key", () => {
+    const sha = ref<string>("sha");
+    const [step] = new SandboxStepBuilder().exec("git rev-parse HEAD", { capture: sha }).build();
+    expect((step as any).capture).toBe("sha");
+  });
+
+  it("exec: Ref envs values resolve to interpolation strings", () => {
+    const sha = ref<string>("sha");
+    const [step] = new SandboxStepBuilder().exec("deploy.sh", { envs: { GIT_SHA: sha } }).build();
+    expect((step as any).envs.GIT_SHA).toBe("{{sha}}");
+  });
+
+  it("exec: string envs values are passed through unchanged", () => {
+    const [step] = new SandboxStepBuilder().exec("run.sh", { envs: { MODE: "prod" } }).build();
+    expect((step as any).envs.MODE).toBe("prod");
+  });
+
+  it("readFile: Ref as resolves to its key", () => {
+    const result = ref<string>("result");
+    const [step] = new SandboxStepBuilder().readFile("/out.txt", { as: result }).build();
+    expect((step as any).as).toBe("result");
+  });
+
+  it("writeFile: Ref content resolves to interpolation string", () => {
+    const body = ref<string>("body");
+    const [step] = new SandboxStepBuilder().writeFile("/out.txt", body).build();
+    expect((step as any).content).toBe("{{body}}");
+  });
+
+  it("deleteFile produces a DeleteFile step", () => {
+    const [step] = new SandboxStepBuilder().deleteFile("/tmp/build.log").build();
+    expect(step).toEqual({ type: StepType.DeleteFile, path: "/tmp/build.log" });
+  });
+
+  it("moveFile produces a MoveFile step", () => {
+    const [step] = new SandboxStepBuilder().moveFile("/app/dist", "/app/release").build();
+    expect(step).toEqual({ type: StepType.MoveFile, from: "/app/dist", to: "/app/release" });
+  });
+
+  it("listDirectory produces a ListDirectory step with Ref as", () => {
+    const entries = ref<unknown[]>("entries");
+    const [step] = new SandboxStepBuilder().listDirectory("/app", { as: entries, depth: 2 }).build();
+    expect(step).toEqual({ type: StepType.ListDirectory, path: "/app", as: "entries", depth: 2 });
+  });
+
+  it("listDirectory omits depth when not provided", () => {
+    const [step] = new SandboxStepBuilder().listDirectory("/app", { as: "items" }).build();
+    expect((step as any).depth).toBeUndefined();
+  });
+
+  it("searchFiles produces a SearchFiles step with Ref as", () => {
+    const files = ref<string[]>("files");
+    const [step] = new SandboxStepBuilder().searchFiles("**/*.ts", { as: files, dir: "/src" }).build();
+    expect(step).toEqual({ type: StepType.SearchFiles, pattern: "**/*.ts", as: "files", dir: "/src" });
+  });
+
+  it("searchFiles omits dir when not provided", () => {
+    const [step] = new SandboxStepBuilder().searchFiles("*.ts", { as: "files" }).build();
+    expect((step as any).dir).toBeUndefined();
+  });
+
+  it("forEach accepts a Ref source and uses over field", () => {
+    const files = ref<string[]>("files");
+    const [step] = new SandboxStepBuilder()
+      .forEach(files, (s, item) => s.exec(`process ${item}`))
+      .build();
+    expect((step as any).over).toBe("files");
+    expect((step as any).items).toBeUndefined();
   });
 });
 

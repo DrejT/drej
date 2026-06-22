@@ -3,6 +3,7 @@ import { LedgerEvent } from "./ledger";
 import type { ControlClient, ExecClient } from "@drej/opensandbox";
 import type { ILogger } from "./logger";
 import { noopLogger } from "./logger";
+import { StepTimeoutError } from "./errors";
 
 export interface WorkflowRunContext {
   readonly workflowName: string;
@@ -15,6 +16,7 @@ export interface WorkflowRunContext {
 
 export interface WorkflowStep {
   readonly id: string;
+  readonly timeoutMs?: number;
   run(input: unknown, ctx: WorkflowRunContext): Promise<unknown>;
   rollback?(output: unknown, ctx: WorkflowRunContext): Promise<void>;
 }
@@ -101,6 +103,7 @@ export interface WorkflowDeps {
   adapter: IStorageAdapter;
   logger?: ILogger;
   hooks?: WorkflowHooks;
+  stepTimeoutMs?: number;
 }
 
 export class Workflow {
@@ -148,7 +151,15 @@ export class Workflow {
 
     for (let i = startFromStep; i < this.steps.length; i++) {
       const step = this.steps[i];
-      const ctx = this.makeContext(i);
+
+      const stepTimeout = step.timeoutMs ?? this.deps.stepTimeoutMs;
+      const ctrl = new AbortController();
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      if (stepTimeout !== undefined) {
+        timer = setTimeout(() => ctrl.abort(new StepTimeoutError(step.id, stepTimeout)), stepTimeout);
+      }
+
+      const ctx = this.makeContext(i, ctrl.signal);
 
       this.log.debug("step starting", { workflowName: this.name, runId: this.runId, stepIndex: i, stepId: step.id });
       await this.callHook("onStepStart", { workflowName: this.name, runId: this.runId, stepIndex: i, stepId: step.id });
@@ -156,6 +167,7 @@ export class Workflow {
 
       try {
         const output = await step.run(current, ctx);
+        clearTimeout(timer);
         this.completedSteps.set(i, { output, completedAt: Date.now() });
         current = output;
 
@@ -179,6 +191,7 @@ export class Workflow {
           payload: this.snapshot(),
         });
       } catch (err) {
+        clearTimeout(timer);
         this._status = WorkflowStatus.Failed;
         const error = err instanceof Error ? err : new Error(String(err));
         this.log.error("step failed", { workflowName: this.name, runId: this.runId, stepIndex: i, stepId: step.id, error: error.message });
@@ -278,13 +291,13 @@ export class Workflow {
     return { workflow: wf, nextStep: 0, lastOutput: {} };
   }
 
-  private makeContext(stepIndex: number): WorkflowRunContext {
+  private makeContext(stepIndex: number, signal: AbortSignal = new AbortController().signal): WorkflowRunContext {
     return {
       workflowName: this.name,
       runId: this.runId,
       stepIndex,
-      control: this.deps.control,
-      resolveExec: this.deps.resolveExec,
+      control: this.deps.control.withSignal(signal),
+      resolveExec: (id) => this.deps.resolveExec(id).then((ec) => ec.withSignal(signal)),
       emit: (entry) => this.deps.adapter.append(entry),
     };
   }

@@ -44,3 +44,17 @@ export class CommandError extends WorkflowError {
     this.name = "CommandError";
   }
 }
+
+/**
+ * Thrown when a step exceeds its `timeoutMs` limit (either set per-step or
+ * via `RunOptions.stepTimeoutMs`). The workflow will roll back after this error.
+ */
+export class StepTimeoutError extends WorkflowError {
+  constructor(
+    public readonly stepId: string,
+    public readonly timeoutMs: number,
+  ) {
+    super(`Step "${stepId}" timed out after ${timeoutMs}ms`);
+    this.name = "StepTimeoutError";
+  }
+}

@@ -14,7 +14,7 @@ import {
   type RunDetails,
   type ListRunsOptions,
 } from "@drej/core";
-export { WorkflowError, SandboxError, ExecConnectionError, CommandError, WorkflowStatus, RunStatus, StepType, Encoding, Backoff } from "@drej/core";
+export { WorkflowError, SandboxError, ExecConnectionError, CommandError, StepTimeoutError, WorkflowStatus, RunStatus, StepType, Encoding, Backoff } from "@drej/core";
 export type {
   WorkflowHooks,
   WorkflowHookInfo,
@@ -366,7 +366,7 @@ export class DrejClient {
           }
         : undefined;
 
-      const deps: WorkflowDeps = { ...teeDeps, hooks: mergeHooks(snapshotHook, options?.hooks) };
+      const deps: WorkflowDeps = { ...teeDeps, hooks: mergeHooks(snapshotHook, options?.hooks), stepTimeoutMs: options?.stepTimeoutMs };
       const wf = new Workflow(name, runId, steps.map(buildStep), deps);
       try {
         await wf.run(initialState);

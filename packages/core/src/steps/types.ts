@@ -51,20 +51,20 @@ export type StepDef =
       metadata?: Record<string, string>;
       resourceLimits?: { cpu?: string; memory?: string; gpu?: string };
     }
-  | { type: StepType.ExecCode; code: string; context?: { id: string; language: CodeLanguage } }
-  | { type: StepType.ExecCommand; command: string; cwd?: string; envs?: Record<string, string>; capture?: string; strict?: boolean }
+  | { type: StepType.ExecCode; code: string; context?: { id: string; language: CodeLanguage }; timeoutMs?: number }
+  | { type: StepType.ExecCommand; command: string; cwd?: string; envs?: Record<string, string>; capture?: string; strict?: boolean; timeoutMs?: number }
   | { type: StepType.DeleteSandbox }
-  | { type: StepType.WriteFile; path: string; content: string; encoding?: Encoding }
-  | { type: StepType.ReadFile; path: string; as: string; encoding?: Encoding }
-  | { type: StepType.DeleteFile; path: string }
-  | { type: StepType.MoveFile; from: string; to: string }
-  | { type: StepType.ListDirectory; path: string; as: string; depth?: number }
-  | { type: StepType.SearchFiles; pattern: string; as: string; dir?: string }
-  | { type: StepType.CreateDirectory; path: string }
-  | { type: StepType.DeleteDirectory; path: string }
-  | { type: StepType.SetPermissions; path: string; mode: string }
-  | { type: StepType.ReplaceInFiles; replacements: Array<{ path: string; old: string; new: string }> }
-  | { type: StepType.GetFileInfo; path: string; as: string }
+  | { type: StepType.WriteFile; path: string; content: string; encoding?: Encoding; timeoutMs?: number }
+  | { type: StepType.ReadFile; path: string; as: string; encoding?: Encoding; timeoutMs?: number }
+  | { type: StepType.DeleteFile; path: string; timeoutMs?: number }
+  | { type: StepType.MoveFile; from: string; to: string; timeoutMs?: number }
+  | { type: StepType.ListDirectory; path: string; as: string; depth?: number; timeoutMs?: number }
+  | { type: StepType.SearchFiles; pattern: string; as: string; dir?: string; timeoutMs?: number }
+  | { type: StepType.CreateDirectory; path: string; timeoutMs?: number }
+  | { type: StepType.DeleteDirectory; path: string; timeoutMs?: number }
+  | { type: StepType.SetPermissions; path: string; mode: string; timeoutMs?: number }
+  | { type: StepType.ReplaceInFiles; replacements: Array<{ path: string; old: string; new: string }>; timeoutMs?: number }
+  | { type: StepType.GetFileInfo; path: string; as: string; timeoutMs?: number }
   | { type: StepType.Snapshot }
   | { type: StepType.Retry; step: StepDef; maxAttempts: number; delayMs?: number; backoff?: Backoff }
   | { type: StepType.Conditional; condition: Predicate; then: StepDef[]; else?: StepDef[] }

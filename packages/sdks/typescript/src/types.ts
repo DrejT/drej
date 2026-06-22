@@ -43,6 +43,12 @@ export interface RunOptions {
   snapshotConfig?: SnapshotConfig;
   /** Lifecycle hooks for observability (e.g. pass `otelHooks(tracer)` from `@drej/otel`). */
   hooks?: WorkflowHooks;
+  /**
+   * Default timeout in milliseconds for every step that does not set its own
+   * `timeoutMs`. When a step exceeds this limit the run fails with
+   * `StepTimeoutError` and rollback runs automatically.
+   */
+  stepTimeoutMs?: number;
 }
 
 /**

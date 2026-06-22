@@ -36,10 +36,16 @@ export class OpenSandboxError extends Error {
 export class ControlClient {
   private baseUrl: string;
   private apiKey: string;
+  private signal?: AbortSignal;
 
-  constructor(options: { baseUrl: string; apiKey: string }) {
+  constructor(options: { baseUrl: string; apiKey: string; signal?: AbortSignal }) {
     this.baseUrl = options.baseUrl.replace(/\/$/, "");
     this.apiKey = options.apiKey;
+    this.signal = options.signal;
+  }
+
+  withSignal(signal: AbortSignal): ControlClient {
+    return new ControlClient({ baseUrl: this.baseUrl, apiKey: this.apiKey, signal });
   }
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -50,6 +56,7 @@ export class ControlClient {
         ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
       },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      signal: this.signal,
     });
     if (!res.ok) {
       const text = await res.text().catch(() => "");

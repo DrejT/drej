@@ -1,0 +1,50 @@
+---
+title: What is drej?
+description: drej is a workflow orchestration framework for running multi-step workflows inside isolated sandbox containers.
+---
+
+drej lets you define workflows in TypeScript and run them inside isolated [OpenSandbox](https://opensandbox.ai) containers. Each workflow is a sequence of steps — shell commands, code execution, file operations, and control flow — that run in-process against a real container.
+
+```ts
+import { Drej, workflow } from "drej";
+import { SQLiteAdapter } from "@drej/sqlite";
+
+const client = new Drej({
+  baseUrl: "http://localhost:8080",
+  apiKey: "",
+  adapter: new SQLiteAdapter("./ledger.db"),
+});
+await client.connect();
+
+await client.run(
+  workflow("hello").sandbox(
+    { image: { uri: "ubuntu:22.04" }, resourceLimits: { cpu: "500m", memory: "256Mi" } },
+    (s) => s.exec('echo "hello world"'),
+  ),
+).pipe(process.stdout);
+
+await client.close();
+```
+
+## How it works
+
+Workflows are built with a fluent builder API and compiled to a step list that the drej engine executes against OpenSandbox. Events stream back in real time as steps run.
+
+```
+your code → WorkflowBuilder → StepDef[] → drej engine → OpenSandbox container
+                                                ↓
+                                          ledger (SQLite / Postgres)
+                                                ↓
+                                      AsyncIterable<WorkflowEvent>
+```
+
+## Key features
+
+- **Runs in-process** — no separate server or daemon; `Drej` runs workflows directly in your process
+- **Real containers** — every sandbox is a Docker container managed by OpenSandbox
+- **Typed results** — `Ref<T>` captures output from steps; `run.result()` returns `{ output, state }`
+- **Streaming** — `run.pipe(process.stdout)`, `run.stdout()`, `run.result()` for flexible consumption
+- **Durable** — every event is persisted to a storage adapter (SQLite or Postgres)
+- **Resumable** — interrupted runs can be resumed from their last checkpoint
+- **Control flow** — `retry`, `when`, `forEach`, `parallel` compose inside a single sandbox
+- **Snapshots** — snapshot a sandbox mid-workflow and replay from that point

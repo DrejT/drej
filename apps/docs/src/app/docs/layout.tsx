@@ -3,7 +3,12 @@ import { source } from "@/lib/source";
 
 export default function DocsPageLayout({ children }: { children: React.ReactNode }) {
   return (
-    <DocsLayout tree={source.pageTree} nav={{ title: "drej" }}>
+    <DocsLayout
+      tree={source.pageTree}
+      nav={{ title: "drej", url: "/" }}
+      themeSwitch={{ enabled: false }}
+      searchToggle={{ enabled: true }}
+    >
       {children}
     </DocsLayout>
   );

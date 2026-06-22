@@ -1,7 +1,17 @@
-import { DocsPage, DocsBody } from "fumadocs-ui/layouts/docs/page";
+import { DocsPage, DocsBody, DocsTitle, DocsDescription } from "fumadocs-ui/layouts/docs/page";
 import { source } from "@/lib/source";
 import { notFound } from "next/navigation";
 import defaultMdxComponents from "fumadocs-ui/mdx";
+
+const OVERVIEW_SLUGS = new Set([
+  "",
+  "getting-started",
+  "concepts",
+  "building",
+  "patterns",
+  "adapters",
+  "api-reference",
+]);
 
 export default async function Page({ params }: { params: Promise<{ slug?: string[] }> }) {
   const { slug } = await params;
@@ -9,11 +19,16 @@ export default async function Page({ params }: { params: Promise<{ slug?: string
   if (!page) notFound();
 
   const MDX = page.data.body;
+  const slugStr = (slug ?? []).join("/");
+  const isOverview = OVERVIEW_SLUGS.has(slugStr);
 
   return (
-    <DocsPage toc={page.data.toc}>
+    <DocsPage toc={isOverview ? [] : page.data.toc} full={isOverview}>
+      <DocsTitle>{page.data.title}</DocsTitle>
+      {page.data.description && (
+        <DocsDescription>{page.data.description}</DocsDescription>
+      )}
       <DocsBody>
-        <h1 className="text-3xl font-bold mb-4">{page.data.title}</h1>
         <MDX components={{ ...defaultMdxComponents }} />
       </DocsBody>
     </DocsPage>

@@ -1,4 +1,4 @@
 {
   "title": "drej",
-  "pages": ["getting-started"]
+  "pages": ["index", "getting-started", "concepts", "building", "patterns", "adapters", "api-reference"]
 }

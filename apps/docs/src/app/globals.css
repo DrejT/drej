@@ -3,3 +3,7 @@
 @import "fumadocs-ui/css/preset.css";
 
 @source "../../node_modules/fumadocs-ui/dist/**/*.js";
+
+html {
+  color-scheme: light;
+}

@@ -1,0 +1,4 @@
+{
+  "title": "Patterns",
+  "pages": ["index", "timeouts-and-cancellation", "error-handling", "run-management", "observability"]
+}

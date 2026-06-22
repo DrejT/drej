@@ -26,11 +26,11 @@ const srcFiles  = ref<string[]>("srcFiles");
 const indexSrc  = ref<string>("indexSrc");
 const afterPatch = ref<string>("afterPatch");
 const bundleInfo = ref<{ size: number; isDirectory: boolean }>("bundleInfo");
-const distEntries = ref<Array<{ name: string; isDirectory: boolean }>>("distEntries");
+const distEntries = ref<Array<{ path: string; type: string }>>("distEntries");
 
 const run = await client.run(
   workflow("file-ops-demo").sandbox(
-    { image: { uri: "node:20-slim" }, resourceLimits: { cpu: "500m", memory: "256Mi" } },
+    { image: { uri: "ubuntu:22.04" }, resourceLimits: { cpu: "500m", memory: "256Mi" } },
     (s) =>
       s
         // 1. Create a project layout
@@ -121,8 +121,8 @@ const info = finalState.bundleInfo as { size: number; isDirectory: boolean };
 assert("getFileInfo: not a directory", info && !info.isDirectory, info);
 assert("getFileInfo: size > 0",        info && info.size > 0,     info?.size);
 
-const entries = finalState.distEntries as Array<{ name: string }>;
-assert("listDirectory sees moved file", entries?.some((e) => e.name === "index.ts"), entries);
+const entries = finalState.distEntries as Array<{ path: string }>;
+assert("listDirectory sees moved file", entries?.some((e) => e.path?.endsWith("index.ts")), entries);
 
 console.log(failed ? "\nsome assertions failed" : "\n✓ all assertions passed");
 if (failed) process.exit(1);

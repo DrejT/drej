@@ -21,6 +21,5 @@ export type {
   CommandStatus,
   FileInfo,
   FileReplacement,
-  DirectoryEntry,
   Metrics,
 } from "./types";

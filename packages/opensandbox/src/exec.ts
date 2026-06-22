@@ -7,7 +7,6 @@ import type {
   CommandStatus,
   FileInfo,
   FileReplacement,
-  DirectoryEntry,
   Metrics,
 } from "./types";
 
@@ -140,8 +139,11 @@ export class ExecClient {
     return this.request("GET", `/command/output/${session}`);
   }
 
-  getFileInfo(path: string): Promise<FileInfo> {
-    return this.request("GET", `/files/info?path=${encodeURIComponent(path)}`);
+  async getFileInfo(path: string): Promise<FileInfo> {
+    const map = await this.request<Record<string, FileInfo>>("GET", `/files/info?path=${encodeURIComponent(path)}`);
+    const entry = map[path];
+    if (!entry) throw new Error(`getFileInfo: no entry for path ${path}`);
+    return entry;
   }
 
   deleteFile(path: string): Promise<void> {
@@ -149,21 +151,23 @@ export class ExecClient {
   }
 
   setPermissions(path: string, mode: string): Promise<void> {
-    return this.request("POST", "/files/permissions", { path, mode });
+    return this.request("POST", "/files/permissions", { [path]: { mode: parseInt(mode, 10) } });
   }
 
   moveFile(from: string, to: string): Promise<void> {
-    return this.request("POST", "/files/mv", { from, to });
+    return this.request("POST", "/files/mv", [{ src: from, dest: to }]);
   }
 
-  searchFiles(pattern: string, dir?: string): Promise<string[]> {
-    const params = new URLSearchParams({ pattern });
-    if (dir) params.set("dir", dir);
-    return this.request("GET", `/files/search?${params}`);
+  async searchFiles(pattern: string, path: string = "/"): Promise<string[]> {
+    const params = new URLSearchParams({ path, pattern });
+    const entries = await this.request<FileInfo[]>("GET", `/files/search?${params}`);
+    return entries.map((e) => e.path);
   }
 
   replaceInFiles(replacements: FileReplacement[]): Promise<void> {
-    return this.request("POST", "/files/replace", { replacements });
+    const body: Record<string, { old: string; new: string }> = {};
+    for (const r of replacements) body[r.path] = { old: r.old, new: r.new };
+    return this.request("POST", "/files/replace", body);
   }
 
   async uploadFile(path: string, content: Blob | BufferSource | string): Promise<void> {
@@ -191,14 +195,14 @@ export class ExecClient {
     return res.body;
   }
 
-  listDirectory(path: string, depth?: number): Promise<DirectoryEntry[]> {
+  listDirectory(path: string, depth?: number): Promise<FileInfo[]> {
     const params = new URLSearchParams({ path });
     if (depth !== undefined) params.set("depth", String(depth));
     return this.request("GET", `/directories/list?${params}`);
   }
 
   createDirectory(path: string): Promise<void> {
-    return this.request("POST", "/directories", { path });
+    return this.request("POST", "/directories", { [path]: { mode: 755 } });
   }
 
   deleteDirectory(path: string): Promise<void> {

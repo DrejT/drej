@@ -91,8 +91,8 @@ export function buildSearchFilesStep(def: Extract<StepDef, { type: StepType.Sear
       const state = (input ?? {}) as WorkflowState;
       if (!state.sandboxId) throw new Error("search_files requires sandboxId in workflow state");
       const exec = await ctx.resolveExec(state.sandboxId);
-      const dir = def.dir ? interpolate(def.dir, state) : undefined;
-      const matches = await exec.searchFiles(interpolate(def.pattern, state), dir);
+      const searchPath = def.dir ? interpolate(def.dir, state) : "/";
+      const matches = await exec.searchFiles(interpolate(def.pattern, state), searchPath);
       return { ...state, [def.as]: matches };
     },
   };

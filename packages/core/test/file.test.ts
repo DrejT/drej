@@ -148,11 +148,11 @@ describe("buildSearchFilesStep", () => {
     expect(exec.searchFiles).toHaveBeenCalledWith("*.ts", "/src");
   });
 
-  it("passes undefined dir when not set", async () => {
+  it("defaults to / when dir is not set", async () => {
     const exec = { searchFiles: vi.fn().mockResolvedValue([]) };
     const step = buildSearchFilesStep({ type: StepType.SearchFiles, pattern: "*.ts", as: "files" });
     await step.run({ sandboxId: "sb-1" }, makeCtx(exec));
-    expect(exec.searchFiles).toHaveBeenCalledWith("*.ts", undefined);
+    expect(exec.searchFiles).toHaveBeenCalledWith("*.ts", "/");
   });
 
   it("interpolates pattern and dir against state", async () => {

@@ -167,17 +167,13 @@ export interface CommandStatus {
 
 export interface FileInfo {
   path: string;
+  type: "file" | "directory" | "symlink";
   size: number;
-  mode: string;
-  modifiedAt: string;
-  isDirectory: boolean;
-}
-
-export interface DirectoryEntry {
-  name: string;
-  path: string;
-  isDirectory: boolean;
-  size?: number;
+  mode: number;
+  modified_at: string;
+  created_at: string;
+  owner: string;
+  group: string;
 }
 
 export interface FileReplacement {

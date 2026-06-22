@@ -4,3 +4,6 @@ dist/
 *.local
 *.ndjson
 plans/
+*.db
+*.db-shm
+*.db-wal

@@ -37,7 +37,7 @@ import {
   type DiagnosticLog,
   type DiagnosticEvent,
 } from "@drej/opensandbox";
-import { DrejError, WorkflowRun, type DrejClientOptions, type RunOptions, type WorkflowEvent } from "./types";
+import { DrejError, WorkflowRun, type DrejOptions, type RunOptions, type WorkflowEvent } from "./types";
 import { makeStream } from "./stream";
 import type { WorkflowBuilder } from "./builder/index";
 
@@ -54,7 +54,7 @@ export type {
 } from "@drej/opensandbox";
 export { SandboxState, SnapshotState, SSEEventType } from "@drej/opensandbox";
 export type { SandboxStatus, Resources, ImageSpec, ImageAuth } from "@drej/opensandbox";
-export { DrejError, WorkflowRun, type DrejClientOptions, type RunOptions, type WorkflowEvent } from "./types";
+export { DrejError, WorkflowRun, type DrejOptions, type RunOptions, type WorkflowEvent } from "./types";
 
 /**
  * Main entry point for drej. Manages workflow execution, sandbox lifecycle,
@@ -62,10 +62,10 @@ export { DrejError, WorkflowRun, type DrejClientOptions, type RunOptions, type W
  *
  * @example
  * ```ts
- * import { DrejClient, workflow } from "drej";
+ * import { Drej, workflow } from "drej";
  * import { SQLiteAdapter } from "@drej/sqlite";
  *
- * const client = new DrejClient({
+ * const client = new Drej({
  *   baseUrl: "http://localhost:8080",
  *   adapter: new SQLiteAdapter("./drej.db"),
  * });
@@ -76,19 +76,18 @@ export { DrejError, WorkflowRun, type DrejClientOptions, type RunOptions, type W
  *     s.exec("node -e 'console.log(\"hello\")'"),
  *   ),
  * );
- * for await (const ev of run) { ... }
- *
+ * await run.pipe(process.stdout);
  * await client.close();
  * ```
  */
-export class DrejClient {
+export class Drej {
   private readonly control: ControlClient;
   private readonly adapter: IStorageAdapter;
   private readonly _maxConcurrency: number | undefined;
   private _activeRuns = 0;
   private readonly _waiters: Array<() => void> = [];
 
-  constructor(options: DrejClientOptions) {
+  constructor(options: DrejOptions) {
     this.control = new ControlClient({
       baseUrl: options.baseUrl,
       apiKey: options.apiKey ?? "",

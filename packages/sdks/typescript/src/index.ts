@@ -1,6 +1,6 @@
-export { DrejClient, DrejError, WorkflowRun, LedgerEvent, RunStatus, StepType, Encoding, Backoff, WorkflowError, SandboxError, ExecConnectionError, CommandError } from "./client";
+export { Drej, DrejError, WorkflowRun, LedgerEvent, RunStatus, StepType, Encoding, Backoff, WorkflowError, SandboxError, ExecConnectionError, CommandError } from "./client";
 export type {
-  DrejClientOptions,
+  DrejOptions,
   RunOptions,
   SnapshotConfig,
   WorkflowEvent,

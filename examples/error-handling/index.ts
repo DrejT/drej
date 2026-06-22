@@ -1,7 +1,7 @@
-import { DrejClient, workflow, CommandError, SandboxError, ExecConnectionError } from "drej";
+import { Drej, workflow, CommandError, SandboxError, ExecConnectionError } from "drej";
 import { SQLiteAdapter } from "@drej/sqlite";
 
-const client = new DrejClient({
+const client = new Drej({
   baseUrl: process.env.OPENSANDBOX_URL ?? "http://localhost:8080",
   adapter: new SQLiteAdapter("./drej.db"),
 });

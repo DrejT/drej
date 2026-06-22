@@ -1,14 +1,14 @@
-import { DrejClient, workflow, StepTimeoutError } from "drej";
+import { Drej, workflow, StepTimeoutError } from "drej";
 import { SQLiteAdapter } from "@drej/sqlite";
 import { beforeAll, afterAll, test, expect, describe } from "bun:test";
 
-let client: DrejClient;
+let client: Drej;
 
 const image = { uri: "ubuntu:22.04" };
 const resourceLimits = { cpu: "500m", memory: "256Mi" };
 
 beforeAll(async () => {
-  client = new DrejClient({
+  client = new Drej({
     baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://localhost:8080",
     apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",
     adapter: new SQLiteAdapter(":memory:"),

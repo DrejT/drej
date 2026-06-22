@@ -1,8 +1,8 @@
-import { DrejClient, workflow } from "drej";
+import { Drej, workflow } from "drej";
 import { SQLiteAdapter } from "@drej/sqlite";
 import { beforeAll, afterAll, test, expect, describe } from "bun:test";
 
-let client: DrejClient;
+let client: Drej;
 
 const sandbox = { image: { uri: "python:3.11-slim" }, resourceLimits: { cpu: "1", memory: "512Mi" } };
 
@@ -19,7 +19,7 @@ print(f"Python {sys.version.split()[0]} (replay), status {r.status_code}")
 `.trim();
 
 beforeAll(async () => {
-  client = new DrejClient({
+  client = new Drej({
     baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://localhost:8080",
     apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",
     adapter: new SQLiteAdapter(":memory:"),

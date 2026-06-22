@@ -5,10 +5,10 @@
  *   forEach  — iterates a list; item resolves via template literal
  *   parallel — runs branches concurrently inside the same sandbox
  */
-import { DrejClient, workflow } from "drej";
+import { Drej, workflow } from "drej";
 import { SQLiteAdapter } from "@drej/sqlite";
 
-const client = new DrejClient({
+const client = new Drej({
   baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://localhost:8080",
   apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",
   adapter: new SQLiteAdapter("./ledger.db"),

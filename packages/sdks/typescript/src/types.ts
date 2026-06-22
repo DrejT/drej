@@ -15,8 +15,8 @@ export class DrejError extends Error {
   }
 }
 
-/** Options for constructing a {@link DrejClient}. */
-export interface DrejClientOptions {
+/** Options for constructing a {@link Drej} client. */
+export interface DrejOptions {
   /** Base URL of your OpenSandbox server (e.g. `http://localhost:8080`). */
   baseUrl: string;
   /** OpenSandbox API key. Pass an empty string for local dev with no auth. */
@@ -37,7 +37,7 @@ export interface DrejClientOptions {
   maxConcurrency?: number;
 }
 
-/** Options passed to {@link DrejClient.run}. */
+/** Options passed to {@link Drej.run}. */
 export interface RunOptions {
   /** Capture a sandbox snapshot after specific step indices complete. */
   snapshotConfig?: SnapshotConfig;
@@ -75,13 +75,15 @@ export type WorkflowEvent = LedgerEntry;
  * @example
  * ```ts
  * const run = await client.run(workflow("build").sandbox(...));
- * console.log(run.id); // UUID for this run
- * for await (const ev of run) {
- *   if (ev.event === "exec_event") {
- *     const { text } = ev.payload as { text?: string };
- *     if (text) process.stdout.write(text);
- *   }
- * }
+ *
+ * // stream stdout only
+ * for await (const text of run.stdout()) process.stdout.write(text);
+ *
+ * // or drain everything and get the final captured state
+ * const { output, state } = await run.result();
+ *
+ * // or pipe to any writable
+ * await run.pipe(process.stdout);
  * ```
  */
 export class WorkflowRun implements AsyncIterable<WorkflowEvent> {
@@ -112,6 +114,62 @@ export class WorkflowRun implements AsyncIterable<WorkflowEvent> {
   cancel(): void {
     this._status = RunStatus.Cancelled;
     this._cancelFn();
+  }
+
+  /**
+   * Async generator that yields each stdout/stderr text chunk as it arrives.
+   * Filters the raw event stream to `exec_event` payloads only.
+   *
+   * @example
+   * ```ts
+   * for await (const text of run.stdout()) process.stdout.write(text);
+   * ```
+   */
+  async *stdout(): AsyncGenerator<string> {
+    for await (const ev of this) {
+      if (ev.event === "exec_event") {
+        const { text } = ev.payload as { text?: string };
+        if (text) yield text;
+      }
+    }
+  }
+
+  /**
+   * Drain the run to completion and return the concatenated stdout and the
+   * final workflow state (captured `Ref` values, keyed by their auto-generated key).
+   *
+   * @example
+   * ```ts
+   * const { output, state } = await run.result();
+   * console.log(output);           // all stdout
+   * console.log(state[versionRef.key]); // captured ref value
+   * ```
+   */
+  async result(): Promise<{ output: string; state: Record<string, unknown> }> {
+    let output = "";
+    let state: Record<string, unknown> = {};
+    for await (const ev of this) {
+      if (ev.event === "exec_event") {
+        const { text } = ev.payload as { text?: string };
+        if (text) output += text;
+      } else if (ev.event === "step_complete") {
+        state = ev.payload as Record<string, unknown>;
+      }
+    }
+    return { output, state };
+  }
+
+  /**
+   * Pipe stdout to any object with a `write(chunk: string)` method, such as
+   * `process.stdout`. Resolves when the run completes.
+   *
+   * @example
+   * ```ts
+   * await run.pipe(process.stdout);
+   * ```
+   */
+  async pipe(writable: { write(chunk: string): unknown }): Promise<void> {
+    for await (const text of this.stdout()) writable.write(text);
   }
 
   [Symbol.asyncIterator](): AsyncIterator<WorkflowEvent> {

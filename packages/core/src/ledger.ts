@@ -81,7 +81,7 @@ export interface LedgerEntry {
  * @example
  * ```ts
  * import { SQLiteAdapter } from "@drej/sqlite";
- * const client = new DrejClient({ baseUrl, adapter: new SQLiteAdapter("./drej.db") });
+ * const client = new Drej({ baseUrl, adapter: new SQLiteAdapter("./drej.db") });
  * await client.connect();
  * ```
  */

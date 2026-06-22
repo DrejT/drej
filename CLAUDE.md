@@ -16,7 +16,7 @@ Example: before writing a `bun build` command or debugging a workspace install i
 
 ## What this is
 
-`drej` is a workflow orchestration framework built on top of [OpenSandbox](https://opensandbox.ai). It lets you define multi-step workflows that run inside isolated sandbox containers. Workflows execute in-process — there is no separate drej server. The `DrejClient` talks directly to your OpenSandbox instance and streams events via an async generator.
+`drej` is a workflow orchestration framework built on top of [OpenSandbox](https://opensandbox.ai). It lets you define multi-step workflows that run inside isolated sandbox containers. Workflows execute in-process — there is no separate drej server. The `Drej` client talks directly to your OpenSandbox instance and streams events via an async generator.
 
 ## Commands
 

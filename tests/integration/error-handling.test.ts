@@ -1,11 +1,11 @@
-import { DrejClient, workflow, CommandError } from "drej";
+import { Drej, workflow, CommandError } from "drej";
 import { SQLiteAdapter } from "@drej/sqlite";
 import { beforeAll, afterAll, test, expect, describe } from "bun:test";
 
-let client: DrejClient;
+let client: Drej;
 
 beforeAll(async () => {
-  client = new DrejClient({
+  client = new Drej({
     baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://localhost:8080",
     apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",
     adapter: new SQLiteAdapter(":memory:"),

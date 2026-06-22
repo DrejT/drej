@@ -114,9 +114,13 @@ export class WorkflowRun implements AsyncIterable<WorkflowEvent> {
       async next() {
         try {
           const r = await gen.next();
-          if (r.done) self._status = RunStatus.Completed;
+          if (r.done && self._status === RunStatus.Running) self._status = RunStatus.Completed;
           return r;
         } catch (e) {
+          if (self._status === RunStatus.Cancelled) {
+            // run.cancel() was called — end the loop cleanly, no error thrown
+            return { done: true as const, value: undefined as unknown as WorkflowEvent };
+          }
           self._status = RunStatus.Failed;
           throw e;
         }

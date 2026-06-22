@@ -104,6 +104,7 @@ export interface WorkflowDeps {
   logger?: ILogger;
   hooks?: WorkflowHooks;
   stepTimeoutMs?: number;
+  signal?: AbortSignal;
 }
 
 export class Workflow {
@@ -150,11 +151,22 @@ export class Workflow {
       startFromStep > 0 ? (this.completedSteps.get(startFromStep - 1)?.output ?? input) : input;
 
     for (let i = startFromStep; i < this.steps.length; i++) {
+      // Bail immediately if the global signal fired between steps
+      if (this.deps.signal?.aborted) {
+        const reason = this.deps.signal.reason;
+        throw reason instanceof Error ? reason : new Error("Workflow aborted");
+      }
+
       const step = this.steps[i];
 
       const stepTimeout = step.timeoutMs ?? this.deps.stepTimeoutMs;
       const ctrl = new AbortController();
       let timer: ReturnType<typeof setTimeout> | undefined;
+
+      // Chain global signal → per-step controller so either source aborts the step
+      const onGlobalAbort = () => ctrl.abort(this.deps.signal?.reason);
+      this.deps.signal?.addEventListener("abort", onGlobalAbort, { once: true });
+
       if (stepTimeout !== undefined) {
         timer = setTimeout(() => ctrl.abort(new StepTimeoutError(step.id, stepTimeout)), stepTimeout);
       }
@@ -167,7 +179,6 @@ export class Workflow {
 
       try {
         const output = await step.run(current, ctx);
-        clearTimeout(timer);
         this.completedSteps.set(i, { output, completedAt: Date.now() });
         current = output;
 
@@ -191,7 +202,6 @@ export class Workflow {
           payload: this.snapshot(),
         });
       } catch (err) {
-        clearTimeout(timer);
         this._status = WorkflowStatus.Failed;
         const error = err instanceof Error ? err : new Error(String(err));
         this.log.error("step failed", { workflowName: this.name, runId: this.runId, stepIndex: i, stepId: step.id, error: error.message });
@@ -206,6 +216,9 @@ export class Workflow {
         });
         await this.callHook("onWorkflowFailed", { workflowName: this.name, runId: this.runId, error });
         throw error;
+      } finally {
+        clearTimeout(timer);
+        this.deps.signal?.removeEventListener("abort", onGlobalAbort);
       }
     }
 

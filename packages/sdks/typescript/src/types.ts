@@ -58,6 +58,47 @@ export interface RunOptions {
 }
 
 /**
+ * Returned by `client.run()`. A thenable wrapper around `Promise<WorkflowRun>`
+ * that also exposes `pipe()`, `stdout()`, and `result()` directly — so you can
+ * stream output without a separate `await` to unwrap the run first.
+ *
+ * @example
+ * ```ts
+ * // pipe stdout directly
+ * await client.run(wf).pipe(process.stdout);
+ *
+ * // or still await to get the WorkflowRun for manual iteration
+ * const run = await client.run(wf);
+ * for await (const ev of run) { ... }
+ * ```
+ */
+export class RunHandle implements PromiseLike<WorkflowRun> {
+  constructor(private readonly _promise: Promise<WorkflowRun>) {}
+
+  then<T, E>(
+    onfulfilled?: ((value: WorkflowRun) => T | PromiseLike<T>) | null,
+    onrejected?: ((reason: unknown) => E | PromiseLike<E>) | null,
+  ): Promise<T | E> {
+    return this._promise.then(onfulfilled, onrejected) as Promise<T | E>;
+  }
+
+  /** Pipe stdout to any object with a `write(chunk: string)` method. */
+  async pipe(writable: { write(chunk: string): unknown }): Promise<void> {
+    return (await this._promise).pipe(writable);
+  }
+
+  /** Drain the run and return concatenated stdout plus final captured state. */
+  async result(): Promise<{ output: string; state: Record<string, unknown> }> {
+    return (await this._promise).result();
+  }
+
+  /** Async generator yielding each stdout text chunk as it arrives. */
+  async *stdout(): AsyncGenerator<string> {
+    yield* (await this._promise).stdout();
+  }
+}
+
+/**
  * A single event emitted and persisted during a workflow run.
  * The shape is identical to `LedgerEntry` — every event stored in the adapter
  * is also yielded to the caller in real-time.
@@ -128,8 +169,8 @@ export class WorkflowRun implements AsyncIterable<WorkflowEvent> {
   async *stdout(): AsyncGenerator<string> {
     for await (const ev of this) {
       if (ev.event === "exec_event") {
-        const { text } = ev.payload as { text?: string };
-        if (text) yield text;
+        const { type, text } = ev.payload as { type?: string; text?: string };
+        if (type === "stdout" && text) yield text;
       }
     }
   }
@@ -150,8 +191,8 @@ export class WorkflowRun implements AsyncIterable<WorkflowEvent> {
     let state: Record<string, unknown> = {};
     for await (const ev of this) {
       if (ev.event === "exec_event") {
-        const { text } = ev.payload as { text?: string };
-        if (text) output += text;
+        const { type, text } = ev.payload as { type?: string; text?: string };
+        if (type === "stdout" && text) output += text;
       } else if (ev.event === "step_complete") {
         state = ev.payload as Record<string, unknown>;
       }

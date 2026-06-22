@@ -37,7 +37,7 @@ import {
   type DiagnosticLog,
   type DiagnosticEvent,
 } from "@drej/opensandbox";
-import { DrejError, WorkflowRun, type DrejOptions, type RunOptions, type WorkflowEvent } from "./types";
+import { DrejError, RunHandle, WorkflowRun, type DrejOptions, type RunOptions, type WorkflowEvent } from "./types";
 import { makeStream } from "./stream";
 import type { WorkflowBuilder } from "./builder/index";
 
@@ -54,7 +54,7 @@ export type {
 } from "@drej/opensandbox";
 export { SandboxState, SnapshotState, SSEEventType } from "@drej/opensandbox";
 export type { SandboxStatus, Resources, ImageSpec, ImageAuth } from "@drej/opensandbox";
-export { DrejError, WorkflowRun, type DrejOptions, type RunOptions, type WorkflowEvent } from "./types";
+export { DrejError, RunHandle, WorkflowRun, type DrejOptions, type RunOptions, type WorkflowEvent } from "./types";
 
 /**
  * Main entry point for drej. Manages workflow execution, sandbox lifecycle,
@@ -228,7 +228,11 @@ export class Drej {
    * }
    * ```
    */
-  async run(w: WorkflowBuilder, options?: RunOptions): Promise<WorkflowRun> {
+  run(w: WorkflowBuilder, options?: RunOptions): RunHandle {
+    return new RunHandle(this._run(w, options));
+  }
+
+  private async _run(w: WorkflowBuilder, options?: RunOptions): Promise<WorkflowRun> {
     await this._acquireSlot();
     const { name, steps, initialState } = w.build();
     const runId = crypto.randomUUID();
@@ -251,7 +255,11 @@ export class Drej {
    * either by a `s.snapshot()` step in the workflow or by the
    * `snapshotConfig` option passed to `client.run()`.
    */
-  async replayFromSnapshot(name: string, runId: string, w: WorkflowBuilder, options?: RunOptions): Promise<WorkflowRun> {
+  replayFromSnapshot(name: string, runId: string, w: WorkflowBuilder, options?: RunOptions): RunHandle {
+    return new RunHandle(this._replayFromSnapshot(name, runId, w, options));
+  }
+
+  private async _replayFromSnapshot(name: string, runId: string, w: WorkflowBuilder, options?: RunOptions): Promise<WorkflowRun> {
     const entries = await this.adapter.readAll(name, runId);
     const snapEntry = [...entries].reverse().find((e) => e.event === LedgerEvent.Snapshot);
     if (!snapEntry) throw new DrejError(`No snapshot found in ledger for ${name}/${runId}`, 404);
@@ -279,7 +287,11 @@ export class Drej {
    * the workflow starting from the next step. Steps that already completed
    * are not re-executed.
    */
-  async resumeRun(name: string, runId: string, w: WorkflowBuilder, options?: RunOptions): Promise<WorkflowRun> {
+  resumeRun(name: string, runId: string, w: WorkflowBuilder, options?: RunOptions): RunHandle {
+    return new RunHandle(this._resumeRun(name, runId, w, options));
+  }
+
+  private async _resumeRun(name: string, runId: string, w: WorkflowBuilder, options?: RunOptions): Promise<WorkflowRun> {
     const { steps } = w.build();
     const workflowSteps = steps.map(buildStep);
 

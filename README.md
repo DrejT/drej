@@ -12,14 +12,12 @@ const client = new Drej({
 });
 await client.connect();
 
-const run = await client.run(
+await client.run(
   workflow("hello").sandbox(
     { image: { uri: "ubuntu:22.04" } },
     (s) => s.exec('echo "hello from a sandbox"'),
   ),
-);
-
-await run.pipe(process.stdout);
+).pipe(process.stdout);
 
 await client.close();
 ```

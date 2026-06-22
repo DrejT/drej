@@ -36,7 +36,7 @@ It is designed for AI products that need to execute untrusted or generated code 
 
 ## Features
 
-- **Streaming** — `for await` over events as steps execute; stdout arrives in real-time
+- **Streaming** — pipe stdout with `run.pipe(writable)`, iterate chunks with `run.stdout()`, or drain with `run.result()`
 - **Durable** — every event is written to a ledger; interrupted runs resume from the last checkpoint
 - **Per-step timeouts** — `exec("cmd", { timeoutMs: 30_000 })` throws `StepTimeoutError` on breach
 - **Cancellation** — `run.cancel()` or `break` from the loop stops the run cleanly; external `AbortSignal` supported
@@ -61,8 +61,6 @@ For production, swap the SQLite adapter for Postgres:
 bun add drej @drej/postgres
 ```
 
-### Packages
-
 | Package | Description |
 |---|---|
 | `drej` | TypeScript SDK — `Drej`, `workflow()`, builder |
@@ -77,96 +75,104 @@ bun add drej @drej/postgres
 
 ### Capture output and use it in later steps
 
+`exec({ capture: true })` and `readFile()` return a `Ref<string>` that interpolates into template literals at runtime. Use `run.result()` to drain the run and read captured values from the final state.
+
 ```ts
-const run = await client.run(
+let versionKey: string;
+
+const { output, state } = await client.run(
   workflow("build").sandbox(
     { image: { uri: "node:20-slim" }, resourceLimits: { cpu: "1", memory: "512Mi" } },
     (s) => {
-      s.exec("npm ci");
-
-      // capture: true returns a Ref<string> — interpolates at runtime
       const version = s.exec("node -e 'process.stdout.write(process.version)'", { capture: true });
+      versionKey = version.key;
       s.exec(`echo "Running on Node ${version}"`);
-
-      s.exec("npm test", { strict: true, timeoutMs: 120_000 });
+      s.exec("node --check index.js", { strict: true, timeoutMs: 30_000 });
     },
   ),
-);
+).result();
 
-await run.pipe(process.stdout);
+console.log(output);              // all stdout
+console.log(state[versionKey!]); // "v20.x.x"
 ```
 
 ### Read and patch files
 
 ```ts
-workflow("release").sandbox({ image: { uri: "ubuntu:22.04" } }, (s) => {
-  s.writeFile("/app/version.txt", "1.0.0");
+await client.run(
+  workflow("release").sandbox(
+    { image: { uri: "ubuntu:22.04" }, resourceLimits: { cpu: "500m", memory: "256Mi" } },
+    (s) => {
+      s.writeFile("/app/version.txt", "1.0.0");
 
-  const before = s.readFile("/app/version.txt");
-  s.exec(`echo "before: ${before}"`);
+      const before = s.readFile("/app/version.txt");
+      s.exec(`echo "before: ${before}"`);
 
-  s.replaceInFiles([{ path: "/app/version.txt", old: "1.0.0", new: "2.0.0" }]);
+      s.replaceInFiles([{ path: "/app/version.txt", old: "1.0.0", new: "2.0.0" }]);
 
-  const after = s.readFile("/app/version.txt");
-  s.exec(`echo "after: ${after}"`);
-});
+      const after = s.readFile("/app/version.txt");
+      s.exec(`echo "after: ${after}"`);
+    },
+  ),
+).pipe(process.stdout);
 ```
 
 ### Control flow
 
 ```ts
-workflow("ci").sandbox({ image: { uri: "ubuntu:22.04" } }, (s) => {
-  // retry up to 3 times with exponential backoff
-  s.retry(3, (r) => { r.exec("flaky-network-call"); }, { delayMs: 500, backoff: "exponential" });
+await client.run(
+  workflow("ci").sandbox(
+    { image: { uri: "ubuntu:22.04" }, resourceLimits: { cpu: "1", memory: "512Mi" } },
+    (s) => {
+      s.retry(3, (r) => { r.exec("flaky-network-call"); }, { delayMs: 500, backoff: "exponential" });
 
-  // conditional branch
-  s.exec("test -f /app/build.sh");
-  s.when(
-    { op: "eq", field: "exitCode", value: 0 },
-    (s) => s.exec("bash /app/build.sh"),
-    (s) => s.exec("echo 'no build script found'"),
-  );
+      s.exec("test -f /app/build.sh");
+      s.when(
+        { op: "eq", field: "exitCode", value: 0 },
+        (s) => s.exec("bash /app/build.sh"),
+        (s) => s.exec("echo 'no build script'"),
+      );
 
-  // iterate over captured file list
-  const tsFiles = s.searchFiles("*.ts", { dir: "/app/src" });
-  s.forEach(tsFiles, (s, file) => {
-    s.exec(`tsc --noEmit ${file}`);
-  });
+      const tsFiles = s.searchFiles("*.ts", { dir: "/app/src" });
+      s.forEach(tsFiles, (s, file) => {
+        s.exec(`tsc --noEmit ${file}`);
+      });
 
-  // two branches run concurrently
-  s.parallel((p) => {
-    p.branch((b) => b.exec("npm run lint"));
-    p.branch((b) => b.exec("npm run test"));
-  });
-});
+      s.parallel((p) => {
+        p.branch((b) => b.exec("npm run lint"));
+        p.branch((b) => b.exec("npm run test"));
+      });
+    },
+  ),
+).pipe(process.stdout);
 ```
 
 ### Timeouts and cancellation
 
 ```ts
 // per-step timeout
-s.exec("slow-build", { timeoutMs: 60_000 }); // throws StepTimeoutError
+s.exec("slow-build", { timeoutMs: 60_000 });
 
-// global default for every step
+// global default for every step in this run
 const run = await client.run(wf, { stepTimeoutMs: 30_000 });
 
-// cancel from outside the loop
+// cancel from outside
 run.cancel(); // no error thrown, run.status → "cancelled"
 
-// or break
+// or break from the loop — same effect
 for await (const ev of run) {
-  if (someCondition) break; // same as cancel()
+  if (someCondition) break;
 }
 
 // external AbortSignal
-const run = await client.run(wf, { signal: AbortSignal.timeout(10_000) });
+await client.run(wf, { signal: AbortSignal.timeout(10_000) }).pipe(process.stdout);
 ```
 
 ### Resume an interrupted run
 
 ```ts
-// if the process crashed mid-run, resume from the last checkpoint
 const run = await client.resumeRun("build", previousRunId, wf);
+await run.pipe(process.stdout);
 ```
 
 ---

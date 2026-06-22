@@ -29,16 +29,25 @@ export type SandboxOpts = {
   resourceLimits?: Resources;
 };
 
-/** Represents the current loop variable inside a `forEach` callback. Serialises to `{{name}}`. */
-export type LoopItem = { toString(): string };
+/**
+ * Represents the current loop variable inside a `forEach` callback.
+ * Serialises to `{{name}}` in template literals. Property access descends into
+ * the object at runtime: `entry.path` → `{{item.path}}`.
+ */
+export type LoopItem = { toString(): string } & { readonly [key: string]: LoopItem };
 
-class LoopVar implements LoopItem {
-  constructor(private name: string) {}
-  toString() { return `{{${this.name}}}`; }
+function makeLoopVar(name: string): LoopItem {
+  return new Proxy({} as LoopItem, {
+    get(_target, prop) {
+      if (prop === "toString" || prop === Symbol.toPrimitive) return () => `{{${name}}}`;
+      if (typeof prop === "string") return makeLoopVar(`${name}.${prop}`);
+      return undefined;
+    },
+  });
 }
 
 export function createLoopVar(name: string): LoopItem {
-  return new LoopVar(name);
+  return makeLoopVar(name);
 }
 
 export function wrapSteps(steps: StepDef[]): StepDef {

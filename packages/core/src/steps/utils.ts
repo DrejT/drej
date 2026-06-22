@@ -8,8 +8,8 @@ export function getPath(obj: unknown, path: string): unknown {
 }
 
 export function interpolate(template: string, state: WorkflowState): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
-    const val = state[key as keyof WorkflowState];
+  return template.replace(/\{\{([\w.]+)\}\}/g, (_, key) => {
+    const val = getPath(state, key);
     return val !== undefined ? String(val) : `{{${key}}}`;
   });
 }

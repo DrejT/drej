@@ -55,6 +55,12 @@ const run = await client.run(
 
       s.deleteFile("/workspace/src/util.ts");
       s.deleteDirectory("/workspace/src");
+
+      // forEach over listDirectory: visit each file in /workspace/dist
+      const distForEach = s.listDirectory("/workspace/dist");
+      s.forEach(distForEach, (s, entry) => {
+        s.exec(`echo "entry-path: ${entry.path}"`);
+      });
     },
   ),
 );
@@ -62,11 +68,12 @@ const run = await client.run(
 console.log(`Run ID: ${run.id}\n`);
 
 let finalState: Record<string, unknown> | undefined;
+let stdout = "";
 
 for await (const ev of run) {
   if (ev.event === "exec_event") {
     const { text } = ev.payload as { text?: string };
-    if (text) process.stdout.write(text);
+    if (text) { process.stdout.write(text); stdout += text; }
   } else if (ev.event === "step_complete") {
     finalState = ev.payload as Record<string, unknown>;
   } else if (ev.event !== "run_started" && ev.event !== "checkpoint") {
@@ -108,6 +115,8 @@ assert("getFileInfo: not a directory", info?.type === "file", info?.type);
 assert("getFileInfo: size > 0",        (info?.size ?? 0) > 0, info?.size);
 
 assert("listDirectory sees moved file", entries?.some((e) => e.path?.endsWith("index.ts")), entries);
+
+assert("forEach(listDirectory): entry.path interpolated in exec", stdout.includes("entry-path: /workspace/dist/index.ts"), stdout);
 
 console.log(failed ? "\nsome assertions failed" : "\n✓ all assertions passed");
 if (failed) process.exit(1);

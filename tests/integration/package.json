@@ -1,0 +1,15 @@
+{
+  "name": "@drej/integration-tests",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "test": "bun test --timeout 120000"
+  },
+  "dependencies": {
+    "drej": "workspace:*",
+    "@drej/sqlite": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

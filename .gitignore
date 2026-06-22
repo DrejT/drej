@@ -1,9 +1,9 @@
 node_modules/
 dist/
 .env
+plans
 *.local
 *.ndjson
-plans/
 *.db
 *.db-shm
 *.db-wal

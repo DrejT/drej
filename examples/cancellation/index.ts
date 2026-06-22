@@ -1,8 +1,10 @@
 /**
  * Demonstrates per-step timeouts and run cancellation.
  *
- * Run: bun index.ts
- * Requires: uvx opensandbox-server
+ * Pattern A — per-step timeoutMs → StepTimeoutError
+ * Pattern B — run.cancel() after first output
+ * Pattern C — break from for-await loop
+ * Pattern D — external AbortSignal.timeout()
  */
 import { Drej, workflow, StepTimeoutError } from "drej";
 import { SQLiteAdapter } from "@drej/sqlite";
@@ -18,8 +20,6 @@ const image = { uri: "ubuntu:22.04" };
 const resourceLimits = { cpu: "500m", memory: "256Mi" };
 
 // ── Pattern A: per-step timeout ───────────────────────────────────────────────
-// The exec step is given 500 ms. `sleep 30` never finishes in time — the step
-// is aborted and StepTimeoutError is thrown from the for-await loop.
 
 console.log("=== Pattern A: per-step timeout ===");
 
@@ -32,24 +32,15 @@ const runA = await client.run(
 );
 
 try {
-  for await (const ev of runA) {
-    if (ev.event === "exec_event") {
-      const { text } = ev.payload as { text?: string };
-      if (text) process.stdout.write(text);
-    }
-  }
+  await runA.pipe(process.stdout);
 } catch (e) {
   if (e instanceof StepTimeoutError) {
-    console.log(`\nStep "${e.stepId}" timed out after ${e.timeoutMs}ms`);
-  } else {
-    throw e;
-  }
+    console.log(`\nStep timed out after ${e.timeoutMs}ms`);
+  } else throw e;
 }
 console.log(`Status: ${runA.status}\n`);
 
 // ── Pattern B: run.cancel() ───────────────────────────────────────────────────
-// Cancel the run after seeing the first exec event. The loop ends cleanly
-// (no error thrown). Rollback runs in the background, deleting the sandbox.
 
 console.log("=== Pattern B: run.cancel() ===");
 
@@ -61,18 +52,13 @@ const runB = await client.run(
   }),
 );
 
-for await (const ev of runB) {
-  if (ev.event === "exec_event") {
-    const { text } = ev.payload as { text?: string };
-    if (text) process.stdout.write(text);
-    runB.cancel(); // abort immediately after first output
-  }
+for await (const text of runB.stdout()) {
+  process.stdout.write(text);
+  runB.cancel();
 }
 console.log(`\nStatus: ${runB.status}\n`);
 
 // ── Pattern C: break from for-await ──────────────────────────────────────────
-// Breaking out of the loop fires the same abort as cancel(). No error is
-// thrown — the loop just ends.
 
 console.log("=== Pattern C: break from for-await ===");
 
@@ -83,18 +69,13 @@ const runC = await client.run(
   }),
 );
 
-for await (const ev of runC) {
-  if (ev.event === "exec_event") {
-    const { text } = ev.payload as { text?: string };
-    if (text) process.stdout.write(text);
-    break;
-  }
+for await (const text of runC.stdout()) {
+  process.stdout.write(text);
+  break;
 }
 console.log(`\nStatus: ${runC.status}\n`);
 
 // ── Pattern D: external AbortSignal ──────────────────────────────────────────
-// Pass an AbortController signal to cancel from outside the loop, or use
-// AbortSignal.timeout() to set an overall run budget.
 
 console.log("=== Pattern D: AbortSignal.timeout() ===");
 
@@ -107,12 +88,7 @@ const runD = await client.run(
 );
 
 try {
-  for await (const ev of runD) {
-    if (ev.event === "exec_event") {
-      const { text } = ev.payload as { text?: string };
-      if (text) process.stdout.write(text);
-    }
-  }
+  await runD.pipe(process.stdout);
 } catch (e) {
   console.log(`\nRun aborted by signal: ${(e as Error).name}`);
 }

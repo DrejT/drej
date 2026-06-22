@@ -2,12 +2,10 @@
  * Demonstrates two ways to capture sandbox snapshots and replay from them.
  *
  * Pattern A — s.snapshot() inline step (preferred):
- *   Declare the checkpoint directly in the workflow definition. Position-aware,
- *   no step indices to count.
+ *   Declare the checkpoint directly in the workflow definition.
  *
  * Pattern B — snapshotConfig on client.run() (external):
- *   Snapshot a workflow you didn't write, or snapshot on a cadence
- *   (everyNSteps) rather than at a fixed point.
+ *   Snapshot a workflow you didn't write, or snapshot on a cadence.
  */
 import { Drej, workflow } from "drej";
 import { SQLiteAdapter } from "@drej/sqlite";
@@ -17,7 +15,6 @@ const client = new Drej({
   apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",
   adapter: new SQLiteAdapter("./ledger.db"),
 });
-
 await client.connect();
 
 const sandbox = { image: { uri: "python:3.11-slim" }, resourceLimits: { cpu: "1", memory: "512Mi" } };
@@ -36,7 +33,6 @@ print(json.dumps(r.json(), indent=2))
 `.trim();
 
 // ── Pattern A: s.snapshot() inline ───────────────────────────────────────────
-// The checkpoint is declared where it belongs — in the workflow itself.
 
 console.log("=== Pattern A: inline s.snapshot() ===\n");
 
@@ -46,7 +42,7 @@ const run1 = await client.run(
   workflow(WORKFLOW_A).sandbox(sandbox, (s) =>
     s
       .exec("pip install -q requests && echo installed")
-      .snapshot()                           // checkpoint declared inline
+      .snapshot()
       .writeFile("/tmp/script.py", script)
       .exec("python3 /tmp/script.py"),
   ),
@@ -55,11 +51,10 @@ const run1 = await client.run(
 console.log(`run: ${run1.id}`);
 for await (const ev of run1) {
   if (ev.event === "exec_event") {
-    const { text } = ev.payload as { text?: string };
-    if (text) process.stdout.write(text);
+    const { type, text } = ev.payload as { type?: string; text?: string };
+    if (type === "stdout" && text) process.stdout.write(text);
   } else if (ev.event === "snapshot") {
-    const { snapshotId } = ev.payload as { snapshotId: string };
-    console.log(`snapshot: ${snapshotId}`);
+    console.log(`snapshot: ${(ev.payload as { snapshotId: string }).snapshotId}`);
   }
 }
 
@@ -73,42 +68,31 @@ const replay1 = await client.replayFromSnapshot(
 );
 
 console.log(`\nreplay: ${replay1.id}`);
-for await (const ev of replay1) {
-  if (ev.event === "exec_event") {
-    const { text } = ev.payload as { text?: string };
-    if (text) process.stdout.write(text);
-  }
-}
+await replay1.pipe(process.stdout);
 
 // ── Pattern B: snapshotConfig on client.run() ─────────────────────────────────
-// Useful when you can't or don't want to modify the workflow definition —
-// e.g. snapshotting a shared workflow, or snapshotting every N steps.
 
 console.log("\n=== Pattern B: snapshotConfig on client.run() ===\n");
 
 const WORKFLOW_B = "snapshot-external";
 
-const externalWorkflow = workflow(WORKFLOW_B).sandbox(sandbox, (s) =>
-  s
-    .exec("pip install -q requests && echo installed")
-    .writeFile("/tmp/script.py", script)
-    .exec("python3 /tmp/script.py"),
+const run2 = await client.run(
+  workflow(WORKFLOW_B).sandbox(sandbox, (s) =>
+    s
+      .exec("pip install -q requests && echo installed")
+      .writeFile("/tmp/script.py", script)
+      .exec("python3 /tmp/script.py"),
+  ),
+  { snapshotConfig: { afterSteps: [1] } },
 );
-
-// afterSteps index 1 corresponds to the exec after create_sandbox (index 0).
-// This is more fragile than s.snapshot() — reordering steps silently shifts indices.
-const run2 = await client.run(externalWorkflow, {
-  snapshotConfig: { afterSteps: [1] },
-});
 
 console.log(`run: ${run2.id}`);
 for await (const ev of run2) {
   if (ev.event === "exec_event") {
-    const { text } = ev.payload as { text?: string };
-    if (text) process.stdout.write(text);
+    const { type, text } = ev.payload as { type?: string; text?: string };
+    if (type === "stdout" && text) process.stdout.write(text);
   } else if (ev.event === "snapshot") {
-    const { snapshotId } = ev.payload as { snapshotId: string };
-    console.log(`snapshot: ${snapshotId}`);
+    console.log(`snapshot: ${(ev.payload as { snapshotId: string }).snapshotId}`);
   }
 }
 
@@ -122,11 +106,6 @@ const replay2 = await client.replayFromSnapshot(
 );
 
 console.log(`\nreplay: ${replay2.id}`);
-for await (const ev of replay2) {
-  if (ev.event === "exec_event") {
-    const { text } = ev.payload as { text?: string };
-    if (text) process.stdout.write(text);
-  }
-}
+await replay2.pipe(process.stdout);
 
 await client.close();

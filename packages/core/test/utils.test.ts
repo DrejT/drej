@@ -35,6 +35,14 @@ describe("interpolate", () => {
   it("coerces non-string values to string", () => {
     expect(interpolate("count: {{n}}", { n: 42 })).toBe("count: 42");
   });
+
+  it("resolves dotted paths into nested state", () => {
+    expect(interpolate("path: {{item.path}}", { item: { path: "/app/foo.ts" } })).toBe("path: /app/foo.ts");
+  });
+
+  it("leaves unresolved dotted keys as-is", () => {
+    expect(interpolate("{{item.missing}}", { item: {} })).toBe("{{item.missing}}");
+  });
 });
 
 describe("evaluate", () => {

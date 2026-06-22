@@ -24,6 +24,10 @@ Example: before writing a `bun build` command or debugging a workspace install i
 # Run the hello-world example
 bun run examples/hello-world.ts
 
+# Run an example's integration test (requires uvx opensandbox-server running)
+bun examples/hello-world/tests/integration.ts
+bun examples/file-ops/tests/integration.ts
+
 # Build the SDK for publishing (generates dist/ across all packages)
 bun run build
 
@@ -44,6 +48,34 @@ bunx changeset status # verify one exists
 # The CI changeset check (bunx changeset status --since origin/main) reads from
 # git history — an uncommitted changeset file will NOT satisfy it.
 ```
+
+## Testing
+
+### Two test layers
+
+**Unit tests** live in `packages/*/test/*.test.ts` and run via `bun test`. They test internal builder logic, control-flow, and adapter behaviour in isolation — no sandbox required.
+
+**Integration tests** live in `examples/<name>/tests/integration.ts` and run with `bun examples/<name>/tests/integration.ts`. They hit a real OpenSandbox sandbox and assert on live stdout and captured state. Every example must have one.
+
+### Integration test conventions
+
+- **Run with**: `bun tests/integration.ts` from within the example directory, or `bun examples/<name>/tests/integration.ts` from the repo root.
+- **Requires**: `uvx opensandbox-server` running locally (see Local OpenSandbox setup).
+- **Client setup**: always use `SQLiteAdapter("./ledger.db")`, read `OPEN_SANDBOX_URL` and `OPEN_SANDBOX_API_KEY` from env with localhost defaults.
+- **Assertion helper**: define a local `assert(label, ok, got?)` function — prints `FAIL: <label> — got: <value>` and sets `failed = true`. Never use a test framework; exit with `process.exit(1)` if any assertion failed.
+- **Event loop**: `for await (const ev of run)` — collect `exec_event` stdout, capture `step_complete` payload as `finalState`, log other events. Never filter events with a test framework matcher.
+- **Captured refs**: declare `let fooKey: string` outside the builder, assign inside (`fooKey = s.readFile(...).key`), then read from `finalState[fooKey!]` after the loop.
+- **Multiple patterns**: group test scenarios with `// ── Pattern A: ... ───` section comments; share a single `failed` flag and `assert` helper across all of them.
+- **Cleanup**: call `await client.close()` at the end (after the exit check for single-scenario tests; inside a `finally` for multi-scenario ones where the run might throw).
+- **Error tests**: wrap the `for await` in `try/catch`; rethrow if not the expected error class.
+
+### What to assert
+
+Assert on observable behaviour, not internal structure:
+- stdout/stderr content from `exec_event` payloads
+- `run.status === "completed"` (or `"failed"`)
+- captured values from `finalState[key]` (readFile contents, searchFiles arrays, getFileInfo shape, etc.)
+- error class and `.exitCode` for `CommandError` cases
 
 ## Architecture
 

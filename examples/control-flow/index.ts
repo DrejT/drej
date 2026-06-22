@@ -16,48 +16,48 @@ const client = new DrejClient({
 
 await client.connect();
 
-const w = workflow("control-flow").sandbox(
-  { image: { uri: "ubuntu:22.04" }, resourceLimits: { cpu: "500m", memory: "512Mi" } },
-  (s) =>
-    s
+const run = await client.run(
+  workflow("control-flow").sandbox(
+    { image: { uri: "ubuntu:22.04" }, resourceLimits: { cpu: "500m", memory: "512Mi" } },
+    (s) => {
       // retry: coin flip, fails ~50% of the time
-      .retry(
+      s.retry(
         5,
-        (s) =>
-          s.exec(`
+        (r) => {
+          r.exec(`
             R=$((RANDOM % 2))
             if [ $R -eq 0 ]; then echo "[retry] tails — failing"; exit 1; fi
             echo "[retry] heads — success"
-          `),
+          `);
+        },
         { delayMs: 200, backoff: "exponential" },
-      )
+      );
 
       // when: branch on the exit code of the previous exec step
-      // test -f exits 0 if the file exists, 1 if it doesn't
-      .exec('test -f /etc/hostname')
-      .when(
+      s.exec("test -f /etc/hostname");
+      s.when(
         { op: "eq", field: "exitCode", value: 0 },
-        (s) => s.exec('echo "[when] then-branch: /etc/hostname exists"'),
-        (s) => s.exec('echo "[when] else-branch: /etc/hostname missing"'),
-      )
+        (s) => { s.exec('echo "[when] then-branch: /etc/hostname exists"'); },
+        (s) => { s.exec('echo "[when] else-branch: /etc/hostname missing"'); },
+      );
 
       // forEach: item is a LoopVar — use directly in a template literal
-      .forEach(["alpha.txt", "beta.txt", "gamma.txt"], { as: "filename" }, (s, filename) =>
-        s.exec(`echo "[loop] writing /tmp/${filename}" && echo "hello" > /tmp/${filename}`),
-      )
+      s.forEach(["alpha.txt", "beta.txt", "gamma.txt"], { as: "filename" }, (s, filename) => {
+        s.exec(`echo "[loop] writing /tmp/${filename}" && echo "hello" > /tmp/${filename}`);
+      });
 
       // parallel: both branches sleep 1s concurrently — wall time ~1s not 2s
-      .parallel((p) =>
-        p
-          .branch((s) => s.exec('sleep 1 && echo "[parallel 0] done"'))
-          .branch((s) => s.exec('sleep 1 && echo "[parallel 1] done"')),
-      )
+      s.parallel((p) => {
+        p.branch((b) => { b.exec('sleep 1 && echo "[parallel 0] done"'); });
+        p.branch((b) => { b.exec('sleep 1 && echo "[parallel 1] done"'); });
+      });
 
       // verify loop files survived
-      .exec("ls /tmp/*.txt && echo '[verify] all files present'"),
+      s.exec("ls /tmp/*.txt && echo '[verify] all files present'");
+    },
+  ),
 );
 
-const run = await client.run(w);
 console.log(`Run ID: ${run.id} (workflow: ${run.name})\n`);
 
 for await (const ev of run) {

@@ -1,43 +1,74 @@
 import type { StepDef, Predicate } from "@drej/core";
 import { StepType, Encoding, Backoff } from "@drej/core";
 import { CodeLanguage } from "@drej/opensandbox";
-import { createLoopVar, wrapSteps, refKey, refStr, Ref, type LoopItem } from "./types";
+import type { FileInfo } from "@drej/opensandbox";
+import { Ref, createLoopVar, wrapSteps, type LoopItem } from "./types";
 
 export { CodeLanguage };
 
+type ExecOpts = { cwd?: string; envs?: Record<string, string>; strict?: boolean };
 type ForEachOpts = { concurrency?: number; as?: string };
-type ForEachSource = unknown[] | { from: string } | Ref<unknown[]>;
-type ForEachCallback = (s: SandboxStepBuilder, item: LoopItem) => SandboxStepBuilder | string;
+type ForEachSource = unknown[] | { from: string } | Ref<any>;
+type ForEachCallback = (s: SandboxStepBuilder, item: LoopItem) => void;
 
 /**
- * Fluent builder for steps that run inside a sandbox.
- * Returned by the callback in `workflow().sandbox(opts, s => s.exec(...))`.
+ * Imperative builder for steps that run inside a sandbox.
+ *
+ * Use inside the callback of `workflow().sandbox(opts, (s) => { ... })`.
+ * Methods that produce output (readFile, searchFiles, etc.) return a `Ref<T>`
+ * you can use in subsequent steps via template literals.
+ *
+ * @example
+ * ```ts
+ * workflow("build").sandbox({ image: { uri: "node:20-slim" } }, (s) => {
+ *   s.exec("npm ci");
+ *   const version = s.exec("node -e 'process.stdout.write(process.version)'", { capture: true });
+ *   s.exec(`echo "Running on Node ${version}"`);
+ * });
+ * ```
  */
 export class SandboxStepBuilder {
   protected _steps: StepDef[] = [];
+  private _keyCounter = 0;
+
+  private _nextKey(): string {
+    return `_s${this._keyCounter++}`;
+  }
 
   /**
    * Run a shell command inside the sandbox.
    *
-   * @param opts.capture Store stdout in workflow state under this key, making it
-   *   available for interpolation in subsequent steps via `{{key}}`.
-   * @param opts.strict Throw a `CommandError` if the command exits with a non-zero
-   *   code. When `false` (default), the exit code is stored in state as `exitCode`.
+   * Pass `{ capture: true }` to store stdout in workflow state — the returned
+   * `Ref<string>` can be interpolated in subsequent steps via template literals.
    *
    * @example
    * ```ts
-   * s.exec("npm ci").exec("npm test")
-   * s.exec("git rev-parse HEAD", { capture: "sha" }).exec("echo deploying {{sha}}")
-   * s.exec("npm test", { strict: true })
+   * s.exec("npm ci");
+   * const sha = s.exec("git rev-parse HEAD", { capture: true });
+   * s.exec(`echo "deploying ${sha}"`);
+   * s.exec("npm test", { strict: true });
    * ```
    */
-  exec(command: string, opts?: { cwd?: string; envs?: Record<string, Ref<string> | string>; capture?: Ref<string> | string; strict?: boolean }): this {
+  exec(command: string, opts: ExecOpts & { capture: true }): Ref<string>;
+  exec(command: string, opts?: ExecOpts & { capture?: never }): this;
+  exec(command: string, opts?: ExecOpts & { capture?: boolean }): this | Ref<string> {
+    if (opts?.capture === true) {
+      const key = this._nextKey();
+      this._steps.push({
+        type: StepType.ExecCommand,
+        command,
+        ...(opts.cwd !== undefined ? { cwd: opts.cwd } : {}),
+        ...(opts.envs ? { envs: opts.envs } : {}),
+        capture: key,
+        ...(opts.strict !== undefined ? { strict: opts.strict } : {}),
+      });
+      return new Ref<string>(key);
+    }
     this._steps.push({
       type: StepType.ExecCommand,
       command,
       ...(opts?.cwd !== undefined ? { cwd: opts.cwd } : {}),
-      ...(opts?.envs ? { envs: Object.fromEntries(Object.entries(opts.envs).map(([k, v]) => [k, refStr(v)])) } : {}),
-      ...(opts?.capture !== undefined ? { capture: refKey(opts.capture) } : {}),
+      ...(opts?.envs ? { envs: opts.envs } : {}),
       ...(opts?.strict !== undefined ? { strict: opts.strict } : {}),
     });
     return this;
@@ -50,8 +81,8 @@ export class SandboxStepBuilder {
    *
    * @example
    * ```ts
-   * s.execCode("x = 42", { context: { id: "repl", language: CodeLanguage.Python } })
-   * s.execCode("print(x)", { context: { id: "repl", language: CodeLanguage.Python } })
+   * s.execCode("x = 42", { context: { id: "repl", language: CodeLanguage.Python } });
+   * s.execCode("print(x)", { context: { id: "repl", language: CodeLanguage.Python } });
    * ```
    */
   execCode(code: string, opts?: { context?: { id: string; language: CodeLanguage } }): this {
@@ -61,17 +92,19 @@ export class SandboxStepBuilder {
 
   /**
    * Read a file from the sandbox filesystem into workflow state.
+   * Returns a `Ref<string>` that resolves to the file content at runtime.
    *
    * @example
    * ```ts
-   * s.exec("node -e 'console.log(42)' > /tmp/result.txt")
-   *  .readFile("/tmp/result.txt", { as: "result" })
-   *  .exec("echo Result was {{result}}")
+   * s.exec("node -e 'console.log(42)' > /tmp/result.txt");
+   * const result = s.readFile("/tmp/result.txt");
+   * s.exec(`echo "Result was ${result}"`);
    * ```
    */
-  readFile(path: string, opts: { as: Ref<string> | string; encoding?: Encoding }): this {
-    this._steps.push({ type: StepType.ReadFile, path, as: refKey(opts.as), ...(opts.encoding ? { encoding: opts.encoding } : {}) });
-    return this;
+  readFile(path: string, opts?: { encoding?: Encoding }): Ref<string> {
+    const key = this._nextKey();
+    this._steps.push({ type: StepType.ReadFile, path, as: key, ...(opts?.encoding ? { encoding: opts.encoding } : {}) });
+    return new Ref<string>(key);
   }
 
   /**
@@ -79,7 +112,9 @@ export class SandboxStepBuilder {
    *
    * @example
    * ```ts
-   * s.exec("npm ci").snapshot().exec("npm test")
+   * s.exec("npm ci");
+   * s.snapshot();
+   * s.exec("npm test");
    * ```
    */
   snapshot(): this {
@@ -89,15 +124,18 @@ export class SandboxStepBuilder {
 
   /**
    * Write a file into the sandbox filesystem.
+   * Use template literals to embed `Ref` values: `` `${myRef}` ``.
    *
    * @example
    * ```ts
-   * s.writeFile("/app/config.json", JSON.stringify(config))
-   * s.writeFile("/app/data.bin", b64data, Encoding.Base64)
+   * s.writeFile("/app/config.json", JSON.stringify(config));
+   * s.writeFile("/app/data.bin", b64data, Encoding.Base64);
+   * const version = s.exec("cat VERSION", { capture: true });
+   * s.writeFile("/app/version.txt", `${version}`);
    * ```
    */
-  writeFile(path: string, content: Ref<string> | string, encoding?: Encoding): this {
-    this._steps.push({ type: StepType.WriteFile, path, content: refStr(content), ...(encoding ? { encoding } : {}) });
+  writeFile(path: string, content: string, encoding?: Encoding): this {
+    this._steps.push({ type: StepType.WriteFile, path, content, ...(encoding ? { encoding } : {}) });
     return this;
   }
 
@@ -106,12 +144,12 @@ export class SandboxStepBuilder {
    *
    * @example
    * ```ts
-   * s.retry(3, (r) => r.exec("flaky-command"), { backoff: Backoff.Exponential })
+   * s.retry(3, (r) => { r.exec("flaky-command"); }, { backoff: Backoff.Exponential });
    * ```
    */
   retry(
     maxAttempts: number,
-    fn: (s: SandboxStepBuilder) => SandboxStepBuilder,
+    fn: (s: SandboxStepBuilder) => void,
     opts?: { delayMs?: number; backoff?: Backoff },
   ): this {
     const inner = new SandboxStepBuilder();
@@ -128,8 +166,8 @@ export class SandboxStepBuilder {
    *
    * @example
    * ```ts
-   * s.forEach(["a.txt", "b.txt"], (s, item) => s.exec(`cat ${item}`))
-   * s.forEach({ from: "files" }, { concurrency: 4 }, (s, item) => s.exec(`process ${item}`))
+   * const files = s.searchFiles("*.ts", { dir: "/src" });
+   * s.forEach(files, (s, file) => { s.exec(`tsc --noEmit ${file}`); });
    * ```
    */
   forEach(source: ForEachSource, fn: ForEachCallback): this;
@@ -145,12 +183,8 @@ export class SandboxStepBuilder {
     const varName = opts.as ?? "item";
     const loopVar = createLoopVar(varName);
     const inner = new SandboxStepBuilder();
-    const result = callback(inner, loopVar);
-
-    const steps: StepDef[] =
-      typeof result === "string"
-        ? [{ type: StepType.ExecCommand, command: result }]
-        : result.build();
+    callback(inner, loopVar);
+    const steps = inner.build();
 
     const over = Array.isArray(source) ? { items: source }
       : source instanceof Ref ? { over: source.key }
@@ -171,16 +205,16 @@ export class SandboxStepBuilder {
    *
    * @example
    * ```ts
-   * s.when({ field: "exitCode", eq: 0 },
-   *   (s) => s.exec("echo success"),
-   *   (s) => s.exec("echo failed"),
-   * )
+   * s.when({ op: "eq", field: "exitCode", value: 0 },
+   *   (s) => { s.exec("echo success"); },
+   *   (s) => { s.exec("echo failed"); },
+   * );
    * ```
    */
   when(
     condition: Predicate,
-    thenFn: (s: SandboxStepBuilder) => SandboxStepBuilder,
-    elseFn?: (s: SandboxStepBuilder) => SandboxStepBuilder,
+    thenFn: (s: SandboxStepBuilder) => void,
+    elseFn?: (s: SandboxStepBuilder) => void,
   ): this {
     const thenBuilder = new SandboxStepBuilder();
     thenFn(thenBuilder);
@@ -208,8 +242,7 @@ export class SandboxStepBuilder {
    *
    * @example
    * ```ts
-   * s.deleteFile("/tmp/build.log")
-   * s.deleteFile(`/tmp/${sha}.tar.gz`)
+   * s.deleteFile("/tmp/build.log");
    * ```
    */
   deleteFile(path: string): this {
@@ -222,8 +255,7 @@ export class SandboxStepBuilder {
    *
    * @example
    * ```ts
-   * s.moveFile("/app/dist", "/app/release")
-   * s.moveFile(`/tmp/${sha}`, "/app/current")
+   * s.moveFile("/app/dist", "/app/release");
    * ```
    */
   moveFile(from: string, to: string): this {
@@ -233,33 +265,103 @@ export class SandboxStepBuilder {
 
   /**
    * List a directory inside the sandbox and store the entries in workflow state.
+   * Returns a `Ref<FileInfo[]>` usable in `forEach` or template literals.
    *
    * @example
    * ```ts
-   * const entries = ref<DirectoryEntry[]>("entries")
-   * s.listDirectory("/app/dist", { as: entries })
-   *  .forEach(entries, (s, entry) => s.exec(`echo ${entry}`))
+   * const entries = s.listDirectory("/app/dist");
+   * s.forEach(entries, (s, entry) => { s.exec(`echo ${entry}`); });
    * ```
    */
-  listDirectory(path: string, opts: { as: Ref<unknown[]> | string; depth?: number }): this {
-    this._steps.push({ type: StepType.ListDirectory, path, as: refKey(opts.as), ...(opts.depth !== undefined ? { depth: opts.depth } : {}) });
-    return this;
+  listDirectory(path: string, opts?: { depth?: number }): Ref<FileInfo[]> {
+    const key = this._nextKey();
+    this._steps.push({ type: StepType.ListDirectory, path, as: key, ...(opts?.depth !== undefined ? { depth: opts.depth } : {}) });
+    return new Ref<FileInfo[]>(key);
   }
 
   /**
    * Search for files matching a glob pattern and store the matching paths in workflow state.
-   * The result is a `string[]` that can be passed directly to `forEach`.
+   * Returns a `Ref<string[]>` usable in `forEach` or template literals.
    *
    * @example
    * ```ts
-   * const tsFiles = ref<string[]>("tsFiles")
-   * s.searchFiles("**\/*.ts", { as: tsFiles })
-   *  .forEach(tsFiles, (s, file) => s.exec(`tsc --noEmit ${file}`))
+   * const tsFiles = s.searchFiles("**\/*.ts", { dir: "/src" });
+   * s.forEach(tsFiles, (s, file) => { s.exec(`tsc --noEmit ${file}`); });
    * ```
    */
-  searchFiles(pattern: string, opts: { as: Ref<string[]> | string; dir?: string }): this {
-    this._steps.push({ type: StepType.SearchFiles, pattern, as: refKey(opts.as), ...(opts.dir !== undefined ? { dir: opts.dir } : {}) });
+  searchFiles(pattern: string, opts?: { dir?: string }): Ref<string[]> {
+    const key = this._nextKey();
+    this._steps.push({ type: StepType.SearchFiles, pattern, as: key, ...(opts?.dir !== undefined ? { dir: opts.dir } : {}) });
+    return new Ref<string[]>(key);
+  }
+
+  /**
+   * Create a directory inside the sandbox filesystem.
+   *
+   * @example
+   * ```ts
+   * s.createDirectory("/app/logs");
+   * ```
+   */
+  createDirectory(path: string): this {
+    this._steps.push({ type: StepType.CreateDirectory, path });
     return this;
+  }
+
+  /**
+   * Recursively delete a directory inside the sandbox filesystem.
+   *
+   * @example
+   * ```ts
+   * s.deleteDirectory("/app/dist");
+   * ```
+   */
+  deleteDirectory(path: string): this {
+    this._steps.push({ type: StepType.DeleteDirectory, path });
+    return this;
+  }
+
+  /**
+   * Set file permissions inside the sandbox.
+   *
+   * @example
+   * ```ts
+   * s.setPermissions("/app/entrypoint.sh", "755");
+   * ```
+   */
+  setPermissions(path: string, mode: string): this {
+    this._steps.push({ type: StepType.SetPermissions, path, mode });
+    return this;
+  }
+
+  /**
+   * Perform batch text replacements across one or more files.
+   * Use template literals to embed `Ref` values: `` `${myRef}` ``.
+   *
+   * @example
+   * ```ts
+   * s.replaceInFiles([{ path: "/app/version.txt", old: "0.0.0", new: "1.2.3" }]);
+   * ```
+   */
+  replaceInFiles(replacements: Array<{ path: string; old: string; new: string }>): this {
+    this._steps.push({ type: StepType.ReplaceInFiles, replacements });
+    return this;
+  }
+
+  /**
+   * Fetch metadata about a file and store it in workflow state.
+   * Returns a `Ref<FileInfo>` with `path`, `size`, `mode`, `type`, etc.
+   *
+   * @example
+   * ```ts
+   * const info = s.getFileInfo("/app/bundle.js");
+   * s.exec(`echo "size: ${info}"`);
+   * ```
+   */
+  getFileInfo(path: string): Ref<FileInfo> {
+    const key = this._nextKey();
+    this._steps.push({ type: StepType.GetFileInfo, path, as: key });
+    return new Ref<FileInfo>(key);
   }
 
   /**
@@ -267,13 +369,13 @@ export class SandboxStepBuilder {
    *
    * @example
    * ```ts
-   * s.parallel((p) => p
-   *   .branch((b) => b.exec("lint"))
-   *   .branch((b) => b.exec("test")),
-   * )
+   * s.parallel((p) => {
+   *   p.branch((b) => { b.exec("lint"); });
+   *   p.branch((b) => { b.exec("test"); });
+   * });
    * ```
    */
-  parallel(fn: (p: SandboxParallelBuilder) => SandboxParallelBuilder, opts?: { concurrency?: number }): this {
+  parallel(fn: (p: SandboxParallelBuilder) => void, opts?: { concurrency?: number }): this {
     const pb = new SandboxParallelBuilder();
     fn(pb);
     this._steps.push({ type: StepType.Parallel, steps: pb.build(), ...(opts?.concurrency ? { maxConcurrency: opts.concurrency } : {}) });
@@ -288,7 +390,7 @@ export class SandboxStepBuilder {
 export class SandboxParallelBuilder {
   private _branches: StepDef[] = [];
 
-  branch(fn: (s: SandboxStepBuilder) => SandboxStepBuilder): this {
+  branch(fn: (s: SandboxStepBuilder) => void): this {
     const sb = new SandboxStepBuilder();
     fn(sb);
     this._branches.push(wrapSteps(sb.build()));

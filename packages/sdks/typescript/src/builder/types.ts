@@ -2,28 +2,13 @@ import { StepType, type StepDef } from "@drej/core";
 import type { ImageSpec, Resources } from "@drej/opensandbox";
 
 /**
- * A typed reference to a workflow state key. Use `ref("name")` to create one.
- * Resolves to the value stored under `name` in workflow state at runtime.
- * Works naturally in template literals: `\`echo ${sha}\`` → `"echo {{sha}}"`.
+ * A typed reference to a workflow state key. Returned by output-producing step
+ * methods (readFile, searchFiles, etc.). Works in template literals — use
+ * `\`echo ${myRef}\`` to interpolate the captured value in later steps.
  */
 export class Ref<T> {
   constructor(readonly key: string) {}
   toString(): string { return `{{${this.key}}}`; }
-}
-
-/** Create a typed reference to a workflow state key. */
-export function ref<T>(name: string): Ref<T> {
-  return new Ref<T>(name);
-}
-
-/** @internal */
-export function refKey(val: Ref<unknown> | string): string {
-  return val instanceof Ref ? val.key : val;
-}
-
-/** @internal */
-export function refStr(val: Ref<unknown> | string): string {
-  return val instanceof Ref ? val.toString() : val;
 }
 
 /** Options for creating a sandbox within a workflow step. */
@@ -44,16 +29,25 @@ export type SandboxOpts = {
   resourceLimits?: Resources;
 };
 
-/** Represents the current loop variable inside a `forEach` callback. Serialises to `{{name}}`. */
-export type LoopItem = { toString(): string };
+/**
+ * Represents the current loop variable inside a `forEach` callback.
+ * Serialises to `{{name}}` in template literals. Property access descends into
+ * the object at runtime: `entry.path` → `{{item.path}}`.
+ */
+export type LoopItem = { toString(): string } & { readonly [key: string]: LoopItem };
 
-class LoopVar implements LoopItem {
-  constructor(private name: string) {}
-  toString() { return `{{${this.name}}}`; }
+function makeLoopVar(name: string): LoopItem {
+  return new Proxy({} as LoopItem, {
+    get(_target, prop) {
+      if (prop === "toString" || prop === Symbol.toPrimitive) return () => `{{${name}}}`;
+      if (typeof prop === "string") return makeLoopVar(`${name}.${prop}`);
+      return undefined;
+    },
+  });
 }
 
 export function createLoopVar(name: string): LoopItem {
-  return new LoopVar(name);
+  return makeLoopVar(name);
 }
 
 export function wrapSteps(steps: StepDef[]): StepDef {

@@ -16,22 +16,26 @@ const client = new DrejClient({
 
 await client.connect();
 
+let versionKey: string, reportKey: string;
+
 const run = await client.run(
   workflow("read-file-demo").sandbox(
     { image: { uri: "node:20-slim" }, resourceLimits: { cpu: "500m", memory: "256Mi" } },
-    (s) =>
-      s
-        // Write a file, then read it back into state as "version"
-        .exec("node -e \"require('fs').writeFileSync('/tmp/version.txt', process.version)\"")
-        .readFile("/tmp/version.txt", { as: "version" })
+    (s) => {
+      // Write a file, then read it back into state
+      s.exec("node -e \"require('fs').writeFileSync('/tmp/version.txt', process.version)\"");
+      const version = s.readFile("/tmp/version.txt");
+      versionKey = version.key;
 
-        // Interpolate the captured value in a subsequent command
-        .exec("echo \"Node version from file: {{version}}\"")
+      // Interpolate the captured value in a subsequent command
+      s.exec(`echo "Node version from file: ${version}"`);
 
-        // Write a JSON report using the captured value
-        .writeFile("/tmp/report.json", JSON.stringify({ capturedAt: new Date().toISOString() }))
-        .readFile("/tmp/report.json", { as: "report" })
-        .exec("echo \"Report: {{report}}\""),
+      // Write a JSON report and read it back
+      s.writeFile("/tmp/report.json", JSON.stringify({ capturedAt: new Date().toISOString() }));
+      const report = s.readFile("/tmp/report.json");
+      reportKey = report.key;
+      s.exec(`echo "Report: ${report}"`);
+    },
   ),
 );
 
@@ -43,16 +47,14 @@ for await (const ev of run) {
     const { text } = ev.payload as { text?: string };
     if (text) process.stdout.write(text);
   } else if (ev.event === "step_complete") {
-    // workflow state is available on each step_complete — last one has all keys
     finalState = ev.payload as Record<string, unknown>;
   }
 }
 
-// Access captured file contents from state after the run
 if (finalState) {
   console.log("\n--- captured state ---");
-  console.log("version:", finalState.version);
-  console.log("report:", finalState.report);
+  console.log("version:", finalState[versionKey!]);
+  console.log("report:", finalState[reportKey!]);
 }
 
 await client.close();

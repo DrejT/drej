@@ -13,11 +13,16 @@ export enum StepType {
   DeleteSandbox = "delete_sandbox",
   WriteFile     = "write_file",
   ReadFile      = "read_file",
-  DeleteFile    = "delete_file",
-  MoveFile      = "move_file",
-  ListDirectory = "list_directory",
-  SearchFiles   = "search_files",
-  Snapshot      = "snapshot",
+  DeleteFile      = "delete_file",
+  MoveFile        = "move_file",
+  ListDirectory   = "list_directory",
+  SearchFiles     = "search_files",
+  CreateDirectory = "create_directory",
+  DeleteDirectory = "delete_directory",
+  SetPermissions  = "set_permissions",
+  ReplaceInFiles  = "replace_in_files",
+  GetFileInfo     = "get_file_info",
+  Snapshot        = "snapshot",
   Retry         = "retry",
   Conditional   = "conditional",
   Loop          = "loop",
@@ -55,6 +60,11 @@ export type StepDef =
   | { type: StepType.MoveFile; from: string; to: string }
   | { type: StepType.ListDirectory; path: string; as: string; depth?: number }
   | { type: StepType.SearchFiles; pattern: string; as: string; dir?: string }
+  | { type: StepType.CreateDirectory; path: string }
+  | { type: StepType.DeleteDirectory; path: string }
+  | { type: StepType.SetPermissions; path: string; mode: string }
+  | { type: StepType.ReplaceInFiles; replacements: Array<{ path: string; old: string; new: string }> }
+  | { type: StepType.GetFileInfo; path: string; as: string }
   | { type: StepType.Snapshot }
   | { type: StepType.Retry; step: StepDef; maxAttempts: number; delayMs?: number; backoff?: Backoff }
   | { type: StepType.Conditional; condition: Predicate; then: StepDef[]; else?: StepDef[] }

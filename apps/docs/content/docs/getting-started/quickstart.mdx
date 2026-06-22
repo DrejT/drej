@@ -1,0 +1,83 @@
+---
+title: Quick start
+description: Run your first workflow in under a minute.
+---
+
+## 1. Install
+
+```bash
+bun add drej @drej/sqlite
+```
+
+## 2. Write a workflow
+
+```ts title="hello.ts"
+import { Drej, workflow } from "drej";
+import { SQLiteAdapter } from "@drej/sqlite";
+
+const client = new Drej({
+  baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://localhost:8080",
+  apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",
+  adapter: new SQLiteAdapter("./ledger.db"),
+});
+await client.connect();
+
+await client.run(
+  workflow("hello").sandbox(
+    { image: { uri: "ubuntu:22.04" }, resourceLimits: { cpu: "500m", memory: "256Mi" } },
+    (s) => s.exec('echo "hello world"'),
+  ),
+).pipe(process.stdout);
+
+await client.close();
+```
+
+## 3. Run it
+
+Make sure `uvx opensandbox-server` is running, then:
+
+```bash
+bun hello.ts
+```
+
+Output:
+
+```
+hello world
+```
+
+## Capture output
+
+Use `result()` to get the full stdout and captured state after the run completes:
+
+```ts
+const { output, state } = await client.run(
+  workflow("capture").sandbox(
+    { image: { uri: "ubuntu:22.04" }, resourceLimits: { cpu: "500m", memory: "256Mi" } },
+    (s) => {
+      const nodeVersion = s.exec("node --version").capture("stdout");
+      return nodeVersion;
+    },
+  ),
+).result();
+
+console.log(output);               // full stdout
+console.log(state[nodeVersion.key]); // captured value from the step
+```
+
+## Stream stdout
+
+Use `stdout()` when you want to process output line by line:
+
+```ts
+const run = await client.run(
+  workflow("stream").sandbox(
+    { image: { uri: "ubuntu:22.04" }, resourceLimits: { cpu: "500m", memory: "256Mi" } },
+    (s) => s.exec("for i in 1 2 3; do echo $i; sleep 0.5; done"),
+  ),
+);
+
+for await (const text of run.stdout()) {
+  process.stdout.write(text);
+}
+```

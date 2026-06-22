@@ -1,0 +1,73 @@
+---
+title: Installation
+description: Install drej and a storage adapter, then wire up the client.
+---
+
+## Install packages
+
+```bash
+bun add drej @drej/sqlite
+```
+
+For production, use the Postgres adapter instead:
+
+```bash
+bun add drej @drej/postgres
+```
+
+## Create the client
+
+```ts
+import { Drej } from "drej";
+import { SQLiteAdapter } from "@drej/sqlite";
+
+const client = new Drej({
+  baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://localhost:8080",
+  apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",
+  adapter: new SQLiteAdapter("./ledger.db"),
+});
+
+await client.connect();
+
+// ... run workflows ...
+
+await client.close();
+```
+
+## Options
+
+| Option | Type | Description |
+|---|---|---|
+| `baseUrl` | `string` | OpenSandbox server URL |
+| `apiKey` | `string` | OpenSandbox API key (empty string for local dev) |
+| `adapter` | `IStorageAdapter` | Storage adapter for the run ledger |
+| `maxConcurrency` | `number` | Max simultaneous workflow runs (default: unlimited) |
+
+## Local OpenSandbox
+
+Run a local sandbox server with `uvx opensandbox-server`. Create `~/.sandbox.toml`:
+
+```toml
+[server]
+host = "127.0.0.1"
+port = 8080
+
+[runtime]
+type = "docker"
+execd_image = "opensandbox/execd:v1.0.19"
+
+[docker]
+network_mode = "bridge"
+
+[ingress]
+mode = "direct"
+
+[egress]
+mode = "dns"
+```
+
+Then start the server:
+
+```bash
+uvx opensandbox-server
+```

@@ -9,7 +9,8 @@
     "packages/adapters/sqlite",
     "packages/adapters/otel",
     "examples/*",
-    "tests/integration"
+    "tests/integration",
+    "apps/docs"
   ],
   "scripts": {
     "build": "bunx tsc --project packages/opensandbox/tsconfig.build.json && bunx tsc --project packages/core/tsconfig.build.json && bun run --cwd packages/sdks/typescript build",

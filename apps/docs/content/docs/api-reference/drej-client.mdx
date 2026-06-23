@@ -1,6 +1,164 @@
 ---
 title: Drej
-description: The main client — connect, run, resumeRun, replayFromSnapshot, and run management methods.
+description: The main client — sandbox(), resume(), connect(), close(), and sandboxes management.
 ---
 
-Coming soon.
+```ts
+import { Drej } from "drej";
+```
+
+## Constructor
+
+```ts
+new Drej(options: DrejOptions)
+```
+
+### DrejOptions
+
+| Option | Type | Required | Description |
+|---|---|---|---|
+| `baseUrl` | `string` | Yes | OpenSandbox server URL, e.g. `"http://localhost:8080"` |
+| `apiKey` | `string` | No | OpenSandbox API key. Empty string for local dev with no auth. |
+| `adapter` | `IStorageAdapter` | Yes | Storage adapter for the run ledger |
+| `maxConcurrency` | `number` | No | Max simultaneous active sandboxes. Omit for no limit. |
+
+```ts
+const client = new Drej({
+  baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://localhost:8080",
+  apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",
+  adapter: new SQLiteAdapter("./ledger.db"),
+  maxConcurrency: 10,
+});
+```
+
+## Methods
+
+### connect()
+
+```ts
+await client.connect(): Promise<void>
+```
+
+Initializes the storage adapter — runs migrations and opens connection pools. Call once before first use.
+
+### close()
+
+```ts
+await client.close(): Promise<void>
+```
+
+Releases storage adapter resources. Call on graceful shutdown.
+
+### sandbox()
+
+```ts
+await client.sandbox(opts: SandboxOptions): Promise<Sandbox>
+```
+
+Creates a container, waits until it reaches `Running` state, and returns a live `Sandbox` object. Writes a `sandbox_created` event to the ledger.
+
+If `maxConcurrency` is set, awaits a slot before creating the container. The slot is released when `sb.close()` is called.
+
+See [Sandboxes](/docs/concepts/sandboxes) for `SandboxOptions` reference.
+
+```ts
+const sb = await client.sandbox({
+  image: "ubuntu:22.04",
+  resources: { cpu: "500m", memory: "512Mi" },
+  name: "my-run",
+});
+try {
+  await sb.exec("echo hello").pipe(process.stdout);
+} finally {
+  await sb.close();
+}
+```
+
+### resume()
+
+```ts
+await client.resume(sandboxId: string): Promise<Sandbox>
+```
+
+Restores a sandbox session from its last checkpoint:
+
+1. Reads the ledger to find the last `checkpoint_created` event
+2. Creates a new container from the snapshot
+3. Populates a replay cache from execs that completed before the checkpoint
+4. Returns a `Sandbox` — pre-checkpoint execs return cached results; later execs run live
+
+Throws `DrejError` (404) if the session is not found or has no checkpoint.
+
+```ts
+const sbResume = await client.resume(originalSandboxId);
+try {
+  await sbResume.exec("pip install -q requests").pipe(process.stdout); // replayed
+  await sbResume.exec("python3 script.py").pipe(process.stdout);       // live
+} finally {
+  await sbResume.close();
+}
+```
+
+### sandboxes
+
+```ts
+client.sandboxes: {
+  list(opts?: ListSandboxOptions): Promise<SandboxDetails[]>
+  listByName(name: string, opts?: ListSandboxOptions): Promise<SandboxDetails[]>
+  get(name: string, sandboxId: string): Promise<SandboxDetails | null>
+  delete(name: string, sandboxId: string): Promise<void>
+}
+```
+
+Access to the ledger's session history.
+
+```ts
+// List all sessions, newest first
+const all = await client.sandboxes.list();
+
+// Filter
+const running = await client.sandboxes.list({ status: SandboxStatus.Running, limit: 20 });
+
+// By name
+const named = await client.sandboxes.listByName("my-ci-job");
+
+// Single session
+const session = await client.sandboxes.get("my-job", sandboxId);
+
+// Delete
+await client.sandboxes.delete("my-job", sandboxId);
+```
+
+### ListSandboxOptions
+
+| Option | Type | Description |
+|---|---|---|
+| `status` | `SandboxStatus` | Filter by status: `"running"`, `"completed"`, `"failed"`, `"cancelled"` |
+| `limit` | `number` | Max results to return |
+| `before` | `number` | Return only sessions started before this Unix timestamp (ms) |
+
+## Sandbox class
+
+See [Sandbox](#sandbox) below for the object returned by `sandbox()` and `resume()`.
+
+### Sandbox methods
+
+| Method | Returns | Description |
+|---|---|---|
+| `sb.exec(cmd, opts?)` | `ExecHandle` | Run a shell command |
+| `sb.execCode(code, opts?)` | `ExecHandle` | Run code via the interpreter |
+| `sb.writeFile(path, content)` | `Promise<void>` | Write a file into the container |
+| `sb.readFile(path)` | `Promise<string>` | Read a file from the container |
+| `sb.moveFile(from, to)` | `Promise<void>` | Move/rename a file |
+| `sb.deleteFile(path)` | `Promise<void>` | Delete a file |
+| `sb.searchFiles(pattern, path?)` | `Promise<SearchResult[]>` | Search for files matching a glob |
+| `sb.listDirectory(path, opts?)` | `Promise<DirEntry[]>` | List directory entries |
+| `sb.checkpoint(name?)` | `Promise<void>` | Snapshot the container |
+| `sb.close()` | `Promise<void>` | Delete the container and release resources |
+
+### Sandbox properties
+
+| Property | Type | Description |
+|---|---|---|
+| `sb.sandboxId` | `string` | OpenSandbox container ID |
+| `sb.name` | `string` | User-provided name or auto-generated |

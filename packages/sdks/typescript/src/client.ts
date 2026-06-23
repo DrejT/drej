@@ -33,15 +33,12 @@ export { DrejError, type DrejOptions, type SandboxOptions } from "./types";
  *   baseUrl: "http://localhost:8080",
  *   adapter: new SQLiteAdapter("./drej.db"),
  * });
- * await client.connect();
  *
  * const sb = await client.sandbox({ image: "node:22" });
  * await sb.exec("npm ci");
  * await sb.checkpoint();
  * await sb.exec("npm test").pipe(process.stdout);
  * await sb.close();
- *
- * await client.close();
  * ```
  */
 export class Drej {
@@ -50,6 +47,8 @@ export class Drej {
   private readonly _maxConcurrency: number | undefined;
   private _activeCount = 0;
   private readonly _waiters: Array<() => void> = [];
+  private _connectPromise: Promise<void> | null = null;
+  private _adapterClosed = false;
 
   constructor(options: DrejOptions) {
     this._control = new ControlClient({
@@ -58,22 +57,23 @@ export class Drej {
     });
     this._adapter = options.adapter;
     this._maxConcurrency = options.maxConcurrency;
+
+    // Close the adapter when the event loop drains naturally (scripts, short-lived processes).
+    // Long-running servers never reach beforeExit, so Postgres pools stay alive for the
+    // lifetime of the process — which is the correct behaviour.
+    process.setMaxListeners(process.getMaxListeners() + 1);
+    process.on("beforeExit", () => {
+      if (!this._adapterClosed) {
+        this._adapterClosed = true;
+        void this._adapter.close?.();
+      }
+    });
   }
 
-  /**
-   * Initializes the storage adapter (runs migrations, opens connection pools).
-   * Must be called before first use when using a DB-backed adapter.
-   */
-  async connect(): Promise<void> {
-    await this._adapter.connect?.();
-  }
-
-  /**
-   * Releases storage adapter resources.
-   * Call on graceful shutdown to avoid dangling connections.
-   */
-  async close(): Promise<void> {
-    await this._adapter.close?.();
+  /** Lazily initialises the adapter on first use. Concurrent callers share the same promise. */
+  private _ensureConnected(): Promise<void> {
+    this._connectPromise ??= (this._adapter.connect?.() ?? Promise.resolve());
+    return this._connectPromise;
   }
 
   /**
@@ -94,6 +94,7 @@ export class Drej {
    * ```
    */
   async sandbox(opts: SandboxOptions): Promise<Sandbox> {
+    await this._ensureConnected();
     await this._acquireSlot();
 
     const image = typeof opts.image === "string" ? { uri: opts.image } : opts.image;
@@ -159,6 +160,7 @@ export class Drej {
    * ```
    */
   async resume(sandboxId: string): Promise<Sandbox> {
+    await this._ensureConnected();
     const allSessions = await this._adapter.listAllSandboxDetails();
     const session = allSessions.find((s) => s.sandboxId === sandboxId);
     if (!session) throw new DrejError(`Session ${sandboxId} not found`, 404);
@@ -240,20 +242,28 @@ export class Drej {
    */
   readonly sandboxes = {
     /** List all sandbox records across all names, newest first. */
-    list: (opts?: ListSandboxOptions): Promise<SandboxDetails[]> =>
-      this._adapter.listAllSandboxDetails(opts),
+    list: async (opts?: ListSandboxOptions): Promise<SandboxDetails[]> => {
+      await this._ensureConnected();
+      return this._adapter.listAllSandboxDetails(opts);
+    },
 
     /** List sandbox records for a specific name, newest first. */
-    listByName: (name: string, opts?: ListSandboxOptions): Promise<SandboxDetails[]> =>
-      this._adapter.listSandboxDetails(name, opts),
+    listByName: async (name: string, opts?: ListSandboxOptions): Promise<SandboxDetails[]> => {
+      await this._ensureConnected();
+      return this._adapter.listSandboxDetails(name, opts);
+    },
 
     /** Return details for a single sandbox record. Returns `null` if not found. */
-    get: (name: string, sandboxId: string): Promise<SandboxDetails | null> =>
-      this._adapter.getSandboxDetails(name, sandboxId),
+    get: async (name: string, sandboxId: string): Promise<SandboxDetails | null> => {
+      await this._ensureConnected();
+      return this._adapter.getSandboxDetails(name, sandboxId);
+    },
 
     /** Delete all ledger events for a sandbox. */
-    delete: (name: string, sandboxId: string): Promise<void> =>
-      this._adapter.deleteSandbox(name, sandboxId),
+    delete: async (name: string, sandboxId: string): Promise<void> => {
+      await this._ensureConnected();
+      return this._adapter.deleteSandbox(name, sandboxId);
+    },
   };
 
   // ── Internal ──────────────────────────────────────────────────────────────

@@ -6,7 +6,6 @@ const client = new Drej({
   apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",
   adapter: new SQLiteAdapter("./ledger.db"),
 });
-await client.connect();
 
 const script = `
 #!/bin/bash
@@ -42,4 +41,3 @@ try {
   await sb.close();
 }
 
-await client.close();

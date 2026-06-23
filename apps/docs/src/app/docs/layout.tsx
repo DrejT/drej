@@ -1,15 +1,3 @@
-import { DocsLayout } from "fumadocs-ui/layouts/docs";
-import { source } from "@/lib/source";
-
-export default function DocsPageLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <DocsLayout
-      tree={source.pageTree}
-      nav={{ title: "drej", url: "/" }}
-      themeSwitch={{ enabled: false }}
-      searchToggle={{ enabled: true }}
-    >
-      {children}
-    </DocsLayout>
-  );
+export default function DocsRootLayout({ children }: { children: React.ReactNode }) {
+  return children;
 }

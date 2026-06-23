@@ -1,0 +1,84 @@
+---
+title: Capturing Values
+description: Use readFile(path, as) to pull file contents out of the sandbox and into WorkflowResult.vars.
+---
+
+`SandboxBuilder` doesn't return `ExecHandle` — ops are queued, not executed. To get a value out of the sandbox, write it to a file inside the container and read it back with `readFile`.
+
+## readFile
+
+```ts
+sb.exec("node --version > /tmp/ver.txt");
+sb.readFile("/tmp/ver.txt", "nodeVersion");
+```
+
+After the workflow resolves, `vars.nodeVersion` contains the file's content as a string.
+
+```ts
+const { vars } = await workflow(client)
+  .sandbox(opts, (sb) => {
+    sb.exec("node --version > /tmp/ver.txt");
+    sb.readFile("/tmp/ver.txt", "nodeVersion");
+  })
+  .result();
+
+console.log(vars.nodeVersion); // "v22.x.x\n"
+```
+
+## Multiple values
+
+Capture as many values as you need — each gets its own key:
+
+```ts
+const { vars } = await workflow(client)
+  .sandbox(opts, (sb) => {
+    sb.exec("node --version > /tmp/node.txt");
+    sb.exec("npm --version > /tmp/npm.txt");
+    sb.exec("uname -r > /tmp/kernel.txt");
+    sb.readFile("/tmp/node.txt", "node");
+    sb.readFile("/tmp/npm.txt", "npm");
+    sb.readFile("/tmp/kernel.txt", "kernel");
+  })
+  .result();
+
+console.log(vars); // { node: "v22.x.x\n", npm: "10.x.x\n", kernel: "..." }
+```
+
+## Passing values between sequence steps
+
+`readFile` values are available in the next step via `prev.vars`:
+
+```ts
+await workflow(client)
+  .sequence([
+    {
+      image: "node:22",
+      resources: opts.resources,
+      run: (sb) => {
+        sb.exec("npm run build:version > /tmp/version.txt");
+        sb.readFile("/tmp/version.txt", "version");
+      },
+    },
+    {
+      image: "ubuntu:22.04",
+      resources: opts.resources,
+      run: (sb, prev) => {
+        const version = String(prev.vars.version).trim();
+        sb.exec(`./deploy.sh --version ${version}`);
+      },
+    },
+  ])
+  .pipe(process.stdout);
+```
+
+## stdout
+
+The combined stdout from all exec calls is also available in `WorkflowResult.stdout`. For selective capture, `readFile` is more reliable than parsing stdout.
+
+```ts
+const { stdout } = await workflow(client)
+  .sandbox(opts, (sb) => {
+    sb.exec("npm test");
+  })
+  .result();
+```

@@ -13,7 +13,6 @@ const client = new Drej({
   apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",
   adapter: new SQLiteAdapter("./ledger.db"),
 });
-await client.connect();
 
 const sb = await client.sandbox({
   image: "opensandbox/code-interpreter",
@@ -49,4 +48,3 @@ print(f"[stateful 2] max = {max(data)}")
   await sb.close();
 }
 
-await client.close();

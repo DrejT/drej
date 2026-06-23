@@ -1,7 +1,6 @@
 import { defineDocs, defineConfig } from "fumadocs-mdx/config";
 
-export const docs = defineDocs({
-  dir: "content/docs",
-});
+export const coreDocs = defineDocs({ dir: "content/docs/core" });
+export const workflowDocs = defineDocs({ dir: "content/docs/workflow" });
 
 export default defineConfig();

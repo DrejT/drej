@@ -11,7 +11,6 @@ const client = new Drej({
   apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",
   adapter: new SQLiteAdapter("./ledger.db"),
 });
-await client.connect();
 
 const sbA = await client.sandbox({
   image: "debian:bookworm-slim",
@@ -58,4 +57,3 @@ try {
   await sbB.close();
 }
 
-await client.close();

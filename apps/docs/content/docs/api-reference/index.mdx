@@ -4,8 +4,8 @@ description: Complete reference for every public symbol exported from drej.
 ---
 
 <Cards>
-  <Card href="/docs/api-reference/drej-client" title="Drej" description="The main client — connect, run, resumeRun, replayFromSnapshot, and run management." />
-  <Card href="/docs/api-reference/workflow-run" title="WorkflowRun & RunHandle" description="The async iterable run object and its pipe(), stdout(), result() methods." />
-  <Card href="/docs/api-reference/builder" title="Builder API" description="workflow(), sandbox(), and all step builder methods." />
-  <Card href="/docs/api-reference/errors" title="Errors" description="CommandError, StepTimeoutError, SandboxError, ExecConnectionError." />
+  <Card href="/docs/api-reference/drej-client" title="Drej" description="The main client — sandbox(), resume(), connect(), close(), and sandboxes management." />
+  <Card href="/docs/api-reference/workflow-run" title="ExecHandle" description="The PromiseLike returned by sb.exec() — pipe(), stdout() generator, result(), and await." />
+  <Card href="/docs/api-reference/builder" title="Builder API" description="workflow(), WorkflowBuilder, and SandboxBuilder from @drej/workflow." />
+  <Card href="/docs/api-reference/errors" title="Errors" description="CommandError, SandboxError, ExecConnectionError, WorkflowError, DrejError." />
 </Cards>

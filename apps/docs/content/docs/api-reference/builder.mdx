@@ -1,6 +1,205 @@
 ---
 title: Builder API
-description: workflow(), sandbox(), and all step builder methods — exec, writeFile, retry, when, forEach, parallel, snapshot.
+description: workflow(), WorkflowBuilder, and SandboxBuilder — the @drej/workflow lazy orchestration layer.
 ---
 
-Coming soon.
+```ts
+import { workflow, WorkflowBuilder, SandboxBuilder } from "@drej/workflow";
+```
+
+## workflow()
+
+```ts
+workflow(client: Drej): WorkflowBuilder
+```
+
+Creates a `WorkflowBuilder` attached to a `Drej` client.
+
+```ts
+import { workflow } from "@drej/workflow";
+
+await workflow(client)
+  .sandbox({ image: "node:22", resources: { cpu: "500m", memory: "512Mi" } }, (sb) => {
+    sb.exec("npm ci");
+    sb.exec("npm test");
+  })
+  .pipe(process.stdout);
+```
+
+## WorkflowBuilder
+
+Collects stages and executes them all when `.pipe()` or `.result()` is awaited. Sandbox lifecycle (create + close) is managed automatically.
+
+### .sandbox()
+
+```ts
+.sandbox(opts: SandboxOptions, fn: (sb: SandboxBuilder) => void): this
+```
+
+Add a sandbox stage. The `fn` callback receives a `SandboxBuilder` to queue operations synchronously. Multiple `.sandbox()` calls run sequentially.
+
+### .parallel()
+
+```ts
+.parallel(configs: SandboxOptions[], fn: (sb: SandboxBuilder) => void): this
+```
+
+Run the same operation across multiple containers simultaneously. All configs receive the same `fn`. Results are merged.
+
+```ts
+await workflow(client)
+  .parallel(
+    [{ image: "node:20" }, { image: "node:22" }, { image: "node:24" }],
+    (sb) => sb.exec("npm test"),
+  )
+  .pipe(process.stdout);
+```
+
+### .sequence()
+
+```ts
+.sequence(steps: SequenceStep[]): this
+```
+
+Run sandboxes one after another. Each step's callback receives the previous step's `WorkflowResult` as `prev`:
+
+```ts
+await workflow(client)
+  .sequence([
+    { image: "node:22", name: "build", run: (sb) => sb.exec("npm run build") },
+    { image: "ubuntu:22.04", name: "deploy", run: (sb, prev) => sb.exec("./deploy.sh") },
+  ])
+  .pipe(process.stdout);
+```
+
+### .pipe()
+
+```ts
+await workflow.pipe(writable: { write(chunk: string): unknown }): Promise<void>
+```
+
+Execute the workflow and stream stdout to a writable. Flushes all queued stages.
+
+### .result()
+
+```ts
+await workflow.result(): Promise<WorkflowResult>
+```
+
+Execute the workflow and return the combined result:
+
+```ts
+interface WorkflowResult {
+  stdout: string;                    // concatenated stdout from all sandboxes
+  vars: Record<string, unknown>;     // values captured by readFile(path, as)
+}
+```
+
+## SandboxBuilder
+
+Queues operations synchronously. All methods return `this` for chaining. Nothing runs until the `WorkflowBuilder` is flushed.
+
+### .exec()
+
+```ts
+sb.exec(cmd: string, opts?: ExecOptions): this
+```
+
+Queue a shell command.
+
+### .execCode()
+
+```ts
+sb.execCode(code: string, opts?: ExecCodeOptions): this
+```
+
+Queue a code execution via the interpreter.
+
+### .writeFile()
+
+```ts
+sb.writeFile(path: string, content: string): this
+```
+
+Queue a file write into the sandbox.
+
+### .readFile()
+
+```ts
+sb.readFile(path: string, as: string): this
+```
+
+Queue a file read. The content is stored in `vars[as]` and available via `WorkflowResult.vars`.
+
+### .moveFile()
+
+```ts
+sb.moveFile(from: string, to: string): this
+```
+
+Queue a file move inside the sandbox.
+
+### .deleteFile()
+
+```ts
+sb.deleteFile(path: string): this
+```
+
+Queue a file deletion.
+
+### .checkpoint()
+
+```ts
+sb.checkpoint(name?: string): this
+```
+
+Queue a container snapshot.
+
+### .retry()
+
+```ts
+sb.retry(
+  maxAttempts: number,
+  fn: (sb: SandboxBuilder) => void,
+  opts?: RetryOptions,
+): this
+```
+
+Queue a retry block. On failure, waits `delayMs` and retries up to `maxAttempts` times.
+
+```ts
+interface RetryOptions {
+  delayMs?: number;                    // default: 1000
+  backoff?: "fixed" | "exponential";   // default: "fixed"
+}
+```
+
+### .when()
+
+```ts
+sb.when(
+  pred: (ctx: { stdout: string; exitCode: number; vars: Record<string, unknown> }) => boolean,
+  then: (sb: SandboxBuilder) => void,
+  otherwise?: (sb: SandboxBuilder) => void,
+): this
+```
+
+Queue a conditional branch. `pred` is evaluated at flush time with the current execution context.
+
+### .forEach()
+
+```ts
+sb.forEach(
+  items: unknown[],
+  fn: (sb: SandboxBuilder, item: unknown, index: number) => void,
+  opts?: ForEachOptions,
+): this
+```
+
+Queue iteration over a list of items.
+
+```ts
+interface ForEachOptions {
+  concurrency?: number; // default: 1 (sequential)
+}
+```

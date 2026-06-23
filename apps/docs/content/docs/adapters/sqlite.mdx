@@ -1,6 +1,80 @@
 ---
 title: SQLite adapter
-description: Zero-config storage with WAL mode. The default for local dev and single-process deploys.
+description: Zero-config storage with WAL mode. The right default for local dev and single-process deploys.
 ---
 
-Coming soon.
+`@drej/sqlite` is the recommended adapter for local development and single-process applications. It requires no external services — just a file path.
+
+## Install
+
+```bash
+bun add @drej/sqlite
+```
+
+## Usage
+
+```ts
+import { Drej } from "drej";
+import { SQLiteAdapter } from "@drej/sqlite";
+
+const client = new Drej({
+  baseUrl: "http://localhost:8080",
+  adapter: new SQLiteAdapter("./ledger.db"),
+});
+
+await client.connect(); // creates the file and runs migrations
+// ...
+await client.close();   // closes the database connection
+```
+
+The file is created if it doesn't exist. `connect()` runs `CREATE TABLE IF NOT EXISTS` migrations so it's safe to call on every startup.
+
+## Constructor
+
+```ts
+new SQLiteAdapter(path: string)
+```
+
+| Argument | Type | Description |
+|---|---|---|
+| `path` | `string` | File path for the SQLite database. Use `":memory:"` for an in-memory database (data lost on close). |
+
+## WAL mode
+
+`SQLiteAdapter` enables WAL (Write-Ahead Logging) mode automatically on `connect()`. WAL mode prevents writers from blocking readers, so multiple concurrent sandbox sessions in the same process are safe.
+
+## When to use
+
+- **Local development** — no infra required, ledger is a file you can inspect
+- **Single-process scripts** — CLI tools, one-off runs
+- **Testing** — use `":memory:"` for a clean database per test run
+
+```ts
+// In-memory: no file, data gone on close
+const adapter = new SQLiteAdapter(":memory:");
+```
+
+## When to switch to Postgres
+
+Switch to `@drej/postgres` when:
+- Multiple processes need to share the same ledger
+- You're deploying to a platform without persistent local disk
+- You need to query ledger data with SQL from external tools
+
+## Schema
+
+`connect()` creates a single table:
+
+```sql
+CREATE TABLE IF NOT EXISTS drej_events (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  sandbox_id TEXT    NOT NULL,
+  name       TEXT    NOT NULL,
+  step_idx   INTEGER NOT NULL,
+  branch     INTEGER,
+  event      TEXT    NOT NULL,
+  payload    TEXT,
+  error      TEXT,
+  ts         INTEGER NOT NULL
+);
+```

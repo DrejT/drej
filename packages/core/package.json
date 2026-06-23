@@ -2,7 +2,7 @@
   "name": "@drej/core",
   "version": "0.3.0",
   "main": "./src/index.ts",
-  "types": "./dist/index.d.ts",
+  "types": "./src/index.ts",
   "files": [
     "dist"
   ],

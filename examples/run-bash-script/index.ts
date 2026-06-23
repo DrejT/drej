@@ -1,4 +1,4 @@
-import { Drej, workflow } from "drej";
+import { Drej } from "drej";
 import { SQLiteAdapter } from "@drej/sqlite";
 
 const client = new Drej({
@@ -28,14 +28,18 @@ echo ""
 echo "=== done ==="
 `.trim();
 
-const run = await client.run(
-  workflow("bash-script").sandbox(
-    { image: { uri: "ubuntu:22.04" }, resourceLimits: { cpu: "500m", memory: "512Mi" } },
-    (s) => s.exec(script),
-  ),
-);
+const sb = await client.sandbox({
+  image: "ubuntu:22.04",
+  resources: { cpu: "500m", memory: "512Mi" },
+  name: "bash-script",
+});
 
-console.log(`Run ID: ${run.id}\n`);
-await run.pipe(process.stdout);
+console.log(`Sandbox ID: ${sb.sandboxId}\n`);
+
+try {
+  await sb.exec(script).pipe(process.stdout);
+} finally {
+  await sb.close();
+}
 
 await client.close();

@@ -1,12 +1,10 @@
 /**
- * Demonstrates per-step timeouts and run cancellation.
- *
- * Pattern A — per-step timeoutMs → StepTimeoutError
- * Pattern B — run.cancel() after first output
- * Pattern C — break from for-await loop
- * Pattern D — external AbortSignal.timeout()
+ * Demonstrates resource cleanup and error handling patterns:
+ *   Pattern A — try/finally ensures sb.close() always runs
+ *   Pattern B — bash-level timeout via the `timeout` command
+ *   Pattern C — CommandError from a non-zero exit
  */
-import { Drej, workflow, StepTimeoutError } from "drej";
+import { Drej, CommandError } from "drej";
 import { SQLiteAdapter } from "@drej/sqlite";
 
 const client = new Drej({
@@ -16,82 +14,49 @@ const client = new Drej({
 });
 await client.connect();
 
-const image = { uri: "ubuntu:22.04" };
-const resourceLimits = { cpu: "500m", memory: "256Mi" };
+const image = "ubuntu:22.04";
+const resources = { cpu: "500m", memory: "256Mi" };
 
-// ── Pattern A: per-step timeout ───────────────────────────────────────────────
+// ── Pattern A: try/finally for cleanup ───────────────────────────────────────
 
-console.log("=== Pattern A: per-step timeout ===");
+console.log("=== Pattern A: try/finally ===");
 
-const runA = await client.run(
-  workflow("cancellation-timeout").sandbox({ image, resourceLimits }, (s) => {
-    s.exec("echo 'starting long task...'");
-    s.exec("sleep 30", { timeoutMs: 500 });
-    s.exec("echo 'this never runs'");
-  }),
-);
-
+const sbA = await client.sandbox({ image, resources, name: "cancellation-a" });
 try {
-  await runA.pipe(process.stdout);
+  await sbA.exec("echo 'starting...'").pipe(process.stdout);
+  await sbA.exec("echo 'done'").pipe(process.stdout);
+} finally {
+  await sbA.close();
+  console.log("sandbox closed\n");
+}
+
+// ── Pattern B: bash-level timeout ────────────────────────────────────────────
+
+console.log("=== Pattern B: bash timeout command ===");
+
+const sbB = await client.sandbox({ image, resources, name: "cancellation-b" });
+try {
+  // timeout(1) wraps sleep(30) — exits after 1 second
+  const { exitCode } = await sbB.exec("timeout 1 sleep 30 || echo 'timed out'", { strict: false });
+  await sbB.exec(`echo "exit code: ${exitCode}"`).pipe(process.stdout);
+} finally {
+  await sbB.close();
+}
+
+// ── Pattern C: CommandError from non-zero exit ────────────────────────────────
+
+console.log("\n=== Pattern C: CommandError ===");
+
+const sbC = await client.sandbox({ image, resources, name: "cancellation-c" });
+try {
+  await sbC.exec("echo 'step 1'").pipe(process.stdout);
+  await sbC.exec("exit 1");  // throws CommandError
 } catch (e) {
-  if (e instanceof StepTimeoutError) {
-    console.log(`\nStep timed out after ${e.timeoutMs}ms`);
+  if (e instanceof CommandError) {
+    console.log(`caught CommandError: exit ${e.exitCode}`);
   } else throw e;
+} finally {
+  await sbC.close();
 }
-console.log(`Status: ${runA.status}\n`);
-
-// ── Pattern B: run.cancel() ───────────────────────────────────────────────────
-
-console.log("=== Pattern B: run.cancel() ===");
-
-const runB = await client.run(
-  workflow("cancellation-cancel").sandbox({ image, resourceLimits }, (s) => {
-    s.exec("echo 'step 1'");
-    s.exec("sleep 30");
-    s.exec("echo 'step 3 — never reached'");
-  }),
-);
-
-for await (const text of runB.stdout()) {
-  process.stdout.write(text);
-  runB.cancel();
-}
-console.log(`\nStatus: ${runB.status}\n`);
-
-// ── Pattern C: break from for-await ──────────────────────────────────────────
-
-console.log("=== Pattern C: break from for-await ===");
-
-const runC = await client.run(
-  workflow("cancellation-break").sandbox({ image, resourceLimits }, (s) => {
-    s.exec("echo 'step 1'");
-    s.exec("sleep 30");
-  }),
-);
-
-for await (const text of runC.stdout()) {
-  process.stdout.write(text);
-  break;
-}
-console.log(`\nStatus: ${runC.status}\n`);
-
-// ── Pattern D: external AbortSignal ──────────────────────────────────────────
-
-console.log("=== Pattern D: AbortSignal.timeout() ===");
-
-const runD = await client.run(
-  workflow("cancellation-signal").sandbox({ image, resourceLimits }, (s) => {
-    s.exec("echo 'starting...'");
-    s.exec("sleep 30");
-  }),
-  { signal: AbortSignal.timeout(800) },
-);
-
-try {
-  await runD.pipe(process.stdout);
-} catch (e) {
-  console.log(`\nRun aborted by signal: ${(e as Error).name}`);
-}
-console.log(`Status: ${runD.status}`);
 
 await client.close();

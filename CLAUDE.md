@@ -16,17 +16,16 @@ Example: before writing a `bun build` command or debugging a workspace install i
 
 ## What this is
 
-`drej` is a workflow orchestration framework built on top of [OpenSandbox](https://opensandbox.ai). It lets you define multi-step workflows that run inside isolated sandbox containers. Workflows execute in-process — there is no separate drej server. The `Drej` client talks directly to your OpenSandbox instance and streams events via an async generator.
+`drej` is a **sandbox execution substrate** built on top of [OpenSandbox](https://opensandbox.ai). It gives you live sandbox containers as first-class objects — spawn, exec, checkpoint, resume — with a durable SQL audit ledger and replay. Workflow primitives (retry, when, forEach, parallel) live in the separate `@drej/workflow` package.
 
 ## Commands
 
 ```bash
-# Run the hello-world example
-bun run examples/hello-world.ts
+# Run an example (requires uvx opensandbox-server)
+bun examples/hello-world/index.ts
 
-# Run an example's integration test (requires uvx opensandbox-server running)
-bun examples/hello-world/tests/integration.ts
-bun examples/file-ops/tests/integration.ts
+# Run all unit tests
+bun run test
 
 # Build the SDK for publishing (generates dist/ across all packages)
 bun run build
@@ -38,6 +37,7 @@ bun run typecheck
 bunx tsc --noEmit --strict --project packages/opensandbox/tsconfig.json
 bunx tsc --noEmit --strict --project packages/core/tsconfig.json
 bunx tsc --noEmit --strict --project packages/sdks/typescript/tsconfig.json
+bunx tsc --noEmit --strict --project packages/workflow/tsconfig.json
 bunx tsc --noEmit --strict --project packages/adapters/postgres/tsconfig.json
 
 # Changesets (required on every PR touching publishable packages)
@@ -59,41 +59,27 @@ bunx changeset status # verify one exists
 
 ### Integration test conventions
 
-- **Run with**: `bun tests/integration.ts` from within the example directory, or `bun examples/<name>/tests/integration.ts` from the repo root.
+- **Run with**: `bun examples/<name>/index.ts` from the repo root (examples are also the integration tests).
 - **Requires**: `uvx opensandbox-server` running locally (see Local OpenSandbox setup).
-- **Client setup**: always use `SQLiteAdapter("./ledger.db")`, read `OPEN_SANDBOX_URL` and `OPEN_SANDBOX_API_KEY` from env with localhost defaults.
-- **Assertion helper**: define a local `assert(label, ok, got?)` function — prints `FAIL: <label> — got: <value>` and sets `failed = true`. Never use a test framework; exit with `process.exit(1)` if any assertion failed.
-- **Event loop**: `for await (const ev of run)` — collect `exec_event` stdout, capture `step_complete` payload as `finalState`, log other events. Never filter events with a test framework matcher.
-- **Captured refs**: declare `let fooKey: string` outside the builder, assign inside (`fooKey = s.readFile(...).key`), then read from `finalState[fooKey!]` after the loop.
-- **Multiple patterns**: group test scenarios with `// ── Pattern A: ... ───` section comments; share a single `failed` flag and `assert` helper across all of them.
-- **Cleanup**: call `await client.close()` at the end (after the exit check for single-scenario tests; inside a `finally` for multi-scenario ones where the run might throw).
-- **Error tests**: wrap the `for await` in `try/catch`; rethrow if not the expected error class.
+- **Client setup**: `new Drej({ baseUrl: ..., adapter: new SQLiteAdapter("./ledger.db") })`.
+- **Sandbox lifecycle**: always wrap in `try/finally { await sb.close(); }` to avoid container leaks.
+- **Assertion**: `const { stdout } = await sb.exec("cmd")` — assert on the returned value. For error cases, catch `CommandError`.
 
 ### What to assert
 
 Assert on observable behaviour, not internal structure:
-- stdout/stderr content from `exec_event` payloads
-- `run.status === "completed"` (or `"failed"`)
-- captured values from `finalState[key]` (readFile contents, searchFiles arrays, getFileInfo shape, etc.)
+- `await sb.exec("cmd")` result: `stdout`, `stderr`, `exitCode`
+- `await sb.readFile("/path")` content
 - error class and `.exitCode` for `CommandError` cases
 
 ## Architecture
 
 ```
-packages/core/                    — Workflow engine (no runtime deps outside opensandbox)
-  src/steps/
-    types.ts                      — StepDef union, StepType enum, Encoding enum, Backoff enum, Predicate, SnapshotConfig
-    utils.ts                      — getPath, interpolate, evaluate, runWithConcurrency (internal)
-    sandbox.ts                    — create_sandbox / delete_sandbox builders; resolveExecClient()
-    exec.ts                       — exec_command / exec_code builders
-    file.ts                       — write_file / read_file builders
-    snapshot.ts                   — snapshot builder; shouldSnapshot(), waitForSnapshot()
-    control-flow.ts               — retry / conditional / loop / parallel / sequence builders
-    index.ts                      — buildStep() router + barrel exports
-  src/ledger.ts                   — IStorageAdapter, LedgerEvent, RunStatus, RunDetails, ListRunsOptions
-  src/workflow.ts                 — Workflow class (run, rollback, resumeFromLedger), WorkflowHooks, WorkflowDeps
+packages/core/                    — Sandbox primitive (no runtime deps outside opensandbox)
+  src/sandbox.ts                  — Sandbox class, resolveExecClient(), SandboxHooks, SandboxDeps
+  src/exec-handle.ts              — ExecHandle (PromiseLike<ExecResult>), pipe(), stdout(), result()
+  src/ledger.ts                   — IStorageAdapter, LedgerEvent, SandboxStatus, SandboxDetails, ListSandboxOptions
   src/errors.ts                   — WorkflowError, SandboxError, ExecConnectionError, CommandError
-  src/validate.ts                 — validateWorkflow() (checks execCode requires code-interpreter image)
   src/logger.ts                   — ILogger, ConsoleLogger, noopLogger
 
 packages/opensandbox/             — OpenSandbox HTTP clients
@@ -102,14 +88,13 @@ packages/opensandbox/             — OpenSandbox HTTP clients
   src/types.ts                    — Full OpenSandbox API type system
 
 packages/sdks/typescript/         — Public TypeScript SDK (published to npm as "drej")
-  src/types.ts                    — DrejError, WorkflowRun, DrejClientOptions, RunOptions, WorkflowEvent
-  src/stream.ts                   — makeStream() — async generator pipeline (tee adapter + event queue)
-  src/client.ts                   — DrejClient: run, resumeRun, replayFromSnapshot, sandbox/snapshot/run mgmt
-  src/builder/
-    types.ts                      — SandboxOpts, LoopItem, wrapSteps(), createLoopVar()
-    sandbox-step.ts               — SandboxStepBuilder, SandboxParallelBuilder
-    workflow.ts                   — WorkflowBuilder, WorkflowParallelBuilder, workflow()
-    index.ts                      — builder barrel exports
+  src/types.ts                    — DrejError, DrejOptions, SandboxOptions
+  src/client.ts                   — Drej: sandbox(), resume(), sandboxes.*, connect(), close()
+
+packages/workflow/                — Lazy workflow builder (published as "@drej/workflow")
+  src/sandbox-builder.ts          — SandboxBuilder (synchronous queue), flushOps()
+  src/workflow-builder.ts         — WorkflowBuilder, workflow() factory
+  src/index.ts                    — barrel exports
 
 packages/adapters/postgres/       — Postgres storage adapter (published as "@drej/postgres")
   src/adapter.ts                  — PostgresAdapter implementing IStorageAdapter
@@ -120,34 +105,28 @@ packages/adapters/sqlite/         — SQLite storage adapter (published as "@dre
   src/migrations.ts               — Idempotent CREATE TABLE IF NOT EXISTS schema
 
 packages/adapters/otel/           — OpenTelemetry hooks adapter (published as "@drej/otel")
-  src/index.ts                    — otelHooks(tracer, opts?) → WorkflowHooks
+  src/index.ts                    — otelHooks(tracer, opts?) → SandboxHooks
 ```
 
 ### Key design points
 
-**In-process execution**: `DrejClient` runs workflows directly in the calling process. No HTTP server, no separate drej daemon. Instantiate `DrejClient` with your OpenSandbox URL and call `client.run(workflow(...))`.
+**Sandbox as first-class object**: `client.sandbox()` returns a live `Sandbox` object. You hold it, call methods on it, and call `sb.close()` when done. Multiple sandboxes → multiple variables. No special API.
 
-**Fluent builder API**: Workflows are constructed via `workflow(name).sandbox(opts, s => s.exec(...).writeFile(...))`. The builder compiles down to a `StepDef[]` which the core engine executes. Step types are defined by the `StepType` enum (`StepType.ExecCommand`, `StepType.Loop`, etc.). File encoding uses the `Encoding` enum (`Encoding.UTF8`, `Encoding.Base64`). Retry backoff uses the `Backoff` enum (`Backoff.Fixed`, `Backoff.Exponential`).
+**ExecHandle**: `sb.exec("cmd")` returns an `ExecHandle` — a `PromiseLike<ExecResult>` with `pipe()`, `stdout()`, and `result()`. `await sb.exec("cmd")` gives `{ stdout, stderr, exitCode }`. Streaming: `await sb.exec("cmd").pipe(process.stdout)`.
 
-**Async event stream**: `client.run()` returns a `WorkflowRun` which is an `AsyncIterable<WorkflowEvent>`. Callers `for await` over events in real-time as steps execute. Every event is also persisted to the ledger simultaneously. The streaming engine lives in `stream.ts` as a standalone `makeStream()` function. `WorkflowRun.status` tracks `Running → Completed | Failed | Cancelled` as the iterator is consumed.
+**Durable ledger**: Every exec is logged to the adapter as `exec_start` → `exec_event`s → `exec_complete`. `sb.checkpoint()` snapshots the container and writes `checkpoint_created`. On `client.resume(sandboxId)`: restores from the last snapshot, returns cached results for execs completed before the checkpoint, runs the rest live. Invisible to the user.
 
-**Storage adapter**: `DrejClientOptions.adapter` accepts any `IStorageAdapter` implementation — pass `new SQLiteAdapter("./drej.db")` for local dev or `new PostgresAdapter(connectionString)` for production. Call `await client.connect()` before first use; `await client.close()` on shutdown.
+**Lazy workflow layer**: `@drej/workflow` provides `workflow(client).sandbox(opts, fn).pipe(sink)`. The `fn` callback receives a `SandboxBuilder` — all methods queue ops synchronously. The queue is flushed when `.pipe()` or `.result()` is awaited. One `await` at the end regardless of workflow complexity.
 
-**Run management**: `IStorageAdapter` and `DrejClient` expose `listRunDetails(workflowName, opts?)`, `listAllRunDetails(opts?)`, `getRunDetails(workflowName, runId)`, and `deleteRun(workflowName, runId)`. Run details are derived from ledger events via a single SQL aggregation query — no full event scan. `RunStatus` (`Running | Completed | Failed | Cancelled`) and `RunDetails` are exported from both `@drej/core` and `drej`.
+**Storage adapter**: `DrejOptions.adapter` accepts any `IStorageAdapter`. Pass `new SQLiteAdapter("./drej.db")` for local dev or `new PostgresAdapter(connectionString)` for production. Call `await client.connect()` before first use; `await client.close()` on shutdown.
 
-**Concurrency limits**: `DrejClientOptions.maxConcurrency` caps simultaneous workflow runs. `run()` awaits a semaphore slot before starting; the slot is released via a `finally`-wrapped generator when the `WorkflowRun` is exhausted or cancelled. Within a workflow, `parallel()` and `forEach()` accept `{ concurrency: N }` to throttle branch/iteration parallelism using a worker-pool pattern.
+**Concurrency limits**: `DrejOptions.maxConcurrency` caps simultaneous active sandboxes. `client.sandbox()` awaits a semaphore slot; the slot is released when `sb.close()` is called.
 
-**Hooks**: `WorkflowHooks` (in `packages/core/src/workflow.ts`) provides lifecycle callbacks: `onWorkflowStart`, `onStepStart`, `onStepComplete`, `onStepFailed`, `onStepRolledBack`, `onWorkflowComplete`, `onWorkflowFailed`. Pass via `RunOptions.hooks`. Use `otelHooks(tracer)` from `@drej/otel` for OpenTelemetry tracing.
+**Hooks**: `SandboxHooks` provides lifecycle callbacks: `onSandboxCreated`, `onExecStart`, `onExecComplete`, `onCheckpoint`, `onSandboxClosed`, `onSandboxFailed`. Pass via `SandboxOptions.hooks`. Use `otelHooks(tracer)` from `@drej/otel` for OpenTelemetry tracing.
 
-**Saga rollback**: If any step throws, `Workflow.rollback()` runs completed steps in reverse order using their optional `rollback()` method.
+**execd readiness**: OpenSandbox reports a sandbox as "Running" before execd is ready. `resolveExecClient()` calls `getEndpoint()` once (each call returns a different ephemeral proxy port) then polls `listContexts()` until execd responds.
 
-**Resumption**: `Workflow.resumeFromLedger()` reads the last `checkpoint` entry from the ledger to reconstruct completed-step state and restart from the next step. Use `client.resumeRun(name, runId, workflow)` to resume an interrupted run.
-
-**execd readiness**: OpenSandbox reports a sandbox as "Running" before the execd process inside is ready to accept connections. `resolveExecClient()` calls `getEndpoint()` exactly once (each call returns a different ephemeral proxy port) then polls `listContexts()` until execd responds.
-
-**Sandbox entrypoint**: Use `["tail", "-f", "/dev/null"]` as the sandbox entrypoint — `/bin/bash` exits immediately without a TTY, killing the container. The builder sets this automatically.
-
-**`buildStep` is a router, not a monolith**: Each step type has its own builder function in `steps/`. The `buildStep()` factory in `steps/index.ts` delegates to them. Control-flow step builders (`retry`, `conditional`, `loop`, `parallel`, `sequence`) receive `buildStep` as a `BuildStepFn` parameter to avoid a circular import on `steps/index.ts`.
+**Sandbox entrypoint**: Always `["tail", "-f", "/dev/null"]` — `/bin/bash` exits immediately without a TTY, killing the container. `client.sandbox()` sets this automatically.
 
 ## Environment variables
 

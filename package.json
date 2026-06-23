@@ -5,6 +5,7 @@
     "packages/core",
     "packages/opensandbox",
     "packages/sdks/typescript",
+    "packages/workflow",
     "packages/adapters/postgres",
     "packages/adapters/sqlite",
     "packages/adapters/otel",
@@ -14,8 +15,8 @@
   ],
   "scripts": {
     "build": "bunx tsc --project packages/opensandbox/tsconfig.build.json && bunx tsc --project packages/core/tsconfig.build.json && bun run --cwd packages/sdks/typescript build",
-    "typecheck": "bunx tsc --noEmit --strict --project packages/opensandbox/tsconfig.json && bunx tsc --noEmit --strict --project packages/core/tsconfig.json && bunx tsc --noEmit --strict --project packages/sdks/typescript/tsconfig.json && bunx tsc --noEmit --strict --project packages/adapters/postgres/tsconfig.json && bunx tsc --noEmit --strict --project packages/adapters/sqlite/tsconfig.json && bunx tsc --noEmit --strict --project packages/adapters/otel/tsconfig.json",
-    "test": "bun run --cwd packages/core test && bun run --cwd packages/sdks/typescript test && bun run --cwd packages/adapters/sqlite test",
+    "typecheck": "bunx tsc --noEmit --strict --project packages/opensandbox/tsconfig.json && bunx tsc --noEmit --strict --project packages/core/tsconfig.json && bunx tsc --noEmit --strict --project packages/sdks/typescript/tsconfig.json && bunx tsc --noEmit --strict --project packages/workflow/tsconfig.json && bunx tsc --noEmit --strict --project packages/adapters/postgres/tsconfig.json && bunx tsc --noEmit --strict --project packages/adapters/sqlite/tsconfig.json && bunx tsc --noEmit --strict --project packages/adapters/otel/tsconfig.json",
+    "test": "bun run --cwd packages/core test && bun run --cwd packages/sdks/typescript test && bun run --cwd packages/workflow test && bun run --cwd packages/adapters/sqlite test",
     "test:integration": "bun run --cwd tests/integration test"
   },
   "devDependencies": {

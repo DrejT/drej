@@ -1,13 +1,11 @@
 /**
- * Demonstrates two ways to capture sandbox snapshots and replay from them.
+ * Demonstrates checkpoint + resume:
+ *   Pattern A — sb.checkpoint() + client.resume(sandboxId)
  *
- * Pattern A — s.snapshot() inline step (preferred):
- *   Declare the checkpoint directly in the workflow definition.
- *
- * Pattern B — snapshotConfig on client.run() (external):
- *   Snapshot a workflow you didn't write, or snapshot on a cadence.
+ * The first run installs deps and checkpoints. The resume skips the install
+ * (replayed from ledger cache) and runs the test script on the restored container.
  */
-import { Drej, workflow } from "drej";
+import { Drej } from "drej";
 import { SQLiteAdapter } from "@drej/sqlite";
 
 const client = new Drej({
@@ -17,95 +15,62 @@ const client = new Drej({
 });
 await client.connect();
 
-const sandbox = { image: { uri: "python:3.11-slim" }, resourceLimits: { cpu: "1", memory: "512Mi" } };
+const sandboxOpts = {
+  image: "python:3.11-slim",
+  resources: { cpu: "1", memory: "512Mi" },
+  name: "snapshot-replay",
+};
 
 const script = `
-import sys, requests
-r = requests.get("https://httpbin.org/get", timeout=5)
-print(f"Python {sys.version.split()[0]}, status {r.status_code}")
+import sys
+print(f"Python {sys.version.split()[0]}")
 `.trim();
 
 const replayScript = `
-import sys, json, requests
-r = requests.get("https://httpbin.org/json", timeout=5)
-print(f"Python {sys.version.split()[0]} (replay)")
-print(json.dumps(r.json(), indent=2))
+import sys
+print(f"Python {sys.version.split()[0]} (replayed)")
+print("requests is already installed — no pip install needed")
 `.trim();
 
-// ── Pattern A: s.snapshot() inline ───────────────────────────────────────────
+// ── Original run ─────────────────────────────────────────────────────────────
 
-console.log("=== Pattern A: inline s.snapshot() ===\n");
+console.log("=== Original run ===\n");
 
-const WORKFLOW_A = "snapshot-inline";
+const sb = await client.sandbox(sandboxOpts);
+let originalSandboxId: string;
 
-const run1 = await client.run(
-  workflow(WORKFLOW_A).sandbox(sandbox, (s) =>
-    s
-      .exec("pip install -q requests && echo installed")
-      .snapshot()
-      .writeFile("/tmp/script.py", script)
-      .exec("python3 /tmp/script.py"),
-  ),
-);
+try {
+  originalSandboxId = sb.sandboxId;
+  console.log(`Sandbox ID: ${originalSandboxId}`);
 
-console.log(`run: ${run1.id}`);
-for await (const ev of run1) {
-  if (ev.event === "exec_event") {
-    const { type, text } = ev.payload as { type?: string; text?: string };
-    if (type === "stdout" && text) process.stdout.write(text);
-  } else if (ev.event === "snapshot") {
-    console.log(`snapshot: ${(ev.payload as { snapshotId: string }).snapshotId}`);
-  }
+  await sb.exec("pip install -q requests && echo 'installed'").pipe(process.stdout);
+  await sb.checkpoint("after-install");
+  console.log("checkpoint created");
+
+  await sb.writeFile("/tmp/script.py", script);
+  await sb.exec("python3 /tmp/script.py").pipe(process.stdout);
+} finally {
+  await sb.close();
 }
 
-const replay1 = await client.replayFromSnapshot(
-  WORKFLOW_A,
-  run1.id,
-  workflow(WORKFLOW_A).sandbox(
-    { resourceLimits: sandbox.resourceLimits },
-    (s) => s.writeFile("/tmp/script.py", replayScript).exec("python3 /tmp/script.py"),
-  ),
-);
+// ── Resumed run ──────────────────────────────────────────────────────────────
 
-console.log(`\nreplay: ${replay1.id}`);
-await replay1.pipe(process.stdout);
+console.log("\n=== Resumed run ===\n");
 
-// ── Pattern B: snapshotConfig on client.run() ─────────────────────────────────
+const sbResume = await client.resume(originalSandboxId!);
 
-console.log("\n=== Pattern B: snapshotConfig on client.run() ===\n");
+try {
+  console.log(`Resumed sandbox ID: ${sbResume.sandboxId}`);
 
-const WORKFLOW_B = "snapshot-external";
+  // This exec is replayed from cache — returns immediately without running
+  const { stdout } = await sbResume.exec("pip install -q requests && echo 'installed'");
+  console.log("(replayed from cache):", stdout.trim());
 
-const run2 = await client.run(
-  workflow(WORKFLOW_B).sandbox(sandbox, (s) =>
-    s
-      .exec("pip install -q requests && echo installed")
-      .writeFile("/tmp/script.py", script)
-      .exec("python3 /tmp/script.py"),
-  ),
-  { snapshotConfig: { afterSteps: [1] } },
-);
-
-console.log(`run: ${run2.id}`);
-for await (const ev of run2) {
-  if (ev.event === "exec_event") {
-    const { type, text } = ev.payload as { type?: string; text?: string };
-    if (type === "stdout" && text) process.stdout.write(text);
-  } else if (ev.event === "snapshot") {
-    console.log(`snapshot: ${(ev.payload as { snapshotId: string }).snapshotId}`);
-  }
+  // This exec actually runs on the restored container
+  await sbResume.writeFile("/tmp/script.py", replayScript);
+  await sbResume.exec("python3 /tmp/script.py").pipe(process.stdout);
+} finally {
+  await sbResume.close();
 }
-
-const replay2 = await client.replayFromSnapshot(
-  WORKFLOW_B,
-  run2.id,
-  workflow(WORKFLOW_B).sandbox(
-    { resourceLimits: sandbox.resourceLimits },
-    (s) => s.writeFile("/tmp/script.py", replayScript).exec("python3 /tmp/script.py"),
-  ),
-);
-
-console.log(`\nreplay: ${replay2.id}`);
-await replay2.pipe(process.stdout);
 
 await client.close();

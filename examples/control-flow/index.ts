@@ -1,11 +1,13 @@
 /**
- * Demonstrates all control-flow builder methods:
- *   retry    — retries a flaky command with exponential backoff
- *   when     — branches on workflow state
- *   forEach  — iterates a list; item resolves via template literal
- *   parallel — runs branches concurrently inside the same sandbox
+ * Demonstrates @drej/workflow control-flow primitives:
+ *   retry   — retries a flaky command with exponential backoff
+ *   when    — branches based on last exitCode
+ *   forEach — iterates over a list of items
+ *
+ * For multi-sandbox parallelism, use workflow(client).parallel([...]).
  */
-import { Drej, workflow } from "drej";
+import { Drej } from "drej";
+import { workflow } from "@drej/workflow";
 import { SQLiteAdapter } from "@drej/sqlite";
 
 const client = new Drej({
@@ -15,14 +17,15 @@ const client = new Drej({
 });
 await client.connect();
 
-const run = await client.run(
-  workflow("control-flow").sandbox(
-    { image: { uri: "ubuntu:22.04" }, resourceLimits: { cpu: "500m", memory: "512Mi" } },
-    (s) => {
-      s.retry(
+await workflow(client)
+  .sandbox(
+    { image: "ubuntu:22.04", resources: { cpu: "500m", memory: "512Mi" }, name: "control-flow" },
+    (sb) => {
+      // retry — retries a flaky command up to 5 times with exponential backoff
+      sb.retry(
         5,
-        (r) => {
-          r.exec(`
+        (sb) => {
+          sb.exec(`
             R=$((RANDOM % 2))
             if [ $R -eq 0 ]; then echo "[retry] tails — failing"; exit 1; fi
             echo "[retry] heads — success"
@@ -31,28 +34,22 @@ const run = await client.run(
         { delayMs: 200, backoff: "exponential" },
       );
 
-      s.exec("test -f /etc/hostname");
-      s.when(
-        { op: "eq", field: "exitCode", value: 0 },
-        (s) => { s.exec('echo "[when] /etc/hostname exists"'); },
-        (s) => { s.exec('echo "[when] /etc/hostname missing"'); },
+      // when — branch based on the previous exec's exit code
+      sb.exec("test -f /etc/hostname", { strict: false });
+      sb.when(
+        (ctx) => ctx.exitCode === 0,
+        (sb) => { sb.exec('echo "[when] /etc/hostname exists"'); },
+        (sb) => { sb.exec('echo "[when] /etc/hostname missing"'); },
       );
 
-      s.forEach(["alpha.txt", "beta.txt", "gamma.txt"], { as: "filename" }, (s, filename) => {
-        s.exec(`echo "[loop] writing /tmp/${filename}" && echo "hello" > /tmp/${filename}`);
+      // forEach — run a command for each item in a list
+      sb.forEach(["alpha.txt", "beta.txt", "gamma.txt"], (sb, item) => {
+        sb.exec(`echo "[loop] writing /tmp/${item}" && echo hello > /tmp/${item}`);
       });
 
-      s.parallel((p) => {
-        p.branch((b) => { b.exec('sleep 1 && echo "[parallel 0] done"'); });
-        p.branch((b) => { b.exec('sleep 1 && echo "[parallel 1] done"'); });
-      });
-
-      s.exec("ls /tmp/*.txt && echo '[verify] all files present'");
+      sb.exec("ls /tmp/*.txt && echo '[verify] all files present'");
     },
-  ),
-);
-
-console.log(`Run ID: ${run.id}\n`);
-await run.pipe(process.stdout);
+  )
+  .pipe(process.stdout);
 
 await client.close();

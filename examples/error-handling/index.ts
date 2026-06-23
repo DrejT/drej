@@ -1,9 +1,9 @@
 /**
  * Demonstrates error handling patterns:
- *   Pattern A — non-strict exec: non-zero exit puts exitCode in state, use when() to branch
- *   Pattern B — strict exec: non-zero exit throws CommandError
+ *   Pattern A — non-strict exec: check exitCode in result
+ *   Pattern B — strict exec (default): CommandError thrown on non-zero exit
  */
-import { Drej, workflow, CommandError, SandboxError, ExecConnectionError } from "drej";
+import { Drej, CommandError, SandboxError, ExecConnectionError } from "drej";
 import { SQLiteAdapter } from "@drej/sqlite";
 
 const client = new Drej({
@@ -13,33 +13,37 @@ const client = new Drej({
 });
 await client.connect();
 
-console.log("=== Pattern A: non-strict exec with when() branching ===");
-await client.run(
-  workflow("error-handling-a").sandbox(
-    { image: { uri: "debian:bookworm-slim" }, resourceLimits: { cpu: "500m", memory: "256Mi" } },
-    (s) =>
-      s
-        .exec("exit 1")
-        .when(
-          { op: "eq", field: "exitCode", value: 0 },
-          (s) => s.exec("echo success"),
-          (s) => s.exec("echo 'command failed, handled gracefully'"),
-        ),
-  ),
-).pipe(process.stdout);
+const sbA = await client.sandbox({
+  image: "debian:bookworm-slim",
+  resources: { cpu: "500m", memory: "256Mi" },
+  name: "error-handling-a",
+});
 
-console.log("\n=== Pattern B: strict exec — catch CommandError ===");
+console.log("=== Pattern A: non-strict exec with exitCode check ===");
+
 try {
-  await client.run(
-    workflow("error-handling-b").sandbox(
-      { image: { uri: "debian:bookworm-slim" }, resourceLimits: { cpu: "500m", memory: "256Mi" } },
-      (s) =>
-        s
-          .exec("echo 'about to fail'")
-          .exec("exit 42", { strict: true })
-          .exec("echo 'this line never runs'"),
-    ),
-  ).pipe(process.stdout);
+  const { exitCode } = await sbA.exec("exit 1", { strict: false });
+  if (exitCode === 0) {
+    await sbA.exec("echo success").pipe(process.stdout);
+  } else {
+    await sbA.exec("echo 'command failed, handled gracefully'").pipe(process.stdout);
+  }
+} finally {
+  await sbA.close();
+}
+
+const sbB = await client.sandbox({
+  image: "debian:bookworm-slim",
+  resources: { cpu: "500m", memory: "256Mi" },
+  name: "error-handling-b",
+});
+
+console.log("\n=== Pattern B: strict exec (default) — catch CommandError ===");
+
+try {
+  await sbB.exec("echo 'about to fail'").pipe(process.stdout);
+  await sbB.exec("exit 42");  // throws CommandError (strict: true is the default)
+  await sbB.exec("echo 'this line never runs'");
 } catch (e) {
   if (e instanceof CommandError) {
     console.error(`CommandError: exit code ${e.exitCode} — "${e.command}"`);
@@ -50,6 +54,8 @@ try {
   } else {
     throw e;
   }
+} finally {
+  await sbB.close();
 }
 
 await client.close();

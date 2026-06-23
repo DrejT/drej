@@ -1,32 +1,22 @@
-import type { Tracer, Span, SpanStatusCode } from "@opentelemetry/api";
+import type { Tracer, Span } from "@opentelemetry/api";
 import { SpanStatusCode as StatusCode, context, trace } from "@opentelemetry/api";
-import type {
-  WorkflowHooks,
-  StepHookInfo,
-  StepCompleteHookInfo,
-  StepFailedHookInfo,
-  WorkflowCompleteHookInfo,
-  WorkflowFailedHookInfo,
-  WorkflowHookInfo,
-} from "@drej/core";
+import type { SandboxHooks, ExecResult } from "@drej/core";
 
 export interface OtelHooksOptions {
-  /** Include sandbox ID as a span attribute when present in step output. Default: true. */
-  recordSandboxId?: boolean;
-  /** Include exit code as a span attribute on exec_command steps. Default: true. */
+  /** Include exit code as a span attribute on exec spans. Default: true. */
   recordExitCode?: boolean;
 }
 
 /**
- * Returns `WorkflowHooks` that emit OpenTelemetry traces for every workflow run.
+ * Returns `SandboxHooks` that emit OpenTelemetry traces for every sandbox run.
  *
- * Pass the result to `client.run(wf, { hooks: otelHooks(tracer) })`.
+ * Pass the result to `client.sandbox(opts, { hooks: otelHooks(tracer) })`.
  *
  * Span structure:
  * ```
- * workflow.run          ← root span, name = workflow name
- *   workflow.step       ← child per step, name = step type
- *   workflow.step
+ * sandbox.run            ← root span (sandboxId attribute)
+ *   sandbox.exec         ← child per exec (cmd, exitCode, seq)
+ *   sandbox.checkpoint   ← child per checkpoint (snapshotId)
  * ```
  *
  * @example
@@ -35,79 +25,82 @@ export interface OtelHooksOptions {
  * import { trace } from "@opentelemetry/api";
  *
  * const tracer = trace.getTracer("my-app");
- * const run = await client.run(wf, { hooks: otelHooks(tracer) });
+ * const sb = await client.sandbox({ image: "node:22" }, { hooks: otelHooks(tracer) });
  * ```
  */
-export function otelHooks(tracer: Tracer, opts: OtelHooksOptions = {}): WorkflowHooks {
-  const { recordSandboxId = true, recordExitCode = true } = opts;
+export function otelHooks(tracer: Tracer, opts: OtelHooksOptions = {}): SandboxHooks {
+  const { recordExitCode = true } = opts;
 
   let rootSpan: Span | undefined;
   let rootCtx: ReturnType<typeof context.active> | undefined;
-  const stepSpans = new Map<number, Span>();
+  const execSpans = new Map<number, Span>();
 
   return {
-    onWorkflowStart({ workflowName, runId }: WorkflowHookInfo) {
+    onSandboxCreated(sandboxId: string, name: string) {
       rootCtx = context.active();
       rootSpan = tracer.startSpan(
-        "workflow.run",
+        "sandbox.run",
         {
           attributes: {
-            "drej.workflow.name": workflowName,
-            "drej.run.id": runId,
+            "drej.sandbox.id": sandboxId,
+            "drej.sandbox.name": name,
           },
         },
         rootCtx,
       );
     },
 
-    onStepStart({ stepIndex, stepId }: StepHookInfo) {
+    onExecStart(sandboxId: string, seq: number, cmd: string) {
       if (!rootSpan || !rootCtx) return;
       const spanCtx = trace.setSpan(rootCtx, rootSpan);
       const span = tracer.startSpan(
-        "workflow.step",
+        "sandbox.exec",
         {
           attributes: {
-            "drej.step.index": stepIndex,
-            "drej.step.type": stepId,
+            "drej.sandbox.id": sandboxId,
+            "drej.exec.seq": seq,
+            "drej.exec.cmd": cmd,
           },
         },
         spanCtx,
       );
-      stepSpans.set(stepIndex, span);
+      execSpans.set(seq, span);
     },
 
-    onStepComplete({ stepIndex, output }: StepCompleteHookInfo) {
-      const span = stepSpans.get(stepIndex);
+    onExecComplete(_sandboxId: string, seq: number, result: ExecResult) {
+      const span = execSpans.get(seq);
       if (!span) return;
-      if (recordSandboxId) {
-        const sandboxId = (output as Record<string, unknown>)?.sandboxId;
-        if (typeof sandboxId === "string") span.setAttribute("drej.sandbox.id", sandboxId);
-      }
-      if (recordExitCode) {
-        const exitCode = (output as Record<string, unknown>)?.exitCode;
-        if (typeof exitCode === "number") span.setAttribute("process.exit_code", exitCode);
-      }
+      if (recordExitCode) span.setAttribute("process.exit_code", result.exitCode);
+      span.setStatus({ code: result.exitCode === 0 ? StatusCode.OK : StatusCode.ERROR });
+      span.end();
+      execSpans.delete(seq);
+    },
+
+    onCheckpoint(sandboxId: string, snapshotId: string, name?: string) {
+      if (!rootSpan || !rootCtx) return;
+      const spanCtx = trace.setSpan(rootCtx, rootSpan);
+      const span = tracer.startSpan(
+        "sandbox.checkpoint",
+        {
+          attributes: {
+            "drej.sandbox.id": sandboxId,
+            "drej.snapshot.id": snapshotId,
+            ...(name ? { "drej.checkpoint.name": name } : {}),
+          },
+        },
+        spanCtx,
+      );
       span.setStatus({ code: StatusCode.OK });
       span.end();
-      stepSpans.delete(stepIndex);
     },
 
-    onStepFailed({ stepIndex, error }: StepFailedHookInfo) {
-      const span = stepSpans.get(stepIndex);
-      if (!span) return;
-      span.recordException(error);
-      span.setStatus({ code: StatusCode.ERROR, message: error.message });
-      span.end();
-      stepSpans.delete(stepIndex);
-    },
-
-    onWorkflowComplete(_info: WorkflowCompleteHookInfo) {
+    onSandboxClosed(_sandboxId: string) {
       rootSpan?.setStatus({ code: StatusCode.OK });
       rootSpan?.end();
       rootSpan = undefined;
     },
 
-    onWorkflowFailed({ error }: WorkflowFailedHookInfo) {
+    onSandboxFailed(_sandboxId: string, error: Error) {
       rootSpan?.recordException(error);
       rootSpan?.setStatus({ code: StatusCode.ERROR, message: error.message });
       rootSpan?.end();

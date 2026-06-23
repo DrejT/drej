@@ -1,11 +1,11 @@
 /**
- * Demonstrates execCode() for running code directly in the sandbox interpreter.
+ * Demonstrates execCode() for running code in the sandbox interpreter.
  *
  * Two patterns shown:
  *   stateless  — each execCode() call runs in an isolated context
- *   stateful   — calls sharing the same context id see each other's variables
+ *   stateful   — calls sharing the same context ID see each other's variables
  */
-import { Drej, workflow } from "drej";
+import { Drej, CodeLanguage } from "drej";
 import { SQLiteAdapter } from "@drej/sqlite";
 
 const client = new Drej({
@@ -15,33 +15,38 @@ const client = new Drej({
 });
 await client.connect();
 
-const run = await client.run(
-  workflow("exec-code").sandbox(
-    {
-      image: { uri: "opensandbox/code-interpreter" },
-      entrypoint: ["/opt/code-interpreter/code-interpreter.sh"],
-      resourceLimits: { cpu: "500m", memory: "512Mi" },
-    },
-    (s) =>
-      s
-        .execCode(`
+const sb = await client.sandbox({
+  image: "opensandbox/code-interpreter",
+  env: {},
+  name: "exec-code",
+  resources: { cpu: "500m", memory: "512Mi" },
+});
+
+console.log(`Sandbox ID: ${sb.sandboxId}\n`);
+
+const ctx = { id: "session", language: CodeLanguage.Python };
+
+try {
+  // Stateless — isolated context
+  await sb.execCode(`
 import sys, math
 print(f"[stateless] Python {sys.version.split()[0]}")
 print(f"[stateless] pi = {math.pi:.6f}")
-        `.trim())
-        .execCode(`
+  `.trim()).pipe(process.stdout);
+
+  // Stateful — variables persist across calls sharing the same context
+  await sb.execCode(`
 data = [2**i for i in range(8)]
 print(f"[stateful 1] data = {data}")
-        `.trim(), { context: { id: "session", language: "python" } })
-        .execCode(`
+  `.trim(), { context: ctx }).pipe(process.stdout);
+
+  await sb.execCode(`
 total = sum(data)
 print(f"[stateful 2] sum = {total}")
 print(f"[stateful 2] max = {max(data)}")
-        `.trim(), { context: { id: "session", language: "python" } }),
-  ),
-);
-
-console.log(`Run ID: ${run.id}\n`);
-await run.pipe(process.stdout);
+  `.trim(), { context: ctx }).pipe(process.stdout);
+} finally {
+  await sb.close();
+}
 
 await client.close();

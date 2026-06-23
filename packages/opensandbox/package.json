@@ -1,8 +1,15 @@
 {
   "name": "@drej/opensandbox",
   "version": "0.1.3",
-  "main": "./src/index.ts",
-  "types": "./dist/index.d.ts",
+  "type": "module",
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.mts"
+    }
+  },
   "files": [
     "dist"
   ],
@@ -10,11 +17,12 @@
     "access": "public"
   },
   "scripts": {
-    "typecheck": "bunx tsc --noEmit",
-    "build:types": "tsc --project tsconfig.build.json"
+    "build": "tsdown",
+    "typecheck": "bunx tsc --noEmit"
   },
   "devDependencies": {
     "bun-types": "1.3.14",
+    "tsdown": "0.22.3",
     "typescript": "6.0.3"
   }
 }

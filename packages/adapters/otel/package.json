@@ -1,10 +1,24 @@
 {
   "name": "@drej/otel",
   "version": "0.1.1",
+  "type": "module",
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.mts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
   "publishConfig": {
     "access": "public"
   },
-  "main": "./src/index.ts",
+  "scripts": {
+    "build": "tsdown"
+  },
   "peerDependencies": {
     "@opentelemetry/api": "^1.0.0"
   },
@@ -14,6 +28,7 @@
   "devDependencies": {
     "@opentelemetry/api": "1.9.1",
     "bun-types": "1.3.14",
+    "tsdown": "0.22.3",
     "typescript": "6.0.3"
   }
 }

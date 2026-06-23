@@ -7,6 +7,7 @@
   },
   "dependencies": {
     "drej": "workspace:*",
+    "@drej/workflow": "workspace:*",
     "@drej/sqlite": "workspace:*"
   }
 }

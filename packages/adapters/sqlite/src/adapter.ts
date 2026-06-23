@@ -1,11 +1,11 @@
 import { Database } from "bun:sqlite";
-import type { IStorageAdapter, LedgerEntry, LedgerEvent, RunDetails, ListRunsOptions } from "@drej/core";
-import { RunStatus } from "@drej/core";
+import type { IStorageAdapter, LedgerEntry, LedgerEvent, SandboxDetails, ListSandboxOptions } from "@drej/core";
+import { SandboxStatus } from "@drej/core";
 import { MIGRATION_SQL } from "./migrations";
 
 type Row = {
-  run_id: string;
-  wf_name: string;
+  sandbox_id: string;
+  name: string;
   step_idx: number;
   branch: number | null;
   event: string;
@@ -15,51 +15,42 @@ type Row = {
 };
 
 type AggRow = {
-  wf_name: string;
-  run_id: string;
+  name: string;
+  sandbox_id: string;
   started_at: number | null;
   completed_at: number | null;
-  terminal_event: string | null;
-  error_msg: string | null;
-  step_count: number;
+  is_closed: number;
+  exec_count: number;
 };
 
 const AGG_SQL = (whereClause: string) => `
   WITH agg AS (
     SELECT
-      wf_name,
-      run_id,
-      MIN(CASE WHEN event = 'run_started' THEN ts END) AS started_at,
-      MAX(CASE WHEN event IN ('workflow_complete', 'workflow_failed') THEN ts END) AS completed_at,
-      MAX(CASE WHEN event IN ('workflow_complete', 'workflow_failed') THEN event END) AS terminal_event,
-      MAX(CASE WHEN event = 'workflow_failed' THEN error END) AS error_msg,
-      CAST(COUNT(CASE WHEN event = 'step_complete' THEN 1 END) AS INTEGER) AS step_count
+      name,
+      sandbox_id,
+      MIN(CASE WHEN event = 'sandbox_created' THEN ts END) AS started_at,
+      MAX(CASE WHEN event = 'sandbox_closed'  THEN ts END) AS completed_at,
+      MAX(CASE WHEN event = 'sandbox_closed'  THEN 1 ELSE 0 END) AS is_closed,
+      CAST(COUNT(CASE WHEN event = 'exec_complete' THEN 1 END) AS INTEGER) AS exec_count
     FROM drej_events
     ${whereClause}
-    GROUP BY wf_name, run_id
+    GROUP BY name, sandbox_id
   )
   SELECT * FROM agg WHERE started_at IS NOT NULL ORDER BY started_at DESC
 `;
 
-function terminalToStatus(event: string | null): RunStatus {
-  if (event === "workflow_complete") return RunStatus.Completed;
-  if (event === "workflow_failed") return RunStatus.Failed;
-  return RunStatus.Running;
-}
-
-function aggRowToDetails(row: AggRow): RunDetails {
+function aggRowToDetails(row: AggRow): SandboxDetails {
   return {
-    workflowName: row.wf_name,
-    runId: row.run_id,
-    status: terminalToStatus(row.terminal_event),
+    name: row.name,
+    sandboxId: row.sandbox_id,
+    status: row.is_closed ? SandboxStatus.Completed : SandboxStatus.Running,
     startedAt: row.started_at!,
     completedAt: row.completed_at ?? undefined,
-    stepCount: row.step_count,
-    error: row.error_msg ?? undefined,
+    execCount: row.exec_count,
   };
 }
 
-function applyOpts(details: RunDetails[], opts?: ListRunsOptions): RunDetails[] {
+function applyOpts(details: SandboxDetails[], opts?: ListSandboxOptions): SandboxDetails[] {
   let result = details;
   if (opts?.before != null) result = result.filter((d) => d.startedAt < opts.before!);
   if (opts?.status != null) result = result.filter((d) => d.status === opts.status);
@@ -69,8 +60,8 @@ function applyOpts(details: RunDetails[], opts?: ListRunsOptions): RunDetails[] 
 
 function rowToEntry(row: Row): LedgerEntry {
   return {
-    runId: row.run_id,
-    workflowName: row.wf_name,
+    sandboxId: row.sandbox_id,
+    name: row.name,
     stepIndex: row.step_idx,
     branch: row.branch ?? undefined,
     event: row.event as LedgerEvent,
@@ -100,12 +91,12 @@ export class SQLiteAdapter implements IStorageAdapter {
   async append(entry: LedgerEntry): Promise<void> {
     this.db
       .prepare(
-        `INSERT INTO drej_events (run_id, wf_name, step_idx, branch, event, payload, error, ts)
+        `INSERT INTO drej_events (sandbox_id, name, step_idx, branch, event, payload, error, ts)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
-        entry.runId,
-        entry.workflowName,
+        entry.sandboxId,
+        entry.name,
         entry.stepIndex,
         entry.branch ?? null,
         entry.event,
@@ -115,53 +106,53 @@ export class SQLiteAdapter implements IStorageAdapter {
       );
   }
 
-  async readAll(workflowName: string, runId: string): Promise<LedgerEntry[]> {
+  async readAll(name: string, sandboxId: string): Promise<LedgerEntry[]> {
     const rows = this.db
       .prepare<Row, [string, string]>(
-        `SELECT run_id, wf_name, step_idx, branch, event, payload, error, ts
+        `SELECT sandbox_id, name, step_idx, branch, event, payload, error, ts
          FROM drej_events
-         WHERE wf_name = ? AND run_id = ?
+         WHERE name = ? AND sandbox_id = ?
          ORDER BY ts ASC`,
       )
-      .all(workflowName, runId);
+      .all(name, sandboxId);
     return rows.map(rowToEntry);
   }
 
-  async lastCheckpoint(workflowName: string, runId: string): Promise<LedgerEntry | null> {
+  async lastCheckpoint(name: string, sandboxId: string): Promise<LedgerEntry | null> {
     const row = this.db
       .prepare<Row, [string, string]>(
-        `SELECT run_id, wf_name, step_idx, branch, event, payload, error, ts
+        `SELECT sandbox_id, name, step_idx, branch, event, payload, error, ts
          FROM drej_events
-         WHERE wf_name = ? AND run_id = ? AND event = 'checkpoint'
+         WHERE name = ? AND sandbox_id = ? AND event = 'checkpoint_created'
          ORDER BY ts DESC
          LIMIT 1`,
       )
-      .get(workflowName, runId);
+      .get(name, sandboxId);
     return row ? rowToEntry(row) : null;
   }
 
-  async listRunDetails(workflowName: string, opts?: ListRunsOptions): Promise<RunDetails[]> {
+  async listSandboxDetails(name: string, opts?: ListSandboxOptions): Promise<SandboxDetails[]> {
     const rows = this.db
-      .prepare<AggRow, [string]>(AGG_SQL("WHERE wf_name = ?"))
-      .all(workflowName);
+      .prepare<AggRow, [string]>(AGG_SQL("WHERE name = ?"))
+      .all(name);
     return applyOpts(rows.map(aggRowToDetails), opts);
   }
 
-  async listAllRunDetails(opts?: ListRunsOptions): Promise<RunDetails[]> {
+  async listAllSandboxDetails(opts?: ListSandboxOptions): Promise<SandboxDetails[]> {
     const rows = this.db.prepare<AggRow, []>(AGG_SQL("")).all();
     return applyOpts(rows.map(aggRowToDetails), opts);
   }
 
-  async getRunDetails(workflowName: string, runId: string): Promise<RunDetails | null> {
+  async getSandboxDetails(name: string, sandboxId: string): Promise<SandboxDetails | null> {
     const row = this.db
-      .prepare<AggRow, [string, string]>(AGG_SQL("WHERE wf_name = ? AND run_id = ?"))
-      .get(workflowName, runId);
+      .prepare<AggRow, [string, string]>(AGG_SQL("WHERE name = ? AND sandbox_id = ?"))
+      .get(name, sandboxId);
     return row ? aggRowToDetails(row) : null;
   }
 
-  async deleteRun(workflowName: string, runId: string): Promise<void> {
+  async deleteSandbox(name: string, sandboxId: string): Promise<void> {
     this.db
-      .prepare<void, [string, string]>(`DELETE FROM drej_events WHERE wf_name = ? AND run_id = ?`)
-      .run(workflowName, runId);
+      .prepare<void, [string, string]>(`DELETE FROM drej_events WHERE name = ? AND sandbox_id = ?`)
+      .run(name, sandboxId);
   }
 }

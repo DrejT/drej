@@ -1,11 +1,11 @@
 import postgres from "postgres";
-import type { IStorageAdapter, LedgerEntry, LedgerEvent, RunDetails, ListRunsOptions } from "@drej/core";
-import { RunStatus } from "@drej/core";
+import type { IStorageAdapter, LedgerEntry, LedgerEvent, SandboxDetails, ListSandboxOptions } from "@drej/core";
+import { SandboxStatus } from "@drej/core";
 import { MIGRATION_SQL } from "./migrations";
 
 type Row = {
-  run_id: string;
-  wf_name: string;
+  sandbox_id: string;
+  name: string;
   step_idx: number;
   branch: number | null;
   event: string;
@@ -15,34 +15,26 @@ type Row = {
 };
 
 type AggRow = {
-  wf_name: string;
-  run_id: string;
+  name: string;
+  sandbox_id: string;
   started_at: string | null;
   completed_at: string | null;
-  terminal_event: string | null;
-  error_msg: string | null;
-  step_count: string;
+  is_closed: string;
+  exec_count: string;
 };
 
-function terminalToStatus(event: string | null): RunStatus {
-  if (event === "workflow_complete") return RunStatus.Completed;
-  if (event === "workflow_failed") return RunStatus.Failed;
-  return RunStatus.Running;
-}
-
-function aggRowToDetails(row: AggRow): RunDetails {
+function aggRowToDetails(row: AggRow): SandboxDetails {
   return {
-    workflowName: row.wf_name,
-    runId: row.run_id,
-    status: terminalToStatus(row.terminal_event),
+    name: row.name,
+    sandboxId: row.sandbox_id,
+    status: Number(row.is_closed) ? SandboxStatus.Completed : SandboxStatus.Running,
     startedAt: Number(row.started_at),
     completedAt: row.completed_at != null ? Number(row.completed_at) : undefined,
-    stepCount: Number(row.step_count),
-    error: row.error_msg ?? undefined,
+    execCount: Number(row.exec_count),
   };
 }
 
-function applyOpts(details: RunDetails[], opts?: ListRunsOptions): RunDetails[] {
+function applyOpts(details: SandboxDetails[], opts?: ListSandboxOptions): SandboxDetails[] {
   let result = details;
   if (opts?.before != null) result = result.filter((d) => d.startedAt < opts.before!);
   if (opts?.status != null) result = result.filter((d) => d.status === opts.status);
@@ -52,8 +44,8 @@ function applyOpts(details: RunDetails[], opts?: ListRunsOptions): RunDetails[] 
 
 function rowToEntry(row: Row): LedgerEntry {
   return {
-    runId: row.run_id,
-    workflowName: row.wf_name,
+    sandboxId: row.sandbox_id,
+    name: row.name,
     stepIndex: row.step_idx,
     branch: row.branch ?? undefined,
     event: row.event as LedgerEvent,
@@ -80,10 +72,10 @@ export class PostgresAdapter implements IStorageAdapter {
 
   async append(entry: LedgerEntry): Promise<void> {
     await this.sql`
-      INSERT INTO drej_events (run_id, wf_name, step_idx, branch, event, payload, error, ts)
+      INSERT INTO drej_events (sandbox_id, name, step_idx, branch, event, payload, error, ts)
       VALUES (
-        ${entry.runId},
-        ${entry.workflowName},
+        ${entry.sandboxId},
+        ${entry.name},
         ${entry.stepIndex},
         ${entry.branch ?? null},
         ${entry.event},
@@ -94,21 +86,21 @@ export class PostgresAdapter implements IStorageAdapter {
     `;
   }
 
-  async readAll(workflowName: string, runId: string): Promise<LedgerEntry[]> {
+  async readAll(name: string, sandboxId: string): Promise<LedgerEntry[]> {
     const rows = await this.sql<Row[]>`
-      SELECT run_id, wf_name, step_idx, branch, event, payload, error, ts
+      SELECT sandbox_id, name, step_idx, branch, event, payload, error, ts
       FROM drej_events
-      WHERE wf_name = ${workflowName} AND run_id = ${runId}
+      WHERE name = ${name} AND sandbox_id = ${sandboxId}
       ORDER BY ts ASC
     `;
     return rows.map(rowToEntry);
   }
 
-  async lastCheckpoint(workflowName: string, runId: string): Promise<LedgerEntry | null> {
+  async lastCheckpoint(name: string, sandboxId: string): Promise<LedgerEntry | null> {
     const rows = await this.sql<Row[]>`
-      SELECT run_id, wf_name, step_idx, branch, event, payload, error, ts
+      SELECT sandbox_id, name, step_idx, branch, event, payload, error, ts
       FROM drej_events
-      WHERE wf_name = ${workflowName} AND run_id = ${runId} AND event = 'checkpoint'
+      WHERE name = ${name} AND sandbox_id = ${sandboxId} AND event = 'checkpoint_created'
       ORDER BY ts DESC
       LIMIT 1
     `;
@@ -119,38 +111,37 @@ export class PostgresAdapter implements IStorageAdapter {
     return this.sql.unsafe<AggRow[]>(
       `WITH agg AS (
         SELECT
-          wf_name,
-          run_id,
-          MIN(CASE WHEN event = 'run_started' THEN ts END) AS started_at,
-          MAX(CASE WHEN event IN ('workflow_complete', 'workflow_failed') THEN ts END) AS completed_at,
-          MAX(CASE WHEN event IN ('workflow_complete', 'workflow_failed') THEN event END) AS terminal_event,
-          MAX(CASE WHEN event = 'workflow_failed' THEN error END) AS error_msg,
-          COUNT(CASE WHEN event = 'step_complete' THEN 1 END)::int AS step_count
+          name,
+          sandbox_id,
+          MIN(CASE WHEN event = 'sandbox_created' THEN ts END) AS started_at,
+          MAX(CASE WHEN event = 'sandbox_closed'  THEN ts END) AS completed_at,
+          MAX(CASE WHEN event = 'sandbox_closed'  THEN 1 ELSE 0 END)::int AS is_closed,
+          COUNT(CASE WHEN event = 'exec_complete' THEN 1 END)::int AS exec_count
         FROM drej_events
         ${whereClause}
-        GROUP BY wf_name, run_id
+        GROUP BY name, sandbox_id
       )
       SELECT * FROM agg WHERE started_at IS NOT NULL ORDER BY started_at DESC`,
       params,
     );
   }
 
-  async listRunDetails(workflowName: string, opts?: ListRunsOptions): Promise<RunDetails[]> {
-    const rows = await this._aggQuery("WHERE wf_name = $1", [workflowName]);
+  async listSandboxDetails(name: string, opts?: ListSandboxOptions): Promise<SandboxDetails[]> {
+    const rows = await this._aggQuery("WHERE name = $1", [name]);
     return applyOpts(rows.map(aggRowToDetails), opts);
   }
 
-  async listAllRunDetails(opts?: ListRunsOptions): Promise<RunDetails[]> {
+  async listAllSandboxDetails(opts?: ListSandboxOptions): Promise<SandboxDetails[]> {
     const rows = await this._aggQuery("", []);
     return applyOpts(rows.map(aggRowToDetails), opts);
   }
 
-  async getRunDetails(workflowName: string, runId: string): Promise<RunDetails | null> {
-    const rows = await this._aggQuery("WHERE wf_name = $1 AND run_id = $2", [workflowName, runId]);
+  async getSandboxDetails(name: string, sandboxId: string): Promise<SandboxDetails | null> {
+    const rows = await this._aggQuery("WHERE name = $1 AND sandbox_id = $2", [name, sandboxId]);
     return rows.length ? aggRowToDetails(rows[0]) : null;
   }
 
-  async deleteRun(workflowName: string, runId: string): Promise<void> {
-    await this.sql`DELETE FROM drej_events WHERE wf_name = ${workflowName} AND run_id = ${runId}`;
+  async deleteSandbox(name: string, sandboxId: string): Promise<void> {
+    await this.sql`DELETE FROM drej_events WHERE name = ${name} AND sandbox_id = ${sandboxId}`;
   }
 }

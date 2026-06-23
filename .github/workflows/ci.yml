@@ -20,8 +20,8 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Build workspace declarations
-        run: bunx tsc --project packages/opensandbox/tsconfig.build.json && bunx tsc --project packages/core/tsconfig.build.json
+      - name: Build all packages
+        run: bun run build
 
       - name: Typecheck opensandbox
         run: bunx tsc --noEmit --strict
@@ -35,6 +35,10 @@ jobs:
         run: bunx tsc --noEmit --strict
         working-directory: packages/sdks/typescript
 
+      - name: Typecheck workflow
+        run: bunx tsc --noEmit --strict
+        working-directory: packages/workflow
+
       - name: Typecheck postgres adapter
         run: bunx tsc --noEmit --strict
         working-directory: packages/adapters/postgres
@@ -42,6 +46,10 @@ jobs:
       - name: Typecheck sqlite adapter
         run: bunx tsc --noEmit --strict
         working-directory: packages/adapters/sqlite
+
+      - name: Typecheck otel adapter
+        run: bunx tsc --noEmit --strict
+        working-directory: packages/adapters/otel
 
   test:
     name: Tests
@@ -56,8 +64,8 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Build workspace declarations
-        run: bunx tsc --project packages/opensandbox/tsconfig.build.json && bunx tsc --project packages/core/tsconfig.build.json
+      - name: Build all packages
+        run: bun run build
 
       - name: Run tests
         run: bun run test
@@ -75,7 +83,7 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Build SDK
+      - name: Build all packages
         run: bun run build
 
   changeset:

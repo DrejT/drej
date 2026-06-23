@@ -1,8 +1,7 @@
 /**
- * Demonstrates exec() with { capture: true } — storing stdout in workflow state
- * so it can be interpolated into subsequent steps or read back after the run.
+ * Demonstrates capturing exec stdout and using it in subsequent steps.
  */
-import { Drej, workflow } from "drej";
+import { Drej } from "drej";
 import { SQLiteAdapter } from "@drej/sqlite";
 
 const client = new Drej({
@@ -12,31 +11,34 @@ const client = new Drej({
 });
 await client.connect();
 
-let nodeVersionKey: string, infoKey: string;
+const sb = await client.sandbox({
+  image: "node:20-slim",
+  resources: { cpu: "500m", memory: "256Mi" },
+  name: "capture-demo",
+});
 
-const { output, state } = await client.run(
-  workflow("capture-demo").sandbox(
-    { image: { uri: "node:20-slim" }, resourceLimits: { cpu: "500m", memory: "256Mi" } },
-    (s) => {
-      const nodeVersion = s.exec("node -e \"process.stdout.write(process.version)\"", { capture: true });
-      nodeVersionKey = nodeVersion.key;
+console.log(`Sandbox ID: ${sb.sandboxId}`);
 
-      s.exec(`echo "Running on Node ${nodeVersion}"`);
+try {
+  const { stdout: nodeVersion } = await sb.exec(
+    "node -e \"process.stdout.write(process.version)\"",
+  );
 
-      s.exec("echo '{\"node\":\"'\"$NODE_VERSION\"'\"}' > /tmp/info.json", {
-        envs: { NODE_VERSION: `${nodeVersion}` },
-      });
+  await sb.exec(`echo "Running on Node ${nodeVersion.trim()}"`, { strict: false });
 
-      const info = s.exec("cat /tmp/info.json", { capture: true });
-      infoKey = info.key;
-      s.exec(`echo "Captured JSON: ${info}"`);
-    },
-  ),
-).result();
+  await sb.writeFile(
+    "/tmp/info.json",
+    JSON.stringify({ node: nodeVersion.trim(), capturedAt: new Date().toISOString() }),
+  );
 
-console.log(output);
-console.log("--- captured state ---");
-console.log("nodeVersion:", state[nodeVersionKey!]);
-console.log("info:", state[infoKey!]);
+  const infoJson = await sb.readFile("/tmp/info.json");
+  await sb.exec(`echo "Captured JSON: ${infoJson}"`).pipe(process.stdout);
+
+  console.log("\n--- captured state ---");
+  console.log("nodeVersion:", nodeVersion.trim());
+  console.log("info:", infoJson);
+} finally {
+  await sb.close();
+}
 
 await client.close();

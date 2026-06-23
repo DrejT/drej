@@ -1,8 +1,7 @@
 /**
- * Demonstrates readFile() — reading a file from the sandbox into workflow state
- * for interpolation in later steps or inspection after the run completes.
+ * Demonstrates readFile() — reading a file from the sandbox.
  */
-import { Drej, workflow } from "drej";
+import { Drej } from "drej";
 import { SQLiteAdapter } from "@drej/sqlite";
 
 const client = new Drej({
@@ -12,28 +11,27 @@ const client = new Drej({
 });
 await client.connect();
 
-let versionKey: string, reportKey: string;
+const sb = await client.sandbox({
+  image: "node:20-slim",
+  resources: { cpu: "500m", memory: "256Mi" },
+  name: "read-file-demo",
+});
 
-const { output, state } = await client.run(
-  workflow("read-file-demo").sandbox(
-    { image: { uri: "node:20-slim" }, resourceLimits: { cpu: "500m", memory: "256Mi" } },
-    (s) => {
-      s.exec("node -e \"require('fs').writeFileSync('/tmp/version.txt', process.version)\"");
-      const version = s.readFile("/tmp/version.txt");
-      versionKey = version.key;
-      s.exec(`echo "Node version from file: ${version}"`);
+console.log(`Sandbox ID: ${sb.sandboxId}`);
 
-      s.writeFile("/tmp/report.json", JSON.stringify({ capturedAt: new Date().toISOString() }));
-      const report = s.readFile("/tmp/report.json");
-      reportKey = report.key;
-      s.exec(`echo "Report: ${report}"`);
-    },
-  ),
-).result();
+try {
+  await sb.exec("node -e \"require('fs').writeFileSync('/tmp/version.txt', process.version)\"");
+  const version = await sb.readFile("/tmp/version.txt");
+  await sb.exec(`echo "Node version from file: ${version}"`).pipe(process.stdout);
 
-console.log(output);
-console.log("--- captured state ---");
-console.log("version:", state[versionKey!]);
-console.log("report:", state[reportKey!]);
+  await sb.writeFile("/tmp/report.json", JSON.stringify({ capturedAt: new Date().toISOString() }));
+  const report = await sb.readFile("/tmp/report.json");
+
+  console.log("\n--- captured state ---");
+  console.log("version:", version.trim());
+  console.log("report:", report);
+} finally {
+  await sb.close();
+}
 
 await client.close();

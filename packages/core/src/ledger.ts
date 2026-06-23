@@ -1,37 +1,53 @@
-/** Status of a workflow run derived from its ledger events. */
-export enum RunStatus {
+/** Status of a sandbox session derived from its ledger events. */
+export enum SandboxStatus {
   Running   = "running",
   Completed = "completed",
   Failed    = "failed",
   Cancelled = "cancelled",
 }
 
-/** Derived metadata for a workflow run, computed from its ledger events. */
-export interface RunDetails {
-  workflowName: string;
-  runId: string;
-  status: RunStatus;
-  /** Unix timestamp (ms) of the `run_started` event. */
+/** Derived metadata for a sandbox session, computed from its ledger events. */
+export interface SandboxDetails {
+  /** User-provided name (or auto-generated). */
+  name: string;
+  sandboxId: string;
+  status: SandboxStatus;
+  /** Unix timestamp (ms) of the `sandbox_created` event. */
   startedAt: number;
-  /** Unix timestamp (ms) of the terminal event, if the run has ended. */
+  /** Unix timestamp (ms) of the `sandbox_closed` event, if the session has ended. */
   completedAt?: number;
-  /** Number of steps that completed successfully. */
-  stepCount: number;
+  /** Number of exec() calls that completed. */
+  execCount: number;
   /** Error message, present when status is `Failed`. */
   error?: string;
 }
 
-/** Options for filtering run listings. */
-export interface ListRunsOptions {
-  status?: RunStatus;
+/** Options for filtering session listings. */
+export interface ListSandboxOptions {
+  status?: SandboxStatus;
   /** Max number of results to return. */
   limit?: number;
-  /** Return only runs that started before this Unix timestamp (ms). */
+  /** Return only sessions that started before this Unix timestamp (ms). */
   before?: number;
 }
 
-/** Events emitted during workflow execution and stored in the ledger. */
+/** Events emitted during execution and stored in the ledger. */
 export enum LedgerEvent {
+  // ── Sandbox substrate events ──────────────────────────────────────────────
+  /** Emitted when a sandbox is created and reaches Running state. */
+  SandboxCreated = "sandbox_created",
+  /** Emitted at the start of each exec() or execCode() call. */
+  ExecStart = "exec_start",
+  /** Streaming output chunk from exec() or execCode(). */
+  ExecEvent = "exec_event",
+  /** Emitted when an exec() or execCode() call completes. */
+  ExecComplete = "exec_complete",
+  /** Emitted when checkpoint() captures a snapshot. */
+  CheckpointCreated = "checkpoint_created",
+  /** Emitted when a sandbox is closed. */
+  SandboxClosed = "sandbox_closed",
+
+  // ── Workflow layer events (used by @drej/workflow) ────────────────────────
   /** Emitted once when a workflow run starts, before any steps execute. */
   RunStarted = "run_started",
   /** Emitted at the beginning of each step. */
@@ -48,19 +64,18 @@ export enum LedgerEvent {
   WorkflowFailed = "workflow_failed",
   /** Durable resumption point written after each successful step. */
   Checkpoint = "checkpoint",
-  /** Streaming output chunk from `exec()` or `execCode()`. */
-  ExecEvent = "exec_event",
   /** Emitted when a sandbox snapshot is captured mid-run. */
   Snapshot = "snapshot",
 }
 
-/** A single event record written to the storage adapter during a workflow run. */
+/** A single event record written to the storage adapter during a session. */
 export interface LedgerEntry {
   /** Unix timestamp in milliseconds. */
   ts: number;
-  workflowName: string;
-  runId: string;
-  /** Zero-based index of the step that produced this event. `-1` for run-level events. */
+  /** Sandbox session name. */
+  name: string;
+  sandboxId: string;
+  /** Zero-based index of the step that produced this event. `-1` for session-level events. */
   stepIndex: number;
   /** Parallel branch index, when this step is inside a `parallel()` block. */
   branch?: number;
@@ -72,7 +87,7 @@ export interface LedgerEntry {
 }
 
 /**
- * Persistence interface for workflow event storage.
+ * Persistence interface for session event storage.
  *
  * Implement this interface to plug in any storage backend. drej ships two
  * official implementations: `@drej/sqlite` (local dev, zero infra) and
@@ -90,18 +105,18 @@ export interface IStorageAdapter {
   connect?(): Promise<void>;
   /** Release connections and resources. Call on graceful shutdown. */
   close?(): Promise<void>;
-  /** Persist a single ledger event. Called automatically during workflow execution. */
+  /** Persist a single ledger event. Called automatically during execution. */
   append(entry: LedgerEntry): Promise<void>;
-  /** Return all events for a specific run, in ascending timestamp order. */
-  readAll(workflowName: string, runId: string): Promise<LedgerEntry[]>;
-  /** Return the most recent checkpoint entry for a run, or `null` if none exists. */
-  lastCheckpoint(workflowName: string, runId: string): Promise<LedgerEntry | null>;
-  /** Return details for all runs of a workflow, newest first. */
-  listRunDetails(workflowName: string, opts?: ListRunsOptions): Promise<RunDetails[]>;
-  /** Return details for runs across all workflows, newest first. */
-  listAllRunDetails(opts?: ListRunsOptions): Promise<RunDetails[]>;
-  /** Return details for a single run, or `null` if not found. */
-  getRunDetails(workflowName: string, runId: string): Promise<RunDetails | null>;
-  /** Delete all ledger events for a run. */
-  deleteRun(workflowName: string, runId: string): Promise<void>;
+  /** Return all events for a specific session, in ascending timestamp order. */
+  readAll(name: string, sandboxId: string): Promise<LedgerEntry[]>;
+  /** Return the most recent checkpoint entry for a session, or `null` if none exists. */
+  lastCheckpoint(name: string, sandboxId: string): Promise<LedgerEntry | null>;
+  /** Return details for all sessions with a given name, newest first. */
+  listSandboxDetails(name: string, opts?: ListSandboxOptions): Promise<SandboxDetails[]>;
+  /** Return details for sessions across all names, newest first. */
+  listAllSandboxDetails(opts?: ListSandboxOptions): Promise<SandboxDetails[]>;
+  /** Return details for a single session, or `null` if not found. */
+  getSandboxDetails(name: string, sandboxId: string): Promise<SandboxDetails | null>;
+  /** Delete all ledger events for a session. */
+  deleteSandbox(name: string, sandboxId: string): Promise<void>;
 }

@@ -1,4 +1,4 @@
-import { Drej, workflow } from "drej";
+import { Drej } from "drej";
 import { SQLiteAdapter } from "@drej/sqlite";
 
 const client = new Drej({
@@ -8,14 +8,18 @@ const client = new Drej({
 });
 await client.connect();
 
-const run = await client.run(
-  workflow("hello-world").sandbox(
-    { image: { uri: "ubuntu:22.04" }, resourceLimits: { cpu: "500m", memory: "512Mi" } },
-    (s) => s.exec('echo "hello world"'),
-  ),
-);
+const sb = await client.sandbox({
+  image: "ubuntu:22.04",
+  resources: { cpu: "500m", memory: "512Mi" },
+  name: "hello-world",
+});
 
-console.log(`Run ID: ${run.id}`);
-await run.pipe(process.stdout);
+console.log(`Sandbox ID: ${sb.sandboxId}`);
+
+try {
+  await sb.exec('echo "hello world"').pipe(process.stdout);
+} finally {
+  await sb.close();
+}
 
 await client.close();

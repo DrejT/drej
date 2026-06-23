@@ -1,68 +1,32 @@
 import {
-  Workflow,
+  Sandbox,
   LedgerEvent,
-  StepType,
-  buildStep,
-  mergeHooks,
-  shouldSnapshot,
-  waitForSnapshot,
-  type WorkflowDeps,
-  type WorkflowHooks,
+  SandboxStatus,
   type IStorageAdapter,
-  type SnapshotConfig,
-  type StepDef,
-  type RunDetails,
-  type ListRunsOptions,
-} from "@drej/core";
-export { WorkflowError, SandboxError, ExecConnectionError, CommandError, StepTimeoutError, WorkflowStatus, RunStatus, StepType, Encoding, Backoff } from "@drej/core";
-export type {
-  WorkflowHooks,
-  WorkflowHookInfo,
-  StepHookInfo,
-  StepCompleteHookInfo,
-  StepFailedHookInfo,
-  WorkflowCompleteHookInfo,
-  WorkflowFailedHookInfo,
-  RunDetails,
-  ListRunsOptions,
+  type SandboxDetails,
+  type ListSandboxOptions,
+  type ExecResult,
+  type SandboxHooks,
 } from "@drej/core";
 import {
   ControlClient,
   SandboxState,
-  type Sandbox,
-  type CreateSandboxOptions,
-  type ListSandboxesOptions,
-  type Snapshot,
-  type ListSnapshotsOptions,
-  type DiagnosticLog,
-  type DiagnosticEvent,
 } from "@drej/opensandbox";
-import { DrejError, RunHandle, WorkflowRun, type DrejOptions, type RunOptions, type WorkflowEvent } from "./types";
-import { makeStream } from "./stream";
-import type { WorkflowBuilder } from "./builder/index";
 
-export { LedgerEvent };
-export type { LedgerEntry, SnapshotConfig, StepDef, IStorageAdapter } from "@drej/core";
-export type {
-  Sandbox,
-  CreateSandboxOptions,
-  ListSandboxesOptions,
-  Snapshot,
-  ListSnapshotsOptions,
-  DiagnosticLog,
-  DiagnosticEvent,
-} from "@drej/opensandbox";
-export { SandboxState, SnapshotState, SSEEventType } from "@drej/opensandbox";
-export type { SandboxStatus, Resources, ImageSpec, ImageAuth } from "@drej/opensandbox";
-export { DrejError, RunHandle, WorkflowRun, type DrejOptions, type RunOptions, type WorkflowEvent } from "./types";
+import { DrejError, type DrejOptions, type SandboxOptions } from "./types";
+
+export { Sandbox } from "@drej/core";
+export type { ExecHandle, ExecResult, ExecOptions, ExecCodeOptions } from "@drej/core";
+export { LedgerEvent, SandboxStatus, SandboxError, ExecConnectionError, CommandError, StepTimeoutError } from "@drej/core";
+export type { IStorageAdapter, SandboxDetails, ListSandboxOptions, LedgerEntry } from "@drej/core";
+export { DrejError, type DrejOptions, type SandboxOptions } from "./types";
 
 /**
- * Main entry point for drej. Manages workflow execution, sandbox lifecycle,
- * snapshots, and run history.
+ * Main entry point for drej. Manages sandbox lifecycle and session history.
  *
  * @example
  * ```ts
- * import { Drej, workflow } from "drej";
+ * import { Drej } from "drej";
  * import { SQLiteAdapter } from "@drej/sqlite";
  *
  * const client = new Drej({
@@ -71,342 +35,253 @@ export { DrejError, RunHandle, WorkflowRun, type DrejOptions, type RunOptions, t
  * });
  * await client.connect();
  *
- * const run = await client.run(
- *   workflow("hello").sandbox({ image: { uri: "node:20-slim" } }, (s) =>
- *     s.exec("node -e 'console.log(\"hello\")'"),
- *   ),
- * );
- * await run.pipe(process.stdout);
+ * const sb = await client.sandbox({ image: "node:22" });
+ * await sb.exec("npm ci");
+ * await sb.checkpoint();
+ * await sb.exec("npm test").pipe(process.stdout);
+ * await sb.close();
+ *
  * await client.close();
  * ```
  */
 export class Drej {
-  private readonly control: ControlClient;
-  private readonly adapter: IStorageAdapter;
+  private readonly _control: ControlClient;
+  private readonly _adapter: IStorageAdapter;
   private readonly _maxConcurrency: number | undefined;
-  private _activeRuns = 0;
+  private _activeCount = 0;
   private readonly _waiters: Array<() => void> = [];
 
   constructor(options: DrejOptions) {
-    this.control = new ControlClient({
+    this._control = new ControlClient({
       baseUrl: options.baseUrl,
       apiKey: options.apiKey ?? "",
     });
-    this.adapter = options.adapter;
+    this._adapter = options.adapter;
     this._maxConcurrency = options.maxConcurrency;
   }
 
   /**
    * Initializes the storage adapter (runs migrations, opens connection pools).
-   * Must be called before the first `run()` when using a DB-backed adapter.
+   * Must be called before first use when using a DB-backed adapter.
    */
   async connect(): Promise<void> {
-    await this.adapter.connect?.();
+    await this._adapter.connect?.();
   }
 
   /**
-   * Releases storage adapter resources (closes DB connection pools, etc.).
-   * Call this on graceful shutdown to avoid dangling connections.
+   * Releases storage adapter resources.
+   * Call on graceful shutdown to avoid dangling connections.
    */
   async close(): Promise<void> {
-    await this.adapter.close?.();
-  }
-
-  // ── Sandbox management ────────────────────────────────────────────────────
-
-  /** Create a new sandbox. Prefer using `workflow().sandbox()` for managed lifecycle. */
-  createSandbox(options: CreateSandboxOptions): Promise<Sandbox> {
-    return this.control.createSandbox(options);
-  }
-
-  /** List sandboxes, optionally filtered by state or metadata. */
-  listSandboxes(options: ListSandboxesOptions = {}): Promise<Sandbox[]> {
-    return this.control.listSandboxes(options);
-  }
-
-  /** Fetch a sandbox by ID. */
-  getSandbox(id: string): Promise<Sandbox> {
-    return this.control.getSandbox(id);
-  }
-
-  /** Permanently delete a sandbox and release its resources. */
-  deleteSandbox(id: string): Promise<void> {
-    return this.control.deleteSandbox(id);
-  }
-
-  /** Pause a running sandbox (suspends billing while preserving state). */
-  pauseSandbox(id: string): Promise<void> {
-    return this.control.pauseSandbox(id);
-  }
-
-  /** Resume a paused sandbox. */
-  resumeSandbox(id: string): Promise<void> {
-    return this.control.resumeSandbox(id);
-  }
-
-  /** Extend the sandbox expiration timer. */
-  renewSandbox(id: string): Promise<void> {
-    return this.control.renewExpiration(id);
+    await this._adapter.close?.();
   }
 
   /**
-   * Poll until the sandbox reaches `Running` state.
-   * Throws {@link DrejError} if the sandbox fails, terminates, or the timeout elapses.
-   */
-  async waitForRunning(
-    id: string,
-    options: { timeoutMs?: number; pollIntervalMs?: number } = {},
-  ): Promise<Sandbox> {
-    const { timeoutMs = 60_000, pollIntervalMs = 1_000 } = options;
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-      const sandbox = await this.control.getSandbox(id);
-      const { state } = sandbox.status;
-      if (state === SandboxState.Running) return sandbox;
-      if (state === SandboxState.Failed || state === SandboxState.Terminated) {
-        throw new DrejError(`Sandbox ${id} entered state ${state}`, 500);
-      }
-      await new Promise<void>((r) => setTimeout(r, pollIntervalMs));
-    }
-    throw new DrejError(`Sandbox ${id} did not reach Running within ${timeoutMs}ms`, 408);
-  }
-
-  // ── Snapshot management ───────────────────────────────────────────────────
-
-  /** Capture a snapshot of a running sandbox. The sandbox must be in `Running` state. */
-  createSnapshot(sandboxId: string): Promise<Snapshot> {
-    return this.control.createSnapshot(sandboxId);
-  }
-
-  /** List all snapshots, optionally filtered. */
-  listSnapshots(options: ListSnapshotsOptions = {}): Promise<Snapshot[]> {
-    return this.control.listSnapshots(options);
-  }
-
-  /** Fetch a snapshot by ID. */
-  getSnapshot(id: string): Promise<Snapshot> {
-    return this.control.getSnapshot(id);
-  }
-
-  /** Delete a snapshot. */
-  deleteSnapshot(id: string): Promise<void> {
-    return this.control.deleteSnapshot(id);
-  }
-
-  // ── Diagnostics ───────────────────────────────────────────────────────────
-
-  /** Fetch structured log lines from a sandbox (stdout/stderr). */
-  getDiagnosticLogs(sandboxId: string): Promise<DiagnosticLog[]> {
-    return this.control.getDiagnosticLogs(sandboxId);
-  }
-
-  /** Fetch sandbox lifecycle events (start, stop, OOM, etc.). */
-  getDiagnosticEvents(sandboxId: string): Promise<DiagnosticEvent[]> {
-    return this.control.getDiagnosticEvents(sandboxId);
-  }
-
-  // ── Workflow execution ────────────────────────────────────────────────────
-
-  /**
-   * Execute a workflow and return a {@link WorkflowRun} you can iterate over.
+   * Create a new sandbox container and return a live `Sandbox` object.
    *
-   * Events are streamed in real-time as steps complete. Every event is also
-   * written to the storage adapter so runs are resumable.
+   * Waits until the container reaches `Running` state before returning.
+   * Call `sb.close()` when done to release resources (use try/finally).
    *
    * @example
    * ```ts
-   * const run = await client.run(
-   *   workflow("build").sandbox({ image: { uri: "node:20-slim" } }, (s) =>
-   *     s.exec("npm ci").exec("npm test"),
-   *   ),
-   * );
-   * for await (const ev of run) {
-   *   if (ev.event === "exec_event") {
-   *     const { text } = ev.payload as { text?: string };
-   *     if (text) process.stdout.write(text);
-   *   }
+   * const sb = await client.sandbox({ image: "node:22" });
+   * try {
+   *   await sb.exec("npm ci");
+   *   await sb.exec("npm test").pipe(process.stdout);
+   * } finally {
+   *   await sb.close();
    * }
    * ```
    */
-  run(w: WorkflowBuilder, options?: RunOptions): RunHandle {
-    return new RunHandle(this._run(w, options));
-  }
-
-  private async _run(w: WorkflowBuilder, options?: RunOptions): Promise<WorkflowRun> {
+  async sandbox(opts: SandboxOptions): Promise<Sandbox> {
     await this._acquireSlot();
-    const { name, steps, initialState } = w.build();
-    const runId = crypto.randomUUID();
-    const ctrl = new AbortController();
-    options?.signal?.addEventListener("abort", () => ctrl.abort(options.signal!.reason), { once: true });
-    return new WorkflowRun(
-      name,
-      runId,
-      this._withRelease(this._execute(name, runId, steps, options, initialState, ctrl.signal)),
-      () => ctrl.abort(),
-    );
-  }
 
-  /**
-   * Re-run a workflow starting from a previously captured sandbox snapshot.
-   * The new run boots from the snapshot image, skipping any steps that ran
-   * before the snapshot was taken (e.g. dependency installs).
-   *
-   * The original run must contain a `LedgerEvent.Snapshot` entry — produced
-   * either by a `s.snapshot()` step in the workflow or by the
-   * `snapshotConfig` option passed to `client.run()`.
-   */
-  replayFromSnapshot(name: string, runId: string, w: WorkflowBuilder, options?: RunOptions): RunHandle {
-    return new RunHandle(this._replayFromSnapshot(name, runId, w, options));
-  }
+    const image = typeof opts.image === "string" ? { uri: opts.image } : opts.image;
 
-  private async _replayFromSnapshot(name: string, runId: string, w: WorkflowBuilder, options?: RunOptions): Promise<WorkflowRun> {
-    const entries = await this.adapter.readAll(name, runId);
-    const snapEntry = [...entries].reverse().find((e) => e.event === LedgerEvent.Snapshot);
-    if (!snapEntry) throw new DrejError(`No snapshot found in ledger for ${name}/${runId}`, 404);
-    const { snapshotId } = snapEntry.payload as { snapshotId: string };
+    let sandboxId: string;
+    try {
+      const rawSb = await this._control.createSandbox({
+        image,
+        env: opts.env,
+        entrypoint: ["tail", "-f", "/dev/null"],
+        resourceLimits: opts.resources,
+        timeout: opts.timeout,
+      });
+      sandboxId = rawSb.id;
 
-    const { name: wfName, steps } = w.build();
-    const replaySteps: StepDef[] = steps.map((s) =>
-      s.type === StepType.CreateSandbox ? { ...s, snapshotId } : s,
-    );
-    const replayRunId = crypto.randomUUID();
-    const ctrl = new AbortController();
-    options?.signal?.addEventListener("abort", () => ctrl.abort(options.signal!.reason), { once: true });
-    return new WorkflowRun(
-      wfName,
-      replayRunId,
-      this._execute(wfName, replayRunId, replaySteps, options, {}, ctrl.signal),
-      () => ctrl.abort(),
-    );
-  }
+      await this._waitForRunning(sandboxId);
 
-  /**
-   * Resume an interrupted workflow run from its last checkpoint.
-   *
-   * Reads the ledger to find the furthest completed step, then re-runs
-   * the workflow starting from the next step. Steps that already completed
-   * are not re-executed.
-   */
-  resumeRun(name: string, runId: string, w: WorkflowBuilder, options?: RunOptions): RunHandle {
-    return new RunHandle(this._resumeRun(name, runId, w, options));
-  }
-
-  private async _resumeRun(name: string, runId: string, w: WorkflowBuilder, options?: RunOptions): Promise<WorkflowRun> {
-    const { steps } = w.build();
-    const workflowSteps = steps.map(buildStep);
-
-    const ctrl = new AbortController();
-    options?.signal?.addEventListener("abort", () => ctrl.abort(options.signal!.reason), { once: true });
-
-    const stream = makeStream(name, runId, this.adapter, this.control, async (teeDeps) => {
-      const deps: WorkflowDeps = { ...teeDeps, signal: ctrl.signal, stepTimeoutMs: options?.stepTimeoutMs };
-      const { workflow, nextStep, lastOutput } = await Workflow.resumeFromLedger(
+      const name = opts.name ?? `sandbox-${sandboxId.slice(0, 8)}`;
+      await this._adapter.append({
+        ts: Date.now(),
         name,
-        runId,
-        workflowSteps,
-        deps,
-      );
-      try {
-        await workflow.run(lastOutput, nextStep);
-      } catch {
-        try { await workflow.rollback(); } catch { /* ignore */ }
+        sandboxId,
+        stepIndex: -1,
+        event: LedgerEvent.SandboxCreated,
+        payload: { sandboxId, resources: opts.resources },
+      });
+
+      const sb = new Sandbox(sandboxId, name, {
+        control: this._control,
+        adapter: this._adapter,
+        hooks: opts.hooks,
+        onClose: () => this._releaseSlot(),
+      });
+      opts.hooks?.onSandboxCreated?.(sandboxId, name);
+      return sb;
+    } catch (err) {
+      this._releaseSlot();
+      throw err;
+    }
+  }
+
+  /**
+   * Resume a sandbox session from its last checkpoint.
+   *
+   * Restores an OpenSandbox container from the snapshot captured by the most
+   * recent `sb.checkpoint()` call. Execs that completed before the checkpoint
+   * are returned from ledger cache without re-running; subsequent execs run
+   * against the restored container.
+   *
+   * @example
+   * ```ts
+   * // original session (crashed mid-test)
+   * const sb = await client.sandbox({ image: "node:22", name: "ci" });
+   * await sb.exec("npm ci");
+   * await sb.checkpoint();
+   * await sb.exec("npm test");  // container dies here
+   *
+   * // resume later
+   * const sb2 = await client.resume(originalSessionId);
+   * await sb2.exec("npm ci");    // instant — replayed from ledger
+   * await sb2.exec("npm test");  // actually runs on restored container
+   * await sb2.close();
+   * ```
+   */
+  async resume(sandboxId: string): Promise<Sandbox> {
+    const allSessions = await this._adapter.listAllSandboxDetails();
+    const session = allSessions.find((s) => s.sandboxId === sandboxId);
+    if (!session) throw new DrejError(`Session ${sandboxId} not found`, 404);
+
+    return this._resumeSession(session.name, sandboxId);
+  }
+
+  private async _resumeSession(name: string, sandboxId: string): Promise<Sandbox> {
+    const entries = await this._adapter.readAll(name, sandboxId);
+
+    const lastCheckpointIdx = entries.map((e) => e.event).lastIndexOf(LedgerEvent.CheckpointCreated);
+    if (lastCheckpointIdx === -1) throw new DrejError(`No checkpoint found for session ${sandboxId}`, 404);
+
+    const { snapshotId } = entries[lastCheckpointIdx].payload as { snapshotId: string };
+
+    const createdEntry = entries.find((e) => e.event === LedgerEvent.SandboxCreated);
+    const resources = (createdEntry?.payload as { resources?: { cpu?: string; memory?: string; gpu?: string } } | undefined)?.resources;
+
+    const replayCache = new Map<number, ExecResult>();
+    const pendingStdout = new Map<number, string[]>();
+    const pendingStderr = new Map<number, string[]>();
+
+    for (const entry of entries.slice(0, lastCheckpointIdx)) {
+      if (entry.event === LedgerEvent.ExecStart) {
+        const { seq } = entry.payload as { seq: number };
+        pendingStdout.set(seq, []);
+        pendingStderr.set(seq, []);
+      } else if (entry.event === LedgerEvent.ExecEvent) {
+        const { seq, type, text } = entry.payload as { seq: number; type: string; text?: string };
+        if (text) {
+          if (type === "stdout") pendingStdout.get(seq)?.push(text);
+          else if (type === "stderr") pendingStderr.get(seq)?.push(text);
+        }
+      } else if (entry.event === LedgerEvent.ExecComplete) {
+        const { seq, exitCode } = entry.payload as { seq: number; exitCode: number };
+        replayCache.set(seq, {
+          stdout: (pendingStdout.get(seq) ?? []).join(""),
+          stderr: (pendingStderr.get(seq) ?? []).join(""),
+          exitCode,
+        });
       }
-    });
+    }
 
-    return new WorkflowRun(name, runId, stream, () => ctrl.abort());
+    await this._acquireSlot();
+    try {
+      const rawSb = await this._control.createSandbox({ snapshotId, resourceLimits: resources });
+      const newSessionId = rawSb.id;
+      await this._waitForRunning(newSessionId);
+
+      await this._adapter.append({
+        ts: Date.now(),
+        name,
+        sandboxId: newSessionId,
+        stepIndex: -1,
+        event: LedgerEvent.SandboxCreated,
+        payload: { sandboxId: newSessionId, resumedFrom: sandboxId, snapshotId },
+      });
+
+      return new Sandbox(newSessionId, name, {
+        control: this._control,
+        adapter: this._adapter,
+        onClose: () => this._releaseSlot(),
+      }, replayCache);
+    } catch (err) {
+      this._releaseSlot();
+      throw err;
+    }
   }
 
-  // ── Run management ────────────────────────────────────────────────────────
+  /**
+   * Sandbox history management. List, inspect, and delete past sandbox records.
+   *
+   * @example
+   * ```ts
+   * const all = await client.sandboxes.list();
+   * const details = await client.sandboxes.get("ci", sandboxId);
+   * await client.sandboxes.delete("ci", sandboxId);
+   * ```
+   */
+  readonly sandboxes = {
+    /** List all sandbox records across all names, newest first. */
+    list: (opts?: ListSandboxOptions): Promise<SandboxDetails[]> =>
+      this._adapter.listAllSandboxDetails(opts),
 
-  /** Return details for all runs of a workflow, newest first. */
-  listRunDetails(workflowName: string, opts?: ListRunsOptions): Promise<RunDetails[]> {
-    return this.adapter.listRunDetails(workflowName, opts);
-  }
+    /** List sandbox records for a specific name, newest first. */
+    listByName: (name: string, opts?: ListSandboxOptions): Promise<SandboxDetails[]> =>
+      this._adapter.listSandboxDetails(name, opts),
 
-  /** Return details for runs across all workflows, newest first. */
-  listAllRunDetails(opts?: ListRunsOptions): Promise<RunDetails[]> {
-    return this.adapter.listAllRunDetails(opts);
-  }
+    /** Return details for a single sandbox record. Returns `null` if not found. */
+    get: (name: string, sandboxId: string): Promise<SandboxDetails | null> =>
+      this._adapter.getSandboxDetails(name, sandboxId),
 
-  /** Return details for a single run. Throws if the run does not exist. */
-  async getRunDetails(workflowName: string, runId: string): Promise<RunDetails> {
-    const details = await this.adapter.getRunDetails(workflowName, runId);
-    if (!details) throw new DrejError(`Run ${runId} not found under workflow "${workflowName}"`, 404);
-    return details;
-  }
-
-  /** Return all ledger events for a specific run, in ascending order. */
-  getRunLedger(workflowName: string, runId: string): Promise<WorkflowEvent[]> {
-    return this.adapter.readAll(workflowName, runId) as Promise<WorkflowEvent[]>;
-  }
-
-  /** Delete all ledger events for a run. */
-  deleteRun(workflowName: string, runId: string): Promise<void> {
-    return this.adapter.deleteRun(workflowName, runId);
-  }
+    /** Delete all ledger events for a sandbox. */
+    delete: (name: string, sandboxId: string): Promise<void> =>
+      this._adapter.deleteSandbox(name, sandboxId),
+  };
 
   // ── Internal ──────────────────────────────────────────────────────────────
 
+  private async _waitForRunning(sandboxId: string, timeoutMs = 120_000): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const s = await this._control.getSandbox(sandboxId);
+      if (s.status.state === SandboxState.Running) return;
+      if (s.status.state === SandboxState.Failed || s.status.state === SandboxState.Terminated) {
+        throw new DrejError(`Sandbox ${sandboxId} entered state ${s.status.state}: ${s.status.message ?? ""}`, 500);
+      }
+      await new Promise<void>((r) => setTimeout(r, 1_000));
+    }
+    throw new DrejError(`Sandbox ${sandboxId} did not reach Running within ${timeoutMs}ms`, 408);
+  }
+
   private async _acquireSlot(): Promise<void> {
-    if (!this._maxConcurrency || this._activeRuns < this._maxConcurrency) {
-      this._activeRuns++;
+    if (!this._maxConcurrency || this._activeCount < this._maxConcurrency) {
+      this._activeCount++;
       return;
     }
     await new Promise<void>((resolve) => this._waiters.push(resolve));
-    this._activeRuns++;
+    this._activeCount++;
   }
 
   private _releaseSlot(): void {
-    this._activeRuns--;
-    const next = this._waiters.shift();
-    next?.();
-  }
-
-  private async *_withRelease(gen: AsyncGenerator<WorkflowEvent>): AsyncGenerator<WorkflowEvent> {
-    try {
-      yield* gen;
-    } finally {
-      this._releaseSlot();
-    }
-  }
-
-  private _execute(
-    name: string,
-    runId: string,
-    steps: StepDef[],
-    options?: RunOptions,
-    initialState: Record<string, unknown> = {},
-    signal?: AbortSignal,
-  ): AsyncGenerator<WorkflowEvent> {
-    return makeStream(name, runId, this.adapter, this.control, async (teeDeps) => {
-      const snapshotHook: WorkflowDeps["hooks"] = options?.snapshotConfig
-        ? {
-            async onStepComplete({ workflowName: wfName, runId: rid, stepIndex, output }) {
-              if (!shouldSnapshot(options.snapshotConfig!, stepIndex)) return;
-              const sandboxId = (output as Record<string, unknown>)?.sandboxId;
-              if (typeof sandboxId !== "string") return;
-              const snap = await teeDeps.control.createSnapshot(sandboxId);
-              await waitForSnapshot(teeDeps.control, snap.id);
-              await teeDeps.adapter.append({
-                ts: Date.now(),
-                workflowName: wfName,
-                runId: rid,
-                stepIndex,
-                event: LedgerEvent.Snapshot,
-                payload: { snapshotId: snap.id, sandboxId },
-              });
-            },
-          }
-        : undefined;
-
-      const deps: WorkflowDeps = { ...teeDeps, hooks: mergeHooks(snapshotHook, options?.hooks), stepTimeoutMs: options?.stepTimeoutMs, signal };
-      const wf = new Workflow(name, runId, steps.map(buildStep), deps);
-      try {
-        await wf.run(initialState);
-      } catch (err) {
-        try { await wf.rollback(); } catch { /* ignore */ }
-        throw err;
-      }
-    });
+    this._activeCount--;
+    this._waiters.shift()?.();
   }
 }

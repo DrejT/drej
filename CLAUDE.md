@@ -39,6 +39,8 @@ bunx tsc --noEmit --strict --project packages/core/tsconfig.json
 bunx tsc --noEmit --strict --project packages/sdks/typescript/tsconfig.json
 bunx tsc --noEmit --strict --project packages/workflow/tsconfig.json
 bunx tsc --noEmit --strict --project packages/adapters/postgres/tsconfig.json
+bunx tsc --noEmit --strict --project packages/adapters/sqlite/tsconfig.json
+bunx tsc --noEmit --strict --project packages/adapters/otel/tsconfig.json
 
 # Changesets (required on every PR touching publishable packages)
 bunx changeset        # add a changeset
@@ -61,7 +63,7 @@ bunx changeset status # verify one exists
 
 - **Run with**: `bun examples/<name>/index.ts` from the repo root (examples are also the integration tests).
 - **Requires**: `uvx opensandbox-server` running locally (see Local OpenSandbox setup).
-- **Client setup**: `new Drej({ baseUrl: ..., adapter: new SQLiteAdapter("./ledger.db") })`.
+- **Client setup**: `new Drej({ baseUrl: ..., adapter: new SQLiteAdapter("./ledger.db") })` — no `connect()` or `close()` needed.
 - **Sandbox lifecycle**: always wrap in `try/finally { await sb.close(); }` to avoid container leaks.
 - **Assertion**: `const { stdout } = await sb.exec("cmd")` — assert on the returned value. For error cases, catch `CommandError`.
 
@@ -89,7 +91,7 @@ packages/opensandbox/             — OpenSandbox HTTP clients
 
 packages/sdks/typescript/         — Public TypeScript SDK (published to npm as "drej")
   src/types.ts                    — DrejError, DrejOptions, SandboxOptions
-  src/client.ts                   — Drej: sandbox(), resume(), sandboxes.*, connect(), close()
+  src/client.ts                   — Drej: sandbox(), resume(), sandboxes.*
 
 packages/workflow/                — Lazy workflow builder (published as "@drej/workflow")
   src/sandbox-builder.ts          — SandboxBuilder (synchronous queue), flushOps()
@@ -118,7 +120,7 @@ packages/adapters/otel/           — OpenTelemetry hooks adapter (published as 
 
 **Lazy workflow layer**: `@drej/workflow` provides `workflow(client).sandbox(opts, fn).pipe(sink)`. The `fn` callback receives a `SandboxBuilder` — all methods queue ops synchronously. The queue is flushed when `.pipe()` or `.result()` is awaited. One `await` at the end regardless of workflow complexity.
 
-**Storage adapter**: `DrejOptions.adapter` accepts any `IStorageAdapter`. Pass `new SQLiteAdapter("./drej.db")` for local dev or `new PostgresAdapter(connectionString)` for production. Call `await client.connect()` before first use; `await client.close()` on shutdown.
+**Storage adapter**: `DrejOptions.adapter` accepts any `IStorageAdapter`. Pass `new SQLiteAdapter("./drej.db")` for local dev or `new PostgresAdapter(connectionString)` for production. The adapter is initialised lazily on first use — no `connect()` call needed. On process exit, `beforeExit` closes the adapter automatically; explicit teardown is not required for scripts.
 
 **Concurrency limits**: `DrejOptions.maxConcurrency` caps simultaneous active sandboxes. `client.sandbox()` awaits a semaphore slot; the slot is released when `sb.close()` is called.
 
@@ -127,6 +129,8 @@ packages/adapters/otel/           — OpenTelemetry hooks adapter (published as 
 **execd readiness**: OpenSandbox reports a sandbox as "Running" before execd is ready. `resolveExecClient()` calls `getEndpoint()` once (each call returns a different ephemeral proxy port) then polls `listContexts()` until execd responds.
 
 **Sandbox entrypoint**: Always `["tail", "-f", "/dev/null"]` — `/bin/bash` exits immediately without a TTY, killing the container. `client.sandbox()` sets this automatically.
+
+**Resource limits required**: `SandboxOptions.resources` (`{ cpu: string; memory: string; gpu?: string }`) is required — the OpenSandbox server rejects requests without it. Always pass at least `{ cpu: "500m", memory: "256Mi" }`. This applies to `client.sandbox()`, `workflow().sandbox()`, and every step in `workflow().sequence()`.
 
 ## Environment variables
 

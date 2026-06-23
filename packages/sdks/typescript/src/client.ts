@@ -12,6 +12,7 @@ import {
   ControlClient,
   SandboxState,
 } from "@drej/opensandbox";
+
 import { DrejError, type DrejOptions, type SandboxOptions } from "./types";
 
 export { Sandbox } from "@drej/core";
@@ -117,7 +118,7 @@ export class Drej {
         sandboxId,
         stepIndex: -1,
         event: LedgerEvent.SandboxCreated,
-        payload: { sandboxId: sandboxId },
+        payload: { sandboxId, resources: opts.resources },
       });
 
       const sb = new Sandbox(sandboxId, name, {
@@ -173,6 +174,9 @@ export class Drej {
 
     const { snapshotId } = entries[lastCheckpointIdx].payload as { snapshotId: string };
 
+    const createdEntry = entries.find((e) => e.event === LedgerEvent.SandboxCreated);
+    const resources = (createdEntry?.payload as { resources?: { cpu?: string; memory?: string; gpu?: string } } | undefined)?.resources;
+
     const replayCache = new Map<number, ExecResult>();
     const pendingStdout = new Map<number, string[]>();
     const pendingStderr = new Map<number, string[]>();
@@ -200,7 +204,7 @@ export class Drej {
 
     await this._acquireSlot();
     try {
-      const rawSb = await this._control.createSandbox({ snapshotId });
+      const rawSb = await this._control.createSandbox({ snapshotId, resourceLimits: resources });
       const newSessionId = rawSb.id;
       await this._waitForRunning(newSessionId);
 

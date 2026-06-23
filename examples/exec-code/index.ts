@@ -5,8 +5,7 @@
  *   stateless  — each execCode() call runs in an isolated context
  *   stateful   — calls sharing the same context ID see each other's variables
  */
-import { Drej } from "drej";
-import { CodeLanguage } from "@drej/opensandbox";
+import { Drej, CodeLanguage } from "drej";
 import { SQLiteAdapter } from "@drej/sqlite";
 
 const client = new Drej({
@@ -20,6 +19,7 @@ const sb = await client.sandbox({
   image: "opensandbox/code-interpreter",
   env: {},
   name: "exec-code",
+  resources: { cpu: "500m", memory: "512Mi" },
 });
 
 console.log(`Sandbox ID: ${sb.sandboxId}\n`);

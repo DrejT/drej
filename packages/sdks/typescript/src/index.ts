@@ -9,3 +9,4 @@ export type { ILogger } from "@drej/core";
 export type { IStorageAdapter, LedgerEntry, SandboxDetails, ListSandboxOptions, SandboxHooks } from "@drej/core";
 export { DrejError } from "./types";
 export type { DrejOptions, SandboxOptions } from "./types";
+export { CodeLanguage } from "@drej/opensandbox";

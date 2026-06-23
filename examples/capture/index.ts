@@ -9,7 +9,6 @@ const client = new Drej({
   apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",
   adapter: new SQLiteAdapter("./ledger.db"),
 });
-await client.connect();
 
 const sb = await client.sandbox({
   image: "node:20-slim",
@@ -41,4 +40,3 @@ try {
   await sb.close();
 }
 
-await client.close();

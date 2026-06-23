@@ -1,51 +1,46 @@
 # drej
 
-Run multi-step workflows inside isolated sandbox containers. Durable, streaming, typed.
+Spawn sandbox containers, run commands in them, and stream results back. Durable, typed, resumable.
 
 ```ts
-import { Drej, workflow } from "drej";
+import { Drej } from "drej";
 import { SQLiteAdapter } from "@drej/sqlite";
 
 const client = new Drej({
   baseUrl: "http://localhost:8080",
-  adapter: new SQLiteAdapter("./drej.db"),
+  adapter: new SQLiteAdapter("./ledger.db"),
 });
-await client.connect();
 
-await client.run(
-  workflow("hello").sandbox(
-    { image: { uri: "ubuntu:22.04" } },
-    (s) => s.exec('echo "hello from a sandbox"'),
-  ),
-).pipe(process.stdout);
-
-await client.close();
+const sb = await client.sandbox({ image: "ubuntu:22.04" });
+await sb.exec('echo "hello from a sandbox"').pipe(process.stdout);
+await sb.close();
 ```
 
 ---
 
 ## What it is
 
-drej is a TypeScript SDK for orchestrating workflows that run inside isolated [OpenSandbox](https://opensandbox.ai) containers. You define steps with a fluent builder, call `client.run()`, and stream events back in real-time — no separate server, no daemon, no queue to operate.
+drej is a TypeScript SDK for running code inside isolated [OpenSandbox](https://opensandbox.ai) containers. Spawn a sandbox, run shell commands or code, stream output, checkpoint state, and resume interrupted work — all from in-process TypeScript, with no server or daemon to operate.
 
-It is designed for AI products that need to execute untrusted or generated code safely: agent tool calls, code interpreter loops, sandboxed CI pipelines, or any multi-step job that touches a filesystem and runs shell commands.
+It is designed for AI products that need to execute untrusted or generated code safely: agent tool calls, code interpreter loops, sandboxed CI pipelines, or any job that touches a filesystem and runs shell commands.
 
-**Not a general job queue.** drej doesn't schedule work across machines — it runs workflows in-process against an OpenSandbox instance you control.
+The optional `@drej/workflow` package adds a lazy builder for multi-step pipelines with retry, conditional branching, and fan-out — all flushed in one await.
+
+**Not a general job queue.** drej doesn't schedule work across machines — it runs containers against an OpenSandbox instance you control.
 
 ---
 
 ## Features
 
-- **Streaming** — pipe stdout with `run.pipe(writable)`, iterate chunks with `run.stdout()`, or drain with `run.result()`
-- **Durable** — every event is written to a ledger; interrupted runs resume from the last checkpoint
-- **Per-step timeouts** — `exec("cmd", { timeoutMs: 30_000 })` throws `StepTimeoutError` on breach
-- **Cancellation** — `run.cancel()` or `break` from the loop stops the run cleanly; external `AbortSignal` supported
-- **File operations** — read, write, move, delete, search, list, patch, set permissions
-- **Capture & interpolate** — `exec({ capture: true })` and `readFile()` return a `Ref<T>` that interpolates into later steps via template literals
-- **Control flow** — `retry`, `when`, `forEach`, `parallel` as first-class builder methods
-- **Snapshot replay** — snapshot a sandbox mid-run and replay from it later, skipping expensive setup steps
-- **Saga rollback** — when a step fails, completed steps run their rollback handlers in reverse
-- **OpenTelemetry** — plug in `otelHooks(tracer)` for distributed traces across every step
+- **Sandbox as object** — `client.sandbox()` returns a live `Sandbox`; call exec, file ops, and checkpoint directly on it
+- **Streaming** — `sb.exec("cmd").pipe(writable)`, iterate with `sb.exec("cmd").stdout()`, or await for `{ stdout, stderr, exitCode }`
+- **Code execution** — `sb.execCode(code, { context })` runs Python, JS, or TS; stateful sessions persist across calls
+- **Durable** — every event written to a ledger; `client.resume(sandboxId)` restores the container and replays cached exec results from before the last checkpoint
+- **File operations** — read, write, delete, move, list directory, search by glob
+- **Concurrency cap** — `maxConcurrency` limits simultaneous active sandboxes; `client.sandbox()` awaits a slot
+- **Sandbox history** — `client.sandboxes.list()`, `.get()`, `.delete()` for audit and cleanup
+- **Workflow builder** — `@drej/workflow` adds retry, when, forEach, parallel, and sequence over sandboxes
+- **OpenTelemetry** — `otelHooks(tracer)` from `@drej/otel` emits distributed traces per exec and checkpoint
 
 ---
 
@@ -63,7 +58,8 @@ bun add drej @drej/postgres
 
 | Package | Description |
 |---|---|
-| `drej` | TypeScript SDK — `Drej`, `workflow()`, builder |
+| `drej` | TypeScript SDK — `Drej` client, `Sandbox`, `ExecHandle` |
+| `@drej/workflow` | Workflow builder — lazy pipeline with retry, branching, fan-out |
 | `@drej/sqlite` | SQLite storage adapter (local dev, zero infra) |
 | `@drej/postgres` | Postgres storage adapter (production) |
 | `@drej/otel` | OpenTelemetry hooks adapter |
@@ -73,106 +69,205 @@ bun add drej @drej/postgres
 
 ## Quickstart
 
-### Capture output and use it in later steps
-
-`exec({ capture: true })` and `readFile()` return a `Ref<string>` that interpolates into template literals at runtime. Use `run.result()` to drain the run and read captured values from the final state.
+### Run a command and read output
 
 ```ts
-let versionKey: string;
+import { Drej } from "drej";
+import { SQLiteAdapter } from "@drej/sqlite";
 
-const { output, state } = await client.run(
-  workflow("build").sandbox(
-    { image: { uri: "node:20-slim" }, resourceLimits: { cpu: "1", memory: "512Mi" } },
-    (s) => {
-      const version = s.exec("node -e 'process.stdout.write(process.version)'", { capture: true });
-      versionKey = version.key;
-      s.exec(`echo "Running on Node ${version}"`);
-      s.exec("node --check index.js", { strict: true, timeoutMs: 30_000 });
-    },
-  ),
-).result();
+const client = new Drej({
+  baseUrl: "http://localhost:8080",
+  adapter: new SQLiteAdapter("./drej.db"),
+});
 
-console.log(output);              // all stdout
-console.log(state[versionKey!]); // "v20.x.x"
-```
+const sb = await client.sandbox({ image: "ubuntu:22.04" });
 
-### Read and patch files
+// Await result
+const { stdout, exitCode } = await sb.exec("node --version");
 
-```ts
-await client.run(
-  workflow("release").sandbox(
-    { image: { uri: "ubuntu:22.04" }, resourceLimits: { cpu: "500m", memory: "256Mi" } },
-    (s) => {
-      s.writeFile("/app/version.txt", "1.0.0");
+// Stream to writable
+await sb.exec("npm run build").pipe(process.stdout);
 
-      const before = s.readFile("/app/version.txt");
-      s.exec(`echo "before: ${before}"`);
-
-      s.replaceInFiles([{ path: "/app/version.txt", old: "1.0.0", new: "2.0.0" }]);
-
-      const after = s.readFile("/app/version.txt");
-      s.exec(`echo "after: ${after}"`);
-    },
-  ),
-).pipe(process.stdout);
-```
-
-### Control flow
-
-```ts
-await client.run(
-  workflow("ci").sandbox(
-    { image: { uri: "ubuntu:22.04" }, resourceLimits: { cpu: "1", memory: "512Mi" } },
-    (s) => {
-      s.retry(3, (r) => { r.exec("flaky-network-call"); }, { delayMs: 500, backoff: "exponential" });
-
-      s.exec("test -f /app/build.sh");
-      s.when(
-        { op: "eq", field: "exitCode", value: 0 },
-        (s) => s.exec("bash /app/build.sh"),
-        (s) => s.exec("echo 'no build script'"),
-      );
-
-      const tsFiles = s.searchFiles("*.ts", { dir: "/app/src" });
-      s.forEach(tsFiles, (s, file) => {
-        s.exec(`tsc --noEmit ${file}`);
-      });
-
-      s.parallel((p) => {
-        p.branch((b) => b.exec("npm run lint"));
-        p.branch((b) => b.exec("npm run test"));
-      });
-    },
-  ),
-).pipe(process.stdout);
-```
-
-### Timeouts and cancellation
-
-```ts
-// per-step timeout
-s.exec("slow-build", { timeoutMs: 60_000 });
-
-// global default for every step in this run
-const run = await client.run(wf, { stepTimeoutMs: 30_000 });
-
-// cancel from outside
-run.cancel(); // no error thrown, run.status → "cancelled"
-
-// or break from the loop — same effect
-for await (const ev of run) {
-  if (someCondition) break;
+// Async iteration
+for await (const chunk of sb.exec("npm test").stdout()) {
+  process.stdout.write(chunk);
 }
 
-// external AbortSignal
-await client.run(wf, { signal: AbortSignal.timeout(10_000) }).pipe(process.stdout);
+await sb.close();
 ```
 
-### Resume an interrupted run
+### File operations
 
 ```ts
-const run = await client.resumeRun("build", previousRunId, wf);
-await run.pipe(process.stdout);
+await sb.writeFile("/app/main.py", "print('hello')");
+
+const content = await sb.readFile("/app/main.py");
+
+const files = await sb.searchFiles("*.py", "/app");
+await sb.moveFile("/tmp/out.txt", "/app/out.txt");
+await sb.deleteFile("/app/main.py");
+```
+
+### Execute code directly
+
+`execCode` runs Python, JavaScript, or TypeScript via the sandbox's built-in interpreter. Pass a `context` to share state across calls within the same session.
+
+```ts
+import { CodeLanguage } from "@drej/opensandbox";
+
+const ctx = { id: "my-session", language: CodeLanguage.Python };
+
+await sb.execCode("x = 42", { context: ctx });
+await sb.execCode("print(x)", { context: ctx }).pipe(process.stdout); // prints 42
+```
+
+### Checkpoint and resume
+
+```ts
+const sb = await client.sandbox({ image: "ubuntu:22.04", name: "my-run" });
+
+await sb.exec("apt-get install -y curl");
+await sb.checkpoint("after-setup");
+await sb.close();
+
+// Later — or after a crash
+const sbRestored = await client.resume(sb.sandboxId);
+// Execs before the checkpoint replay from the ledger cache.
+// New execs run live against the restored container.
+await sbRestored.exec("curl https://example.com").pipe(process.stdout);
+await sbRestored.close();
+```
+
+### Error handling
+
+```ts
+import { CommandError, SandboxError, ExecConnectionError } from "drej";
+
+// strict: true is the default — non-zero exit throws CommandError
+try {
+  await sb.exec("exit 1");
+} catch (e) {
+  if (e instanceof CommandError) {
+    console.log(e.exitCode, e.command);
+  }
+}
+
+// Opt out to handle non-zero exits manually
+const { exitCode } = await sb.exec("exit 1", { strict: false });
+```
+
+---
+
+## Workflow builder
+
+`@drej/workflow` provides a lazy builder for multi-step pipelines. All methods queue operations synchronously; the pipeline executes when you await `.pipe()` or `.result()`.
+
+```bash
+bun add @drej/workflow
+```
+
+```ts
+import { workflow } from "@drej/workflow";
+
+await workflow(client)
+  .sandbox(
+    { image: "node:20-slim", resources: { cpu: "1", memory: "512Mi" } },
+    (sb) => {
+      sb.exec("npm ci");
+      sb.exec("npm run build");
+      sb.exec("npm test");
+    },
+  )
+  .pipe(process.stdout);
+```
+
+### Retry
+
+```ts
+sb.retry(3, (r) => {
+  r.exec("flaky-network-call");
+}, { delayMs: 500, backoff: "exponential" });
+```
+
+### Conditional branching
+
+The predicate receives `{ stdout, exitCode, vars }` from the previous step.
+
+```ts
+sb.exec("test -f /app/build.sh", { strict: false });
+sb.when(
+  (ctx) => ctx.exitCode === 0,
+  (s) => s.exec("bash /app/build.sh"),
+  (s) => s.exec("echo 'no build script'"),
+);
+```
+
+### Fan-out
+
+```ts
+sb.forEach(["a.ts", "b.ts", "c.ts"], (s, file) => {
+  s.exec(`tsc --noEmit ${file}`);
+}, { concurrency: 4 });
+```
+
+### Capture a file into the result
+
+`sb.readFile(path, as)` in the builder stores the file contents in `vars[as]` on the result object.
+
+```ts
+const { vars } = await workflow(client)
+  .sandbox({ image: "node:20-slim" }, (sb) => {
+    sb.exec("node -e \"require('fs').writeFileSync('/out.txt', process.version)\"");
+    sb.readFile("/out.txt", "nodeVersion");
+  })
+  .result();
+
+console.log(vars.nodeVersion); // "v20.x.x"
+```
+
+### Parallel sandboxes
+
+Run the same builder across multiple sandbox configs simultaneously:
+
+```ts
+await workflow(client)
+  .parallel(
+    [
+      { image: "node:18-slim" },
+      { image: "node:20-slim" },
+      { image: "node:22-slim" },
+    ],
+    (sb) => {
+      sb.exec("node --version");
+      sb.exec("npm ci && npm test");
+    },
+  )
+  .pipe(process.stdout);
+```
+
+### Sequential pipeline
+
+```ts
+await workflow(client)
+  .sequence([
+    { image: "node:20-slim", run: (sb) => { sb.exec("npm ci"); sb.exec("npm run build"); } },
+    { image: "alpine:3",     run: (sb) => { sb.exec("ls /app/dist"); } },
+  ])
+  .pipe(process.stdout);
+```
+
+---
+
+## OpenTelemetry
+
+```ts
+import { otelHooks } from "@drej/otel";
+
+const sb = await client.sandbox({
+  image: "ubuntu:22.04",
+  hooks: otelHooks(tracer),
+});
+// Emits: sandbox.run → sandbox.exec (per command), sandbox.checkpoint
 ```
 
 ---
@@ -210,4 +305,4 @@ mode = "dns"
 
 ## License
 
-MIT
+Apache 2.0

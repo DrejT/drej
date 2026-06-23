@@ -15,7 +15,6 @@ const client = new Drej({
   apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",
   adapter: new SQLiteAdapter("./ledger.db"),
 });
-await client.connect();
 
 await workflow(client)
   .sandbox(
@@ -52,4 +51,3 @@ await workflow(client)
   )
   .pipe(process.stdout);
 
-await client.close();

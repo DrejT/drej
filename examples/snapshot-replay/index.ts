@@ -13,7 +13,6 @@ const client = new Drej({
   apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",
   adapter: new SQLiteAdapter("./ledger.db"),
 });
-await client.connect();
 
 const sandboxOpts = {
   image: "python:3.11-slim",
@@ -73,4 +72,3 @@ try {
   await sbResume.close();
 }
 
-await client.close();

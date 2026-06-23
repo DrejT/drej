@@ -12,7 +12,6 @@ const client = new Drej({
   apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",
   adapter: new SQLiteAdapter("./ledger.db"),
 });
-await client.connect();
 
 const image = "ubuntu:22.04";
 const resources = { cpu: "500m", memory: "256Mi" };
@@ -59,4 +58,3 @@ try {
   await sbC.close();
 }
 
-await client.close();

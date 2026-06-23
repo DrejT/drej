@@ -61,6 +61,7 @@ export class Drej {
     // Close the adapter when the event loop drains naturally (scripts, short-lived processes).
     // Long-running servers never reach beforeExit, so Postgres pools stay alive for the
     // lifetime of the process — which is the correct behaviour.
+    process.setMaxListeners(process.getMaxListeners() + 1);
     process.on("beforeExit", () => {
       if (!this._adapterClosed) {
         this._adapterClosed = true;

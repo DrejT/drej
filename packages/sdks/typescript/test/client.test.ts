@@ -25,21 +25,24 @@ function makeClient(adapter: IStorageAdapter, opts: { maxConcurrency?: number } 
   });
 }
 
-// ── connect / close ────────────────────────────────────────────────────────
+// ── lazy connect ───────────────────────────────────────────────────────────
 
-describe("Drej.connect / close", () => {
-  it("calls adapter.connect on connect()", async () => {
+describe("Drej lazy connect", () => {
+  it("does not call adapter.connect before first use", () => {
     const adapter = makeAdapter();
-    const client = makeClient(adapter);
-    await client.connect();
-    expect(adapter.connect).toHaveBeenCalledOnce();
+    makeClient(adapter);
+    expect(adapter.connect).not.toHaveBeenCalled();
   });
 
-  it("calls adapter.close on close()", async () => {
+  it("calls adapter.connect exactly once across concurrent first uses", async () => {
     const adapter = makeAdapter();
     const client = makeClient(adapter);
-    await client.close();
-    expect(adapter.close).toHaveBeenCalledOnce();
+    // Trigger two concurrent first uses
+    await Promise.all([
+      client.sandboxes.list(),
+      client.sandboxes.list(),
+    ]);
+    expect(adapter.connect).toHaveBeenCalledOnce();
   });
 });
 

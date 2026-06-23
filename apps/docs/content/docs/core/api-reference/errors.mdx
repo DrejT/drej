@@ -81,7 +81,7 @@ Thrown when a sandbox fails to create, boot, or reach `Running` state. Also thro
 import { SandboxError } from "drej";
 
 try {
-  const sb = await client.sandbox({ image: "nonexistent:image", resources: {} });
+  const sb = await client.sandbox({ image: "nonexistent:image", resources: { cpu: "500m", memory: "256Mi" } });
 } catch (e) {
   if (e instanceof SandboxError) {
     console.error(e.message);           // "Sandbox <id> entered state Failed: ..."

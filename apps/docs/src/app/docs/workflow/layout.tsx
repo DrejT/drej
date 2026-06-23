@@ -9,7 +9,7 @@ export default function WorkflowLayout({ children }: { children: React.ReactNode
       nav={{ title: "drej", url: "/" }}
       themeSwitch={{ enabled: false }}
       searchToggle={{ enabled: true }}
-      sidebar={{ banner: <PackageSwitcher /> }}
+      sidebar={{ banner: <PackageSwitcher key="package-switcher" /> }}
     >
       {children}
     </DocsLayout>

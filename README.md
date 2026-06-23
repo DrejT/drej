@@ -11,7 +11,10 @@ const client = new Drej({
   adapter: new SQLiteAdapter("./ledger.db"),
 });
 
-const sb = await client.sandbox({ image: "ubuntu:22.04" });
+const sb = await client.sandbox({
+  image: "ubuntu:22.04",
+  resources: { cpu: "500m", memory: "512Mi" },
+});
 await sb.exec('echo "hello from a sandbox"').pipe(process.stdout);
 await sb.close();
 ```
@@ -80,7 +83,10 @@ const client = new Drej({
   adapter: new SQLiteAdapter("./drej.db"),
 });
 
-const sb = await client.sandbox({ image: "ubuntu:22.04" });
+const sb = await client.sandbox({
+  image: "ubuntu:22.04",
+  resources: { cpu: "500m", memory: "512Mi" },
+});
 
 // Await result
 const { stdout, exitCode } = await sb.exec("node --version");
@@ -124,7 +130,11 @@ await sb.execCode("print(x)", { context: ctx }).pipe(process.stdout); // prints 
 ### Checkpoint and resume
 
 ```ts
-const sb = await client.sandbox({ image: "ubuntu:22.04", name: "my-run" });
+const sb = await client.sandbox({
+  image: "ubuntu:22.04",
+  name: "my-run",
+  resources: { cpu: "500m", memory: "512Mi" },
+});
 
 await sb.exec("apt-get install -y curl");
 await sb.checkpoint("after-setup");
@@ -250,8 +260,8 @@ await workflow(client)
 ```ts
 await workflow(client)
   .sequence([
-    { image: "node:20-slim", run: (sb) => { sb.exec("npm ci"); sb.exec("npm run build"); } },
-    { image: "alpine:3",     run: (sb) => { sb.exec("ls /app/dist"); } },
+    { image: "node:20-slim", resources: { cpu: "1", memory: "512Mi" }, run: (sb) => { sb.exec("npm ci"); sb.exec("npm run build"); } },
+    { image: "alpine:3",     resources: { cpu: "500m", memory: "256Mi" }, run: (sb) => { sb.exec("ls /app/dist"); } },
   ])
   .pipe(process.stdout);
 ```

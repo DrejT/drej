@@ -11,7 +11,7 @@ export interface WorkflowResult {
 /** A single step in a `.sequence()` call. */
 export interface SequenceStep {
   image: SandboxOptions["image"];
-  resources?: SandboxOptions["resources"];
+  resources: SandboxOptions["resources"];
   env?: SandboxOptions["env"];
   timeout?: SandboxOptions["timeout"];
   name?: string;
@@ -33,7 +33,7 @@ type WorkflowStage =
  * import { workflow } from "@drej/workflow";
  *
  * await workflow(client)
- *   .sandbox({ image: "node:22" }, (sb) => {
+ *   .sandbox({ image: "node:22", resources: { cpu: "500m", memory: "256Mi" } }, (sb) => {
  *     sb.exec("npm ci")
  *     sb.checkpoint()
  *     sb.retry(3, (sb) => sb.exec("npm test"), { backoff: "exponential" })
@@ -189,7 +189,7 @@ export class WorkflowBuilder {
  * import { workflow } from "@drej/workflow";
  *
  * await workflow(client)
- *   .sandbox({ image: "node:22" }, (sb) => {
+ *   .sandbox({ image: "node:22", resources: { cpu: "500m", memory: "256Mi" } }, (sb) => {
  *     sb.exec("npm ci")
  *     sb.exec("npm test")
  *   })

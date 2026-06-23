@@ -112,6 +112,7 @@ await workflow(client)
     {
       image: "node:22",
       name: "build",
+      resources: { cpu: "1", memory: "512Mi" },
       run: (sb) => {
         sb.exec("npm run build");
         sb.readFile("/dist/bundle.js", "bundle");
@@ -120,6 +121,7 @@ await workflow(client)
     {
       image: "ubuntu:22.04",
       name: "deploy",
+      resources: { cpu: "500m", memory: "256Mi" },
       run: (sb, prev) => {
         // prev.vars.bundle is available here
         sb.exec(`echo "deploying bundle (${String(prev?.vars.bundle ?? "").length} bytes)"`);

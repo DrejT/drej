@@ -1,7 +1,12 @@
-import { docs } from "collections/server";
+import { coreDocs, workflowDocs } from "collections/server";
 import { loader } from "fumadocs-core/source";
 
-export const source = loader({
-  baseUrl: "/docs",
-  source: docs.toFumadocsSource(),
+export const coreSource = loader({
+  baseUrl: "/docs/core",
+  source: coreDocs.toFumadocsSource(),
+});
+
+export const workflowSource = loader({
+  baseUrl: "/docs/workflow",
+  source: workflowDocs.toFumadocsSource(),
 });

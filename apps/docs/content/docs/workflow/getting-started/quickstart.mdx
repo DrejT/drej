@@ -1,0 +1,67 @@
+---
+title: Quickstart
+description: Run your first workflow — install, configure, and run a multi-step pipeline in one await.
+---
+
+## Install
+
+```bash
+npm install drej @drej/workflow
+```
+
+## Configure
+
+```ts
+import { Drej } from "drej";
+import { SQLiteAdapter } from "@drej/sqlite";
+import { workflow } from "@drej/workflow";
+
+const client = new Drej({
+  baseUrl: "http://localhost:8080",
+  adapter: new SQLiteAdapter("./ledger.db"),
+});
+
+await client.connect();
+```
+
+## Run a workflow
+
+```ts
+await workflow(client)
+  .sandbox(
+    { image: "node:22", resources: { cpu: "500m", memory: "512Mi" } },
+    (sb) => {
+      sb.exec("node --version");
+      sb.exec("npm --version");
+    },
+  )
+  .pipe(process.stdout);
+
+await client.close();
+```
+
+The callback receives a `SandboxBuilder`. All calls inside it queue operations synchronously — nothing runs until `.pipe()` or `.result()` is awaited. The sandbox is created, all ops are flushed in order, then the sandbox is closed automatically.
+
+## Capture output
+
+Use `.result()` instead of `.pipe()` to get the combined stdout and any captured file values:
+
+```ts
+const { stdout, vars } = await workflow(client)
+  .sandbox(
+    { image: "node:22", resources: { cpu: "500m", memory: "512Mi" } },
+    (sb) => {
+      sb.exec("node --version > /tmp/ver.txt");
+      sb.readFile("/tmp/ver.txt", "nodeVersion");
+    },
+  )
+  .result();
+
+console.log(vars.nodeVersion); // "v22.x.x\n"
+```
+
+## Next steps
+
+- [SandboxBuilder operations](/docs/workflow/building/sandbox-builder) — the full set of queued ops
+- [Control flow](/docs/workflow/building/control-flow) — retry, when, forEach
+- [Parallel & sequence](/docs/workflow/building/parallel-sequence) — multi-sandbox patterns

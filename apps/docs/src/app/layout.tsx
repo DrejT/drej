@@ -18,8 +18,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       className={`${geistSans.variable} ${geistMono.variable} light`}
       suppressHydrationWarning
     >
-      <body>
-        <RootProvider>{children}</RootProvider>
+      <body suppressHydrationWarning>
+        <RootProvider theme={{ forcedTheme: "light" }}>{children}</RootProvider>
       </body>
     </html>
   );

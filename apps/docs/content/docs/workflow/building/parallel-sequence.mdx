@@ -1,0 +1,99 @@
+---
+title: Parallel & Sequence
+description: Run the same workflow across multiple containers simultaneously, or chain sandboxes where each step sees the previous result.
+---
+
+## parallel
+
+Run the same set of operations across multiple containers at the same time.
+
+```ts
+await workflow(client)
+  .parallel(
+    [
+      { image: "node:20", resources: { cpu: "500m", memory: "512Mi" } },
+      { image: "node:22", resources: { cpu: "500m", memory: "512Mi" } },
+      { image: "node:24", resources: { cpu: "500m", memory: "512Mi" } },
+    ],
+    (sb) => sb.exec("npm test"),
+  )
+  .pipe(process.stdout);
+```
+
+All configs receive the same `fn` callback. The sandboxes run concurrently — stdout from all of them is merged in the result. Each sandbox is its own isolated container.
+
+### Cross-version matrix testing
+
+```ts
+const nodeVersions = ["18", "20", "22"];
+
+await workflow(client)
+  .parallel(
+    nodeVersions.map((v) => ({
+      image: `node:${v}`,
+      resources: { cpu: "500m", memory: "512Mi" },
+    })),
+    (sb) => {
+      sb.exec("npm ci");
+      sb.exec("npm test");
+    },
+  )
+  .pipe(process.stdout);
+```
+
+## sequence
+
+Chain sandboxes one after another. Each step's callback receives the previous step's `WorkflowResult` as `prev`.
+
+```ts
+await workflow(client)
+  .sequence([
+    {
+      image: "node:22",
+      resources: { cpu: "1", memory: "1Gi" },
+      name: "build",
+      run: (sb) => {
+        sb.exec("npm ci");
+        sb.exec("npm run build");
+        sb.exec("tar -czf /tmp/dist.tar.gz dist/");
+        sb.readFile("/tmp/dist.tar.gz", "artifact");
+      },
+    },
+    {
+      image: "ubuntu:22.04",
+      resources: { cpu: "500m", memory: "512Mi" },
+      name: "deploy",
+      run: (sb, prev) => {
+        // prev.vars.artifact is the tarball from the build step
+        sb.exec("./deploy.sh");
+      },
+    },
+  ])
+  .pipe(process.stdout);
+```
+
+### SequenceStep
+
+```ts
+interface SequenceStep {
+  image: string;
+  resources?: { cpu?: string; memory?: string };
+  name?: string;
+  run: (sb: SandboxBuilder, prev: WorkflowResult) => void;
+}
+```
+
+`prev` is `{ stdout: "", vars: {} }` for the first step.
+
+## Combining parallel and sequence
+
+`.parallel()` and `.sequence()` are both methods on `WorkflowBuilder` and can be chained:
+
+```ts
+await workflow(client)
+  .sandbox(opts, (sb) => sb.exec("npm ci"))        // setup
+  .parallel(matrix, (sb) => sb.exec("npm test"))   // test across versions
+  .pipe(process.stdout);
+```
+
+Each call adds a stage. Stages run in the order they are added.

@@ -1,4 +1,4 @@
 {
   "title": "API Reference",
-  "pages": ["index", "drej-client", "workflow-run", "builder", "errors"]
+  "pages": ["drej-client", "workflow-run", "builder", "errors"]
 }

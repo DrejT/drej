@@ -1,0 +1,99 @@
+---
+title: Control Flow
+description: retry, when, and forEach — conditional branching and iteration inside a SandboxBuilder.
+---
+
+Control flow primitives let you express branching and looping inside the `SandboxBuilder` callback. They queue lazily like every other operation, and the predicates/callbacks run at flush time with the current execution context.
+
+## retry
+
+Retry a block of operations up to `maxAttempts` times on failure.
+
+```ts
+sb.retry(3, (sb) => {
+  sb.exec("curl -f https://api.example.com/health");
+}, { delayMs: 2000, backoff: "exponential" });
+```
+
+### RetryOptions
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `delayMs` | `number` | `1000` | Wait between attempts (ms) |
+| `backoff` | `"fixed" \| "exponential"` | `"fixed"` | Delay growth strategy |
+
+With `backoff: "exponential"`, each retry multiplies `delayMs` by the attempt number: 1s, 2s, 4s, ...
+
+## when
+
+Branch on runtime state. The predicate receives the current execution context.
+
+```ts
+sb.exec("test -f /tmp/cache.tar.gz", { strict: false });
+
+sb.when(
+  (ctx) => ctx.exitCode === 0,
+  (sb) => sb.exec("tar -xzf /tmp/cache.tar.gz"),
+  (sb) => sb.exec("npm ci"),
+);
+```
+
+### Predicate context
+
+```ts
+interface FlushContext {
+  stdout: string;          // accumulated stdout so far
+  exitCode: number;        // exit code of the last exec
+  vars: Record<string, unknown>; // values captured by readFile(path, as)
+}
+```
+
+The `otherwise` branch is optional. If the predicate is false and no `otherwise` is provided, the when block is skipped.
+
+## forEach
+
+Iterate over a list of items, queueing the same operations for each.
+
+```ts
+const packages = ["lodash", "zod", "tsx"];
+
+sb.forEach(packages, (sb, pkg) => {
+  sb.exec(`npm install ${pkg}`);
+});
+```
+
+Run iterations in parallel with `concurrency`:
+
+```ts
+sb.forEach(
+  packages,
+  (sb, pkg) => sb.exec(`npm install ${pkg}`),
+  { concurrency: 3 },
+);
+```
+
+### ForEachOptions
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `concurrency` | `number` | `1` | Max parallel iterations |
+
+## Composing
+
+Control flow primitives nest naturally:
+
+```ts
+sb.retry(3, (sb) => {
+  sb.exec("./deploy.sh", { strict: false });
+
+  sb.when(
+    (ctx) => ctx.exitCode !== 0,
+    (sb) => {
+      sb.exec("./rollback.sh");
+      sb.forEach(["web", "api", "worker"], (sb, svc) => {
+        sb.exec(`systemctl restart ${svc}`);
+      });
+    },
+  );
+});
+```

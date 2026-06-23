@@ -1,21 +1,18 @@
 import { DocsPage, DocsBody, DocsTitle, DocsDescription } from "fumadocs-ui/layouts/docs/page";
-import { source } from "@/lib/source";
+import { workflowSource } from "@/lib/source";
 import { notFound } from "next/navigation";
 import defaultMdxComponents from "fumadocs-ui/mdx";
 
 const OVERVIEW_SLUGS = new Set([
   "",
   "getting-started",
-  "concepts",
   "building",
-  "patterns",
-  "adapters",
   "api-reference",
 ]);
 
 export default async function Page({ params }: { params: Promise<{ slug?: string[] }> }) {
   const { slug } = await params;
-  const page = source.getPage(slug);
+  const page = workflowSource.getPage(slug);
   if (!page) notFound();
 
   const MDX = page.data.body;
@@ -36,7 +33,7 @@ export default async function Page({ params }: { params: Promise<{ slug?: string
 }
 
 export async function generateStaticParams() {
-  return source.getPages().map((page) => ({
+  return workflowSource.getPages().map((page) => ({
     slug: page.slugs,
   }));
 }

@@ -33,7 +33,7 @@ type WorkflowStage =
  * import { workflow } from "@drej/workflow";
  *
  * await workflow(client)
- *   .sandbox({ image: "node:22" }, (sb) => {
+ *   .sandbox({ image: "node:22", resources: { cpu: "500m", memory: "256Mi" } }, (sb) => {
  *     sb.exec("npm ci")
  *     sb.checkpoint()
  *     sb.retry(3, (sb) => sb.exec("npm test"), { backoff: "exponential" })
@@ -189,7 +189,7 @@ export class WorkflowBuilder {
  * import { workflow } from "@drej/workflow";
  *
  * await workflow(client)
- *   .sandbox({ image: "node:22" }, (sb) => {
+ *   .sandbox({ image: "node:22", resources: { cpu: "500m", memory: "256Mi" } }, (sb) => {
  *     sb.exec("npm ci")
  *     sb.exec("npm test")
  *   })

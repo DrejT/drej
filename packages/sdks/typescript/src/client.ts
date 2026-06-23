@@ -34,7 +34,7 @@ export { DrejError, type DrejOptions, type SandboxOptions } from "./types";
  *   adapter: new SQLiteAdapter("./drej.db"),
  * });
  *
- * const sb = await client.sandbox({ image: "node:22" });
+ * const sb = await client.sandbox({ image: "node:22", resources: { cpu: "500m", memory: "256Mi" } });
  * await sb.exec("npm ci");
  * await sb.checkpoint();
  * await sb.exec("npm test").pipe(process.stdout);
@@ -84,7 +84,7 @@ export class Drej {
    *
    * @example
    * ```ts
-   * const sb = await client.sandbox({ image: "node:22" });
+   * const sb = await client.sandbox({ image: "node:22", resources: { cpu: "500m", memory: "256Mi" } });
    * try {
    *   await sb.exec("npm ci");
    *   await sb.exec("npm test").pipe(process.stdout);
@@ -147,7 +147,7 @@ export class Drej {
    * @example
    * ```ts
    * // original session (crashed mid-test)
-   * const sb = await client.sandbox({ image: "node:22", name: "ci" });
+   * const sb = await client.sandbox({ image: "node:22", name: "ci", resources: { cpu: "500m", memory: "256Mi" } });
    * await sb.exec("npm ci");
    * await sb.checkpoint();
    * await sb.exec("npm test");  // container dies here

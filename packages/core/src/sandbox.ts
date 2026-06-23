@@ -77,7 +77,7 @@ export async function resolveExecClient(
  *
  * @example
  * ```ts
- * const sb = await client.sandbox({ image: "node:22" });
+ * const sb = await client.sandbox({ image: "node:22", resources: { cpu: "500m", memory: "256Mi" } });
  * await sb.exec("npm ci");
  * await sb.checkpoint();
  * await sb.exec("npm test").pipe(process.stdout);

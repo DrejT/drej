@@ -42,8 +42,8 @@ export interface SandboxOptions {
    * with optional auth (`{ uri: "ghcr.io/org/image", auth: { username, password } }`).
    */
   image: string | { uri: string; auth?: { username: string; password: string } };
-  /** CPU/memory/GPU resource limits. */
-  resources?: { cpu?: string; memory?: string; gpu?: string };
+  /** CPU/memory/GPU resource limits. Required by the OpenSandbox server. */
+  resources: { cpu: string; memory: string; gpu?: string };
   /** Environment variables set in the container at startup. */
   env?: Record<string, string>;
   /**

@@ -72,14 +72,14 @@ Use the workflow builder when:
 ```ts
 // Sequential: stage 2 starts after stage 1 finishes
 await workflow(client)
-  .sandbox({ image: "node:22" }, (sb) => { sb.exec("npm run build"); })
-  .sandbox({ image: "ubuntu:22.04" }, (sb) => { sb.exec("./deploy.sh"); })
+  .sandbox({ image: "node:22", resources: { cpu: "500m", memory: "256Mi" } }, (sb) => { sb.exec("npm run build"); })
+  .sandbox({ image: "ubuntu:22.04", resources: { cpu: "500m", memory: "256Mi" } }, (sb) => { sb.exec("./deploy.sh"); })
   .pipe(process.stdout);
 
 // Parallel: all run simultaneously, results merged
 await workflow(client)
   .parallel(
-    [{ image: "node:20" }, { image: "node:22" }, { image: "node:24" }],
+    [{ image: "node:20", resources: { cpu: "500m", memory: "256Mi" } }, { image: "node:22", resources: { cpu: "500m", memory: "256Mi" } }, { image: "node:24", resources: { cpu: "500m", memory: "256Mi" } }],
     (sb) => sb.exec("npm test"),
   )
   .pipe(process.stdout);
@@ -87,8 +87,8 @@ await workflow(client)
 // Sequence: each step receives the previous step's result
 await workflow(client)
   .sequence([
-    { image: "node:22", name: "build", run: (sb) => sb.exec("npm run build") },
-    { image: "ubuntu:22.04", name: "deploy", run: (sb, prev) => sb.exec("./deploy.sh") },
+    { image: "node:22", name: "build", resources: { cpu: "500m", memory: "256Mi" }, run: (sb) => sb.exec("npm run build") },
+    { image: "ubuntu:22.04", name: "deploy", resources: { cpu: "500m", memory: "256Mi" }, run: (sb, prev) => sb.exec("./deploy.sh") },
   ])
   .pipe(process.stdout);
 ```
@@ -103,7 +103,7 @@ const { stdout } = await sb.exec("node --version");
 
 // Workflow builder — readFile stores into vars
 const { vars } = await workflow(client)
-  .sandbox({ image: "node:22" }, (sb) => {
+  .sandbox({ image: "node:22", resources: { cpu: "500m", memory: "256Mi" } }, (sb) => {
     sb.exec("node --version > /tmp/version.txt");
     sb.readFile("/tmp/version.txt", "nodeVersion");
   })

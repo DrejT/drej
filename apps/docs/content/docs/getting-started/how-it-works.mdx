@@ -1,0 +1,73 @@
+---
+title: How it works
+description: The mental model behind drej — builder, engine, ledger, and event stream.
+---
+
+## The pipeline
+
+```
+workflow("name").sandbox(opts, s => s.exec(...))
+        ↓
+  WorkflowBuilder.build() → StepDef[]
+        ↓
+  DrejClient._execute() → Workflow engine
+        ↓                      ↓
+  OpenSandbox container    ledger (SQLite / Postgres)
+        ↓
+  AsyncIterable<WorkflowEvent>
+```
+
+## WorkflowBuilder
+
+`workflow(name)` returns a `WorkflowBuilder`. Calling `.sandbox(opts, builder)` adds a sandbox scope where all steps share a single container. The builder callback receives a `SandboxStepBuilder` (`s`) that has all step methods.
+
+Steps are accumulated into a `StepDef[]` array. Nothing runs until you pass the builder to `client.run()`.
+
+## Step types
+
+| Step | What it does |
+|---|---|
+| `s.exec(cmd)` | Runs a shell command; returns a `Ref` to capture output |
+| `s.execCode(code)` | Runs code in the sandbox interpreter |
+| `s.writeFile(path, content)` | Writes a file into the container |
+| `s.readFile(path)` | Reads a file; returns a `Ref<string>` |
+| `s.retry(n, fn, opts)` | Retries a group of steps up to `n` times |
+| `s.when(pred, then, else)` | Branches on workflow state |
+| `s.forEach(items, opts, fn)` | Iterates over a list of items |
+| `s.parallel(fn)` | Runs branches concurrently inside the same sandbox |
+| `s.snapshot()` | Snapshots the container state |
+
+## The event stream
+
+`client.run()` returns a `RunHandle`. Awaiting it (or calling `.pipe()`, `.result()`, `.stdout()`) starts the workflow and yields events:
+
+| Event | When |
+|---|---|
+| `exec_event` | Stdout/stderr chunks from running commands |
+| `step_complete` | A step finished; payload has captured state |
+| `snapshot` | A snapshot was taken |
+| `workflow_complete` | All steps finished |
+| `workflow_failed` | A step threw; payload has the error |
+
+## Storage
+
+Every event is written to the ledger simultaneously with streaming. This means a run is fully replayable from the ledger even if the caller disconnects.
+
+`SQLiteAdapter` is zero-dependency and uses WAL mode for concurrency. `PostgresAdapter` is for production multi-process deployments.
+
+## Refs and state
+
+`Ref<T>` is a typed pointer to a value that will exist in workflow state after execution. You declare the ref before the run and read from `state[ref.key]` after:
+
+```ts
+let versionKey: string;
+
+const { state } = await client.run(
+  workflow("capture").sandbox(opts, (s) => {
+    const ref = s.exec("node --version").capture("stdout");
+    versionKey = ref.key;
+  }),
+).result();
+
+console.log(state[versionKey!]); // "v22.x.x\n"
+```

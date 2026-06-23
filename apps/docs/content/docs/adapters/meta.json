@@ -1,0 +1,4 @@
+{
+  "title": "Storage Adapters",
+  "pages": ["index", "sqlite", "postgres", "custom"]
+}

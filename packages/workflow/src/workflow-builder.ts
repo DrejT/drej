@@ -11,7 +11,7 @@ export interface WorkflowResult {
 /** A single step in a `.sequence()` call. */
 export interface SequenceStep {
   image: SandboxOptions["image"];
-  resources?: SandboxOptions["resources"];
+  resources: SandboxOptions["resources"];
   env?: SandboxOptions["env"];
   timeout?: SandboxOptions["timeout"];
   name?: string;

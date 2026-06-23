@@ -82,6 +82,7 @@ await workflow(client)
     {
       image: "node:22",
       name: "build",
+      resources: { cpu: "1", memory: "512Mi" },
       run: (sb) => {
         sb.exec("npm run build 2>&1 | tee /tmp/build.log");
         sb.readFile("/tmp/build.log", "buildLog");
@@ -90,6 +91,7 @@ await workflow(client)
     {
       image: "ubuntu:22.04",
       name: "deploy",
+      resources: { cpu: "500m", memory: "256Mi" },
       run: (sb, prev) => {
         // prev.vars.buildLog from the first sandbox
         sb.exec(`echo "Build output lines: $(echo '${prev?.vars.buildLog}' | wc -l)"`);

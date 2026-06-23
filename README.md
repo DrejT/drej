@@ -260,8 +260,8 @@ await workflow(client)
 ```ts
 await workflow(client)
   .sequence([
-    { image: "node:20-slim", run: (sb) => { sb.exec("npm ci"); sb.exec("npm run build"); } },
-    { image: "alpine:3",     run: (sb) => { sb.exec("ls /app/dist"); } },
+    { image: "node:20-slim", resources: { cpu: "1", memory: "512Mi" }, run: (sb) => { sb.exec("npm ci"); sb.exec("npm run build"); } },
+    { image: "alpine:3",     resources: { cpu: "500m", memory: "256Mi" }, run: (sb) => { sb.exec("ls /app/dist"); } },
   ])
   .pipe(process.stdout);
 ```

@@ -86,6 +86,10 @@ await workflow(client)
   .pipe(process.stdout);
 ```
 
+## Forking a live sandbox
+
+To create an independent copy without closing the original, use `sb.fork()` — it snapshots and immediately returns a new live sandbox. See [Forking sandboxes](/docs/core/patterns/fork).
+
 ## Limitations
 
 - `client.resume()` requires at least one checkpoint in the session's ledger — it throws if none exists.

@@ -47,6 +47,8 @@ export interface SandboxDeps {
   onClose?: () => void;
   /** Default shell for all `exec()` calls on this sandbox. Defaults to `"/bin/sh"`. */
   shell?: string;
+  /** Called by `fork()` to create a new Sandbox from a snapshot — injected by DrejClient. */
+  fork?: (snapshotId: string, tag?: string) => Promise<Sandbox>;
 }
 
 /**
@@ -269,6 +271,31 @@ export class Sandbox {
   /** Return all checkpoints for this sandbox in creation order. */
   listCheckpoints(): Promise<CheckpointInfo[]> {
     return this._deps.adapter.listCheckpoints(this.name, this.sandboxId);
+  }
+
+  /**
+   * Snapshot the current sandbox and return a new independent `Sandbox` from that state.
+   *
+   * The original sandbox keeps running. Both operate on separate containers restored
+   * from the same snapshot. Equivalent to `checkpoint()` followed by `resume()` on a
+   * clone, but without closing the original.
+   *
+   * @example
+   * ```ts
+   * await sb.exec("npm ci");
+   * const fork = await sb.fork("after-install");
+   *
+   * await sb.exec("npm test");         // runs on original
+   * await fork.exec("npm run build");  // runs on fork
+   * ```
+   */
+  async fork(tag?: string): Promise<Sandbox> {
+    if (!this._deps.fork) throw new SandboxError("fork() is not supported on this sandbox", this.sandboxId);
+    const snap = await this._deps.control.createSnapshot(this.sandboxId);
+    await this._waitForSnapshot(snap.id);
+    await this._emit(LedgerEvent.CheckpointCreated, -1, { snapshotId: snap.id, name: tag });
+    this._deps.hooks?.onCheckpoint?.(this.sandboxId, snap.id, tag);
+    return this._deps.fork(snap.id, tag);
   }
 
   /**

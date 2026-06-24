@@ -135,6 +135,7 @@ export class Drej {
         hooks: opts.hooks,
         onClose: () => this._releaseSlot(),
         shell: opts.shell,
+        fork: (snapshotId, tag) => this._forkFromSnapshot(snapshotId, name, opts.resources, opts.shell),
       });
       opts.hooks?.onSandboxCreated?.(sandboxId, name);
       return sb;
@@ -239,6 +240,9 @@ export class Drej {
         control: this._control,
         adapter: this._adapter,
         onClose: () => this._releaseSlot(),
+        fork: resources?.cpu && resources?.memory
+          ? (snapshotId, tag) => this._forkFromSnapshot(snapshotId, name, resources as { cpu: string; memory: string; gpu?: string }, undefined)
+          : undefined,
       }, replayCache);
     } catch (err) {
       this._releaseSlot();
@@ -425,9 +429,45 @@ export class Drej {
         hooks: extra?.hooks,
         onClose: () => this._releaseSlot(),
         shell: extra?.shell ?? envShell,
+        fork: (snapshotId, tag) => this._forkFromSnapshot(snapshotId, sessionName, resources, extra?.shell ?? envShell),
       });
       extra?.hooks?.onSandboxCreated?.(newId, sessionName);
       return sb;
+    } catch (err) {
+      this._releaseSlot();
+      throw err;
+    }
+  }
+
+  private async _forkFromSnapshot(
+    snapshotId: string,
+    parentName: string,
+    resources: { cpu: string; memory: string; gpu?: string },
+    shell?: string,
+  ): Promise<Sandbox> {
+    await this._acquireSlot();
+    try {
+      const rawSb = await this._control.createSandbox({ snapshotId, resourceLimits: resources });
+      const newId = rawSb.id;
+      await this._waitForRunning(newId);
+
+      const sessionName = `fork-${parentName}-${newId.slice(0, 8)}`;
+      await this._adapter.append({
+        ts: Date.now(),
+        name: sessionName,
+        sandboxId: newId,
+        stepIndex: -1,
+        event: LedgerEvent.SandboxCreated,
+        payload: { sandboxId: newId, forkedFrom: snapshotId },
+      });
+
+      return new Sandbox(newId, sessionName, {
+        control: this._control,
+        adapter: this._adapter,
+        onClose: () => this._releaseSlot(),
+        shell,
+        fork: (sid, tag) => this._forkFromSnapshot(sid, sessionName, resources, shell),
+      });
     } catch (err) {
       this._releaseSlot();
       throw err;

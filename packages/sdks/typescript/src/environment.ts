@@ -18,6 +18,12 @@ export interface EnvironmentOptions {
    * that makes the environment ready. The result is snapshotted and reused from then on.
    */
   setup: (sb: Sandbox) => Promise<void>;
+  /**
+   * Default shell for all `exec()` calls — both during setup and in sandboxes spawned
+   * from this environment. Pass an absolute path (e.g. `"/bin/bash"`).
+   * Defaults to `"/bin/sh"`.
+   */
+  shell?: string;
 }
 
 /** Extra options forwarded to each sandbox spawned from an environment. */
@@ -26,6 +32,11 @@ export interface EnvironmentSandboxOptions {
   env?: Record<string, string>;
   /** Observability hooks. */
   hooks?: SandboxHooks;
+  /**
+   * Override the shell for this spawned sandbox only.
+   * Falls back to `EnvironmentOptions.shell`, then `"/bin/sh"`.
+   */
+  shell?: string;
 }
 
 /**

@@ -55,4 +55,10 @@ export interface SandboxOptions {
   timeout?: number;
   /** Observability hooks (e.g. `otelHooks(tracer)` from `@drej/otel`). */
   hooks?: SandboxHooks;
+  /**
+   * Default shell for all `sb.exec()` calls on this sandbox.
+   * Pass an absolute path to the shell binary (e.g. `"/bin/bash"`, `"/bin/zsh"`).
+   * Defaults to `"/bin/sh"`.
+   */
+  shell?: string;
 }

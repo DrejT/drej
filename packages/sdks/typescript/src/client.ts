@@ -132,6 +132,7 @@ export class Drej {
         adapter: this._adapter,
         hooks: opts.hooks,
         onClose: () => this._releaseSlot(),
+        shell: opts.shell,
       });
       opts.hooks?.onSandboxCreated?.(sandboxId, name);
       return sb;
@@ -344,13 +345,13 @@ export class Drej {
     if (record) {
       const snap = await this._control.getSnapshot(record.snapshotId).catch(() => null);
       if (snap?.state === SnapshotState.Ready) {
-        return this._createFromSnapshot(record.snapshotId, opts.resources, name, extra);
+        return this._createFromSnapshot(record.snapshotId, opts.resources, name, opts.shell, extra);
       }
       // Stale snapshot (server-side TTL or deletion) — fall through to rebuild
     }
 
     const snapshotId = await this._getOrBuildEnvironment(name, opts);
-    return this._createFromSnapshot(snapshotId, opts.resources, name, extra);
+    return this._createFromSnapshot(snapshotId, opts.resources, name, opts.shell, extra);
   }
 
   _getOrBuildEnvironment(name: string, opts: EnvironmentOptions): Promise<string> {
@@ -365,7 +366,7 @@ export class Drej {
     const image = typeof opts.image === "string" ? opts.image : opts.image.uri;
     const buildName = `env-${name}-build`;
 
-    const sb = await this.sandbox({ image: opts.image, resources: opts.resources, name: buildName });
+    const sb = await this.sandbox({ image: opts.image, resources: opts.resources, name: buildName, shell: opts.shell });
     try {
       await opts.setup(sb);
       await sb.checkpoint(`env:${name}`);
@@ -385,6 +386,7 @@ export class Drej {
     snapshotId: string,
     resources: { cpu: string; memory: string; gpu?: string },
     envName: string,
+    envShell?: string,
     extra?: EnvironmentSandboxOptions,
   ): Promise<Sandbox> {
     await this._acquireSlot();
@@ -412,6 +414,7 @@ export class Drej {
         adapter: this._adapter,
         hooks: extra?.hooks,
         onClose: () => this._releaseSlot(),
+        shell: extra?.shell ?? envShell,
       });
       extra?.hooks?.onSandboxCreated?.(newId, sessionName);
       return sb;

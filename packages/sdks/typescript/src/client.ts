@@ -7,19 +7,23 @@ import {
   type ListSandboxOptions,
   type ExecResult,
   type SandboxHooks,
+  type EnvironmentRecord,
 } from "@drej/core";
 import {
   ControlClient,
   SandboxState,
+  SnapshotState,
 } from "@drej/opensandbox";
 
 import { DrejError, type DrejOptions, type SandboxOptions } from "./types";
+import { Environment, type EnvironmentOptions, type EnvironmentSandboxOptions } from "./environment";
 
 export { Sandbox } from "@drej/core";
 export type { ExecHandle, ExecResult, ExecOptions, ExecCodeOptions } from "@drej/core";
 export { LedgerEvent, SandboxStatus, SandboxError, ExecConnectionError, CommandError, StepTimeoutError } from "@drej/core";
-export type { IStorageAdapter, SandboxDetails, ListSandboxOptions, LedgerEntry } from "@drej/core";
+export type { IStorageAdapter, SandboxDetails, ListSandboxOptions, LedgerEntry, EnvironmentRecord } from "@drej/core";
 export { DrejError, type DrejOptions, type SandboxOptions } from "./types";
+export { Environment, type EnvironmentOptions, type EnvironmentSandboxOptions } from "./environment";
 
 /**
  * Main entry point for drej. Manages sandbox lifecycle and session history.
@@ -49,6 +53,7 @@ export class Drej {
   private readonly _waiters: Array<() => void> = [];
   private _connectPromise: Promise<void> | null = null;
   private _adapterClosed = false;
+  private readonly _envBuilds = new Map<string, Promise<string>>();
 
   constructor(options: DrejOptions) {
     this._control = new ControlClient({
@@ -266,7 +271,155 @@ export class Drej {
     },
   };
 
+  /**
+   * Define a named, reusable sandbox environment.
+   *
+   * Returns an `Environment` object — no I/O happens here. The first call to
+   * `env.sandbox()` builds the environment (runs setup + snapshots), then caches
+   * the snapshot ID in the ledger. Subsequent calls restore from that snapshot.
+   *
+   * @example
+   * ```ts
+   * const env = client.environment("python", {
+   *   image: "debian:bookworm-slim",
+   *   resources: { cpu: "500m", memory: "512Mi" },
+   *   setup: async (sb) => {
+   *     await sb.exec("apt-get update -qq && apt-get install -y python3-pip");
+   *     await sb.exec("pip install numpy pandas");
+   *   },
+   * });
+   *
+   * const sb = await env.sandbox();
+   * try {
+   *   await sb.exec("python3 -c 'import pandas; print(pandas.__version__)'").pipe(process.stdout);
+   * } finally {
+   *   await sb.close();
+   * }
+   * ```
+   */
+  environment(name: string, opts: EnvironmentOptions): Environment {
+    return new Environment(name, opts, this);
+  }
+
+  /**
+   * Environment management. List and delete cached environment records.
+   *
+   * @example
+   * ```ts
+   * const envs = await client.environments.list();
+   * await client.environments.delete("python");
+   * ```
+   */
+  readonly environments = {
+    /** Return all environment records, newest first. */
+    list: async (): Promise<EnvironmentRecord[]> => {
+      await this._ensureConnected();
+      return this._adapter.listEnvironments();
+    },
+    /** Remove the ledger record for a named environment. Does not delete the server-side snapshot. */
+    delete: async (name: string): Promise<void> => {
+      await this._ensureConnected();
+      return this._adapter.deleteEnvironment(name);
+    },
+  };
+
   // ── Internal ──────────────────────────────────────────────────────────────
+
+  // ── Environment internals (called by Environment class) ──────────────────
+
+  async _envInfo(name: string): Promise<EnvironmentRecord | null> {
+    await this._ensureConnected();
+    return this._adapter.getEnvironment(name);
+  }
+
+  async _envRebuild(name: string, opts: EnvironmentOptions): Promise<void> {
+    await this._ensureConnected();
+    await this._buildEnvironment(name, opts);
+  }
+
+  async _envSandbox(name: string, opts: EnvironmentOptions, extra?: EnvironmentSandboxOptions): Promise<Sandbox> {
+    await this._ensureConnected();
+
+    const record = await this._adapter.getEnvironment(name);
+    if (record) {
+      const snap = await this._control.getSnapshot(record.snapshotId).catch(() => null);
+      if (snap?.state === SnapshotState.Ready) {
+        return this._createFromSnapshot(record.snapshotId, opts.resources, name, extra);
+      }
+      // Stale snapshot (server-side TTL or deletion) — fall through to rebuild
+    }
+
+    const snapshotId = await this._getOrBuildEnvironment(name, opts);
+    return this._createFromSnapshot(snapshotId, opts.resources, name, extra);
+  }
+
+  _getOrBuildEnvironment(name: string, opts: EnvironmentOptions): Promise<string> {
+    const inflight = this._envBuilds.get(name);
+    if (inflight) return inflight;
+    const build = this._buildEnvironment(name, opts).finally(() => this._envBuilds.delete(name));
+    this._envBuilds.set(name, build);
+    return build;
+  }
+
+  async _buildEnvironment(name: string, opts: EnvironmentOptions): Promise<string> {
+    const image = typeof opts.image === "string" ? opts.image : opts.image.uri;
+    const buildName = `env-${name}-build`;
+
+    const sb = await this.sandbox({ image: opts.image, resources: opts.resources, name: buildName });
+    try {
+      await opts.setup(sb);
+      await sb.checkpoint(`env:${name}`);
+    } finally {
+      await sb.close();
+    }
+
+    const checkpoint = await this._adapter.lastCheckpoint(buildName, sb.sandboxId);
+    if (!checkpoint) throw new DrejError(`Environment build for '${name}' produced no checkpoint`, 500);
+    const { snapshotId } = checkpoint.payload as { snapshotId: string };
+
+    await this._adapter.saveEnvironment({ name, snapshotId, image, builtAt: Date.now() });
+    return snapshotId;
+  }
+
+  async _createFromSnapshot(
+    snapshotId: string,
+    resources: { cpu: string; memory: string; gpu?: string },
+    envName: string,
+    extra?: EnvironmentSandboxOptions,
+  ): Promise<Sandbox> {
+    await this._acquireSlot();
+    try {
+      const rawSb = await this._control.createSandbox({
+        snapshotId,
+        resourceLimits: resources,
+        env: extra?.env,
+      });
+      const newId = rawSb.id;
+      await this._waitForRunning(newId);
+
+      const sessionName = `env-${envName}-${newId.slice(0, 8)}`;
+      await this._adapter.append({
+        ts: Date.now(),
+        name: sessionName,
+        sandboxId: newId,
+        stepIndex: -1,
+        event: LedgerEvent.SandboxCreated,
+        payload: { sandboxId: newId, fromEnvironment: envName, snapshotId },
+      });
+
+      const sb = new Sandbox(newId, sessionName, {
+        control: this._control,
+        adapter: this._adapter,
+        hooks: extra?.hooks,
+        onClose: () => this._releaseSlot(),
+      });
+      extra?.hooks?.onSandboxCreated?.(newId, sessionName);
+      return sb;
+    } catch (err) {
+      this._releaseSlot();
+      throw err;
+    }
+  }
 
   private async _waitForRunning(sandboxId: string, timeoutMs = 120_000): Promise<void> {
     const deadline = Date.now() + timeoutMs;

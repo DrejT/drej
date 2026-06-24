@@ -192,4 +192,56 @@ describe("SQLiteAdapter", () => {
       expect(await db.getSandboxDetails("sb", "s2")).not.toBeNull();
     });
   });
+
+  // ── environments ────────────────────────────────────────────────────────────
+
+  describe("environments", () => {
+    it("getEnvironment returns null for unknown name", async () => {
+      expect(await db.getEnvironment("no-such")).toBeNull();
+    });
+
+    it("saveEnvironment + getEnvironment round-trips all fields", async () => {
+      await db.saveEnvironment({ name: "py", snapshotId: "snap-1", image: "debian:slim", builtAt: 1000 });
+      const r = await db.getEnvironment("py");
+      expect(r).toEqual({ name: "py", snapshotId: "snap-1", image: "debian:slim", builtAt: 1000 });
+    });
+
+    it("saveEnvironment upserts: second write updates the record", async () => {
+      await db.saveEnvironment({ name: "py", snapshotId: "snap-1", image: "debian:slim", builtAt: 1000 });
+      await db.saveEnvironment({ name: "py", snapshotId: "snap-2", image: "debian:slim", builtAt: 2000 });
+      const r = await db.getEnvironment("py");
+      expect(r?.snapshotId).toBe("snap-2");
+      expect(r?.builtAt).toBe(2000);
+    });
+
+    it("deleteEnvironment removes the record", async () => {
+      await db.saveEnvironment({ name: "py", snapshotId: "snap-1", image: "debian:slim", builtAt: 1000 });
+      await db.deleteEnvironment("py");
+      expect(await db.getEnvironment("py")).toBeNull();
+    });
+
+    it("deleteEnvironment is a no-op for unknown name", async () => {
+      await expect(db.deleteEnvironment("no-such")).resolves.toBeUndefined();
+    });
+
+    it("listEnvironments returns all records newest-first", async () => {
+      await db.saveEnvironment({ name: "py", snapshotId: "snap-1", image: "debian:slim", builtAt: 1000 });
+      await db.saveEnvironment({ name: "node", snapshotId: "snap-2", image: "node:22", builtAt: 2000 });
+      const list = await db.listEnvironments();
+      expect(list).toHaveLength(2);
+      expect(list[0].name).toBe("node");
+      expect(list[1].name).toBe("py");
+    });
+
+    it("listEnvironments returns empty array when no environments exist", async () => {
+      expect(await db.listEnvironments()).toEqual([]);
+    });
+
+    it("deleteEnvironment does not affect other records", async () => {
+      await db.saveEnvironment({ name: "py", snapshotId: "snap-1", image: "debian:slim", builtAt: 1000 });
+      await db.saveEnvironment({ name: "node", snapshotId: "snap-2", image: "node:22", builtAt: 2000 });
+      await db.deleteEnvironment("py");
+      expect(await db.getEnvironment("node")).not.toBeNull();
+    });
+  });
 });

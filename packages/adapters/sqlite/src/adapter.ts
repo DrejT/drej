@@ -1,7 +1,14 @@
 import { Database } from "bun:sqlite";
-import type { IStorageAdapter, LedgerEntry, LedgerEvent, SandboxDetails, ListSandboxOptions } from "@drej/core";
+import type { IStorageAdapter, LedgerEntry, LedgerEvent, SandboxDetails, ListSandboxOptions, EnvironmentRecord } from "@drej/core";
 import { SandboxStatus } from "@drej/core";
 import { MIGRATION_SQL } from "./migrations";
+
+type EnvRow = {
+  name: string;
+  snapshot_id: string;
+  image: string;
+  built_at: number;
+};
 
 type Row = {
   sandbox_id: string;
@@ -154,5 +161,32 @@ export class SQLiteAdapter implements IStorageAdapter {
     this.db
       .prepare<void, [string, string]>(`DELETE FROM drej_events WHERE name = ? AND sandbox_id = ?`)
       .run(name, sandboxId);
+  }
+
+  async getEnvironment(name: string): Promise<EnvironmentRecord | null> {
+    const row = this.db
+      .prepare<EnvRow, [string]>("SELECT name, snapshot_id, image, built_at FROM drej_environments WHERE name = ?")
+      .get(name);
+    return row ? { name: row.name, snapshotId: row.snapshot_id, image: row.image, builtAt: row.built_at } : null;
+  }
+
+  async saveEnvironment(record: EnvironmentRecord): Promise<void> {
+    this.db
+      .prepare<void, [string, string, string, number]>(
+        `INSERT INTO drej_environments (name, snapshot_id, image, built_at) VALUES (?, ?, ?, ?)
+         ON CONFLICT(name) DO UPDATE SET snapshot_id = excluded.snapshot_id, image = excluded.image, built_at = excluded.built_at`,
+      )
+      .run(record.name, record.snapshotId, record.image, record.builtAt);
+  }
+
+  async deleteEnvironment(name: string): Promise<void> {
+    this.db.prepare<void, [string]>("DELETE FROM drej_environments WHERE name = ?").run(name);
+  }
+
+  async listEnvironments(): Promise<EnvironmentRecord[]> {
+    const rows = this.db
+      .prepare<EnvRow, []>("SELECT name, snapshot_id, image, built_at FROM drej_environments ORDER BY built_at DESC")
+      .all();
+    return rows.map((r) => ({ name: r.name, snapshotId: r.snapshot_id, image: r.image, builtAt: r.built_at }));
   }
 }

@@ -1,0 +1,191 @@
+---
+title: Environments
+description: Define a named setup recipe once, snapshot it, and spawn cheap isolated sandboxes from it on demand.
+---
+
+An **environment** is a named sandbox configuration with a setup recipe. drej builds it once — installs packages, writes config, compiles assets — snapshots the result, and restores from that snapshot on every subsequent call. Setup never runs again unless you explicitly rebuild.
+
+```
+First call   → create sandbox → run setup → snapshot → restore → return Sandbox   (~30–60 s)
+Second call  → restore from snapshot → return Sandbox                              (~2–3 s)
+```
+
+Each sandbox spawned from an environment is fully isolated. Changes made in one do not affect others, and they all start from the same filesystem baseline.
+
+## Defining an environment
+
+`client.environment(name, opts)` returns an `Environment` object. No I/O happens here — it's a pure configuration object.
+
+```ts
+const env = client.environment("python-data-science", {
+  image: "debian:bookworm-slim",
+  resources: { cpu: "500m", memory: "512Mi" },
+  setup: async (sb) => {
+    await sb.exec("apt-get update -qq && apt-get install -y python3-pip --no-install-recommends -q");
+    await sb.exec("pip install --quiet numpy pandas matplotlib");
+  },
+});
+```
+
+`setup` receives a live `Sandbox` and runs synchronously in sequence. Use `sb.exec()`, `sb.writeFile()`, or any other `Sandbox` method.
+
+## Spawning a sandbox
+
+```ts
+const sb = await env.sandbox();
+try {
+  await sb.exec("python3 -c 'import pandas; print(pandas.__version__)'").pipe(process.stdout);
+} finally {
+  await sb.close();
+}
+```
+
+The first call builds and snapshots the environment. Every subsequent call restores from the cached snapshot. Concurrent first calls are safe — drej ensures the setup recipe runs exactly once even if multiple callers race.
+
+## Passing options to each sandbox
+
+`env.sandbox(extra?)` forwards additional options to the spawned container:
+
+```ts
+const sb = await env.sandbox({
+  env: { PYTHONPATH: "/app", DEBUG: "1" },
+  hooks: otelHooks(tracer),
+});
+```
+
+| Option | Type | Description |
+|---|---|---|
+| `env` | `Record<string, string>` | Environment variables set at container startup. |
+| `hooks` | `SandboxHooks` | Observability hooks (e.g. `otelHooks(tracer)` from `@drej/otel`). |
+
+## Rebuilding after setup changes
+
+Call `env.rebuild()` to force a fresh build, discarding the cached snapshot:
+
+```ts
+await env.rebuild();
+```
+
+There is no automatic invalidation — drej cannot detect changes to your setup function. Call `rebuild()` explicitly whenever your setup script changes.
+
+## Inspecting an environment
+
+```ts
+const info = await env.info();
+// → { name, snapshotId, image, builtAt } | null
+```
+
+Returns `null` if the environment has never been built. `builtAt` is a Unix timestamp in milliseconds.
+
+## Managing environments
+
+```ts
+// List all cached environments
+const envs = await client.environments.list();
+// → [{ name, snapshotId, image, builtAt }, ...]
+
+// Remove the ledger record for an environment
+await client.environments.delete("python-data-science");
+```
+
+`delete` removes only the ledger record. It does not delete the server-side snapshot on OpenSandbox. Cleaning up orphaned snapshots is the server's responsibility (TTL policy) or yours via the OpenSandbox API directly.
+
+## Full example
+
+```ts
+import { Drej } from "drej";
+import { SQLiteAdapter } from "@drej/sqlite";
+
+const client = new Drej({
+  baseUrl: "http://localhost:8080",
+  adapter: new SQLiteAdapter("./ledger.db"),
+});
+
+const env = client.environment("node-ci", {
+  image: "debian:bookworm-slim",
+  resources: { cpu: "1", memory: "1Gi" },
+  setup: async (sb) => {
+    await sb.exec("apt-get update -qq && apt-get install -y nodejs npm -q");
+    await sb.exec("npm install -g typescript ts-node");
+  },
+});
+
+// Run two isolated CI jobs from the same environment
+const [sb1, sb2] = await Promise.all([env.sandbox(), env.sandbox()]);
+
+try {
+  await Promise.all([
+    sb1.exec("node --version").pipe(process.stdout),
+    sb2.exec("tsc --version").pipe(process.stdout),
+  ]);
+} finally {
+  await Promise.all([sb1.close(), sb2.close()]);
+}
+```
+
+## API reference
+
+### `client.environment(name, opts)`
+
+Returns an `Environment` object. No network calls.
+
+```ts
+function environment(name: string, opts: EnvironmentOptions): Environment
+```
+
+**`EnvironmentOptions`**
+
+| Field | Type | Description |
+|---|---|---|
+| `image` | `string \| { uri: string; auth?: ... }` | Container image. Same format as `SandboxOptions.image`. |
+| `resources` | `{ cpu: string; memory: string; gpu?: string }` | Applied to both the build sandbox and each spawned sandbox. |
+| `setup` | `(sb: Sandbox) => Promise<void>` | Runs once to configure the environment. |
+
+### `Environment`
+
+| Method | Returns | Description |
+|---|---|---|
+| `env.sandbox(extra?)` | `Promise<Sandbox>` | Spawn a sandbox pre-configured with this environment. |
+| `env.rebuild()` | `Promise<void>` | Force a full rebuild, ignoring any cached snapshot. |
+| `env.info()` | `Promise<EnvironmentRecord \| null>` | Return the cached build record, or `null` if not yet built. |
+| `env.name` | `string` | The environment name. |
+
+### `client.environments`
+
+| Method | Returns | Description |
+|---|---|---|
+| `.list()` | `Promise<EnvironmentRecord[]>` | All cached environment records, newest first. |
+| `.delete(name)` | `Promise<void>` | Remove the ledger record. Does not delete the server snapshot. |
+
+### `EnvironmentRecord`
+
+```ts
+interface EnvironmentRecord {
+  name: string;
+  snapshotId: string;  // OpenSandbox snapshot ID
+  image: string;       // resolved image URI
+  builtAt: number;     // Unix timestamp (ms)
+}
+```
+
+## How it works
+
+Internally, `env.sandbox()` does the following on a cold start:
+
+1. Calls `adapter.getEnvironment(name)` to check for a cached snapshot ID
+2. If found, calls `control.getSnapshot(snapshotId)` to verify it still exists on the server
+3. If the snapshot is valid, calls `control.createSandbox({ snapshotId })` — a new container initialized from the snapshot filesystem
+4. If no valid snapshot, runs `_buildEnvironment`: creates a fresh sandbox, calls `setup(sb)`, calls `sb.checkpoint()`, reads the resulting `snapshotId` from the ledger, persists it via `adapter.saveEnvironment()`
+5. Returns a fully live `Sandbox` with a new ID and empty exec history
+
+The snapshot is not "resumed" in the session-replay sense — there is no exec cache. Every sandbox spawned from an environment starts fresh, with the pre-installed filesystem as its starting point.
+
+## Known limits
+
+**Image requirements** — drej wraps every `sb.exec()` call as `echo <base64> | base64 -d | bash`. The image must include `bash` and `base64`. `debian:bookworm-slim` works out of the box; `alpine:3` does not (it has `ash`, not `bash`).
+
+**No automatic invalidation** — if you change your setup function, the cached snapshot is stale but drej has no way to detect it. Call `env.rebuild()` explicitly.
+
+**Snapshot storage** — snapshots live on the OpenSandbox server. If you switch `baseUrl` or the server prunes old snapshots, the cached record becomes stale. `env.sandbox()` detects this (via `getSnapshot`) and rebuilds automatically.
+
+**`rebuild()` concurrency** — concurrent `rebuild()` calls are not deduplicated. If you call `rebuild()` from multiple processes simultaneously, each will run setup and overwrite the record. For production use, call `rebuild()` from a single coordinated process (e.g. a deploy script).

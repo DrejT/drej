@@ -13,4 +13,11 @@ CREATE TABLE IF NOT EXISTS drej_events (
 
 CREATE INDEX IF NOT EXISTS drej_events_sandbox_id ON drej_events(sandbox_id);
 CREATE INDEX IF NOT EXISTS drej_events_name ON drej_events(name);
+
+CREATE TABLE IF NOT EXISTS drej_environments (
+  name        TEXT    PRIMARY KEY,
+  snapshot_id TEXT    NOT NULL,
+  image       TEXT    NOT NULL,
+  built_at    INTEGER NOT NULL
+);
 `;

@@ -23,7 +23,7 @@ await sb.close();
 
 ## What it is
 
-drej is a TypeScript SDK for running code inside isolated [OpenSandbox](https://opensandbox.ai) containers. Spawn a sandbox, run shell commands or code, stream output, checkpoint state, and resume interrupted work — all from in-process TypeScript, with no server or daemon to operate.
+drej is a TypeScript SDK for running code inside isolated [OpenSandbox](https://open-sandbox.ai) containers. Spawn a sandbox, run shell commands or code, stream output, checkpoint state, and resume interrupted work — all from in-process TypeScript, with no server or daemon to operate.
 
 It is designed for AI products that need to execute untrusted or generated code safely: agent tool calls, code interpreter loops, sandboxed CI pipelines, or any job that touches a filesystem and runs shell commands.
 
@@ -66,6 +66,7 @@ bun add drej @drej/postgres
 | `@drej/sqlite` | SQLite storage adapter (local dev, zero infra) |
 | `@drej/postgres` | Postgres storage adapter (production) |
 | `@drej/otel` | OpenTelemetry hooks adapter |
+| `@drej/flue` | Flue sandbox adapter — use drej sandboxes as Flue session environments |
 | `@drej/core` | Core engine — consumed by `drej`, not used directly |
 
 ---
@@ -284,7 +285,7 @@ const sb = await client.sandbox({
 
 ## Local OpenSandbox setup
 
-drej requires a running [OpenSandbox](https://opensandbox.ai) instance. For local development:
+drej requires a running [OpenSandbox](https://open-sandbox.ai) instance. For local development:
 
 ```bash
 uvx opensandbox-server

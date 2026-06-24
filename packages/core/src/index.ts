@@ -1,5 +1,5 @@
 export { LedgerEvent, SandboxStatus } from "./ledger";
-export type { LedgerEntry, IStorageAdapter, SandboxDetails, ListSandboxOptions, EnvironmentRecord } from "./ledger";
+export type { LedgerEntry, IStorageAdapter, SandboxDetails, ListSandboxOptions, EnvironmentRecord, CheckpointInfo } from "./ledger";
 
 export { LogLevel, ConsoleLogger, noopLogger } from "./logger";
 export type { ILogger } from "./logger";

@@ -8,6 +8,7 @@ import {
   type ExecResult,
   type SandboxHooks,
   type EnvironmentRecord,
+  type CheckpointInfo,
 } from "@drej/core";
 import {
   ControlClient,
@@ -15,14 +16,15 @@ import {
   SnapshotState,
 } from "@drej/opensandbox";
 
-import { DrejError, type DrejOptions, type SandboxOptions } from "./types";
+import { DrejError, type DrejOptions, type SandboxOptions, type ResumeOptions } from "./types";
 import { Environment, type EnvironmentOptions, type EnvironmentSandboxOptions } from "./environment";
 
 export { Sandbox } from "@drej/core";
 export type { ExecHandle, ExecResult, ExecOptions, ExecCodeOptions } from "@drej/core";
 export { LedgerEvent, SandboxStatus, SandboxError, ExecConnectionError, CommandError, StepTimeoutError } from "@drej/core";
 export type { IStorageAdapter, SandboxDetails, ListSandboxOptions, LedgerEntry, EnvironmentRecord } from "@drej/core";
-export { DrejError, type DrejOptions, type SandboxOptions } from "./types";
+export { DrejError, type DrejOptions, type SandboxOptions, type ResumeOptions } from "./types";
+export type { CheckpointInfo } from "@drej/core";
 export { Environment, type EnvironmentOptions, type EnvironmentSandboxOptions } from "./environment";
 
 /**
@@ -165,22 +167,30 @@ export class Drej {
    * await sb2.close();
    * ```
    */
-  async resume(sandboxId: string): Promise<Sandbox> {
+  async resume(sandboxId: string, opts?: ResumeOptions): Promise<Sandbox> {
     await this._ensureConnected();
     const allSessions = await this._adapter.listAllSandboxDetails();
     const session = allSessions.find((s) => s.sandboxId === sandboxId);
     if (!session) throw new DrejError(`Session ${sandboxId} not found`, 404);
 
-    return this._resumeSession(session.name, sandboxId);
+    return this._resumeSession(session.name, sandboxId, opts?.tag);
   }
 
-  private async _resumeSession(name: string, sandboxId: string): Promise<Sandbox> {
+  private async _resumeSession(name: string, sandboxId: string, tag?: string): Promise<Sandbox> {
     const entries = await this._adapter.readAll(name, sandboxId);
 
-    const lastCheckpointIdx = entries.map((e) => e.event).lastIndexOf(LedgerEvent.CheckpointCreated);
-    if (lastCheckpointIdx === -1) throw new DrejError(`No checkpoint found for session ${sandboxId}`, 404);
+    let checkpointIdx: number;
+    if (tag) {
+      checkpointIdx = entries.findIndex(
+        (e) => e.event === LedgerEvent.CheckpointCreated && (e.payload as { name?: string } | undefined)?.name === tag,
+      );
+      if (checkpointIdx === -1) throw new DrejError(`No checkpoint with tag '${tag}' found for session ${sandboxId}`, 404);
+    } else {
+      checkpointIdx = entries.map((e) => e.event).lastIndexOf(LedgerEvent.CheckpointCreated);
+      if (checkpointIdx === -1) throw new DrejError(`No checkpoint found for session ${sandboxId}`, 404);
+    }
 
-    const { snapshotId } = entries[lastCheckpointIdx].payload as { snapshotId: string };
+    const { snapshotId } = entries[checkpointIdx].payload as { snapshotId: string };
 
     const createdEntry = entries.find((e) => e.event === LedgerEvent.SandboxCreated);
     const resources = (createdEntry?.payload as { resources?: { cpu?: string; memory?: string; gpu?: string } } | undefined)?.resources;
@@ -189,7 +199,7 @@ export class Drej {
     const pendingStdout = new Map<number, string[]>();
     const pendingStderr = new Map<number, string[]>();
 
-    for (const entry of entries.slice(0, lastCheckpointIdx)) {
+    for (const entry of entries.slice(0, checkpointIdx)) {
       if (entry.event === LedgerEvent.ExecStart) {
         const { seq } = entry.payload as { seq: number };
         pendingStdout.set(seq, []);

@@ -86,6 +86,16 @@ export interface LedgerEntry {
   error?: string;
 }
 
+/** A recorded checkpoint for a sandbox session. */
+export interface CheckpointInfo {
+  /** OpenSandbox snapshot ID. */
+  snapshotId: string;
+  /** User-supplied tag, if provided when calling `sb.checkpoint(tag)`. */
+  tag?: string;
+  /** Unix timestamp (ms) when the checkpoint was created. */
+  createdAt: number;
+}
+
 /**
  * Persisted record for a named, reusable sandbox environment.
  * Written once when the environment is first built; updated on rebuild.
@@ -134,6 +144,8 @@ export interface IStorageAdapter {
   getSandboxDetails(name: string, sandboxId: string): Promise<SandboxDetails | null>;
   /** Delete all ledger events for a session. */
   deleteSandbox(name: string, sandboxId: string): Promise<void>;
+  /** Return all checkpoints for a session in creation order. */
+  listCheckpoints(name: string, sandboxId: string): Promise<CheckpointInfo[]>;
 
   // ── Environment records ──────────────────────────────────────────────────
 

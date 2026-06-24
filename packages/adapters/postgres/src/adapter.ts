@@ -1,5 +1,5 @@
 import postgres from "postgres";
-import type { IStorageAdapter, LedgerEntry, LedgerEvent, SandboxDetails, ListSandboxOptions, EnvironmentRecord } from "@drej/core";
+import type { IStorageAdapter, LedgerEntry, LedgerEvent, SandboxDetails, ListSandboxOptions, EnvironmentRecord, CheckpointInfo } from "@drej/core";
 import { SandboxStatus } from "@drej/core";
 import { MIGRATION_SQL } from "./migrations";
 
@@ -143,6 +143,19 @@ export class PostgresAdapter implements IStorageAdapter {
 
   async deleteSandbox(name: string, sandboxId: string): Promise<void> {
     await this.sql`DELETE FROM drej_events WHERE name = ${name} AND sandbox_id = ${sandboxId}`;
+  }
+
+  async listCheckpoints(name: string, sandboxId: string): Promise<CheckpointInfo[]> {
+    const rows = await this.sql<Row[]>`
+      SELECT sandbox_id, name, step_idx, branch, event, payload, error, ts
+      FROM drej_events
+      WHERE name = ${name} AND sandbox_id = ${sandboxId} AND event = 'checkpoint_created'
+      ORDER BY ts ASC
+    `;
+    return rows.map((r) => {
+      const p = (r.payload ?? {}) as { snapshotId: string; name?: string };
+      return { snapshotId: p.snapshotId, tag: p.name, createdAt: Number(r.ts) };
+    });
   }
 
   async getEnvironment(name: string): Promise<EnvironmentRecord | null> {

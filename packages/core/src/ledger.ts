@@ -87,6 +87,21 @@ export interface LedgerEntry {
 }
 
 /**
+ * Persisted record for a named, reusable sandbox environment.
+ * Written once when the environment is first built; updated on rebuild.
+ */
+export interface EnvironmentRecord {
+  /** User-provided environment name. */
+  name: string;
+  /** OpenSandbox snapshot ID to restore from. */
+  snapshotId: string;
+  /** Raw image URI resolved at build time. */
+  image: string;
+  /** Unix timestamp (ms) when the environment was last built. */
+  builtAt: number;
+}
+
+/**
  * Persistence interface for session event storage.
  *
  * Implement this interface to plug in any storage backend. drej ships two
@@ -119,4 +134,15 @@ export interface IStorageAdapter {
   getSandboxDetails(name: string, sandboxId: string): Promise<SandboxDetails | null>;
   /** Delete all ledger events for a session. */
   deleteSandbox(name: string, sandboxId: string): Promise<void>;
+
+  // ── Environment records ──────────────────────────────────────────────────
+
+  /** Return the cached record for a named environment, or null if not built yet. */
+  getEnvironment(name: string): Promise<EnvironmentRecord | null>;
+  /** Upsert an environment record after a successful build. */
+  saveEnvironment(record: EnvironmentRecord): Promise<void>;
+  /** Remove the record for a named environment. Does not delete the server-side snapshot. */
+  deleteEnvironment(name: string): Promise<void>;
+  /** Return all environment records, newest first. */
+  listEnvironments(): Promise<EnvironmentRecord[]>;
 }

@@ -1,4 +1,4 @@
 {
   "title": "Concepts",
-  "pages": ["workflows", "sandboxes", "steps", "refs-and-state", "event-stream", "storage-adapters"]
+  "pages": ["workflows", "sandboxes", "environments", "steps", "refs-and-state", "event-stream", "storage-adapters"]
 }

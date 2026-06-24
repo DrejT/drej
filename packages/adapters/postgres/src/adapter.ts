@@ -1,5 +1,5 @@
 import postgres from "postgres";
-import type { IStorageAdapter, LedgerEntry, LedgerEvent, SandboxDetails, ListSandboxOptions } from "@drej/core";
+import type { IStorageAdapter, LedgerEntry, LedgerEvent, SandboxDetails, ListSandboxOptions, EnvironmentRecord } from "@drej/core";
 import { SandboxStatus } from "@drej/core";
 import { MIGRATION_SQL } from "./migrations";
 
@@ -143,5 +143,36 @@ export class PostgresAdapter implements IStorageAdapter {
 
   async deleteSandbox(name: string, sandboxId: string): Promise<void> {
     await this.sql`DELETE FROM drej_events WHERE name = ${name} AND sandbox_id = ${sandboxId}`;
+  }
+
+  async getEnvironment(name: string): Promise<EnvironmentRecord | null> {
+    const rows = await this.sql<{ name: string; snapshot_id: string; image: string; built_at: string }[]>`
+      SELECT name, snapshot_id, image, built_at FROM drej_environments WHERE name = ${name}
+    `;
+    if (!rows.length) return null;
+    const r = rows[0];
+    return { name: r.name, snapshotId: r.snapshot_id, image: r.image, builtAt: Number(r.built_at) };
+  }
+
+  async saveEnvironment(record: EnvironmentRecord): Promise<void> {
+    await this.sql`
+      INSERT INTO drej_environments (name, snapshot_id, image, built_at)
+      VALUES (${record.name}, ${record.snapshotId}, ${record.image}, ${record.builtAt})
+      ON CONFLICT (name) DO UPDATE
+        SET snapshot_id = excluded.snapshot_id,
+            image       = excluded.image,
+            built_at    = excluded.built_at
+    `;
+  }
+
+  async deleteEnvironment(name: string): Promise<void> {
+    await this.sql`DELETE FROM drej_environments WHERE name = ${name}`;
+  }
+
+  async listEnvironments(): Promise<EnvironmentRecord[]> {
+    const rows = await this.sql<{ name: string; snapshot_id: string; image: string; built_at: string }[]>`
+      SELECT name, snapshot_id, image, built_at FROM drej_environments ORDER BY built_at DESC
+    `;
+    return rows.map((r) => ({ name: r.name, snapshotId: r.snapshot_id, image: r.image, builtAt: Number(r.built_at) }));
   }
 }

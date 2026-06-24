@@ -56,6 +56,14 @@
         "drej": "workspace:*",
       },
     },
+    "examples/environments": {
+      "name": "drej-example-environments",
+      "version": "0.0.1",
+      "dependencies": {
+        "@drej/sqlite": "workspace:*",
+        "drej": "workspace:*",
+      },
+    },
     "examples/error-handling": {
       "name": "drej-example-error-handling",
       "version": "0.0.1",
@@ -1148,6 +1156,8 @@
     "drej-example-capture": ["drej-example-capture@workspace:examples/capture"],
 
     "drej-example-control-flow": ["drej-example-control-flow@workspace:examples/control-flow"],
+
+    "drej-example-environments": ["drej-example-environments@workspace:examples/environments"],
 
     "drej-example-error-handling": ["drej-example-error-handling@workspace:examples/error-handling"],
 

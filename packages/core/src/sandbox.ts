@@ -15,6 +15,12 @@ export interface ExecOptions {
    * Defaults to `true`.
    */
   strict?: boolean;
+  /**
+   * Path to the shell binary used to execute the command.
+   * Overrides the sandbox-level default set in `SandboxOptions.shell`.
+   * Defaults to `"/bin/sh"`.
+   */
+  shell?: string;
 }
 
 export interface ExecCodeOptions {
@@ -39,6 +45,8 @@ export interface SandboxDeps {
   hooks?: SandboxHooks;
   /** Called when `close()` completes — used by DrejClient for concurrency accounting. */
   onClose?: () => void;
+  /** Default shell for all `exec()` calls on this sandbox. Defaults to `"/bin/sh"`. */
+  shell?: string;
 }
 
 /**
@@ -154,7 +162,8 @@ export class Sandbox {
       await self._emit(LedgerEvent.ExecStart, seq, { cmd, seq });
       self._deps.hooks?.onExecStart?.(self.sandboxId, seq, cmd);
       // base64-encode so newlines/special chars survive the JSON boundary
-      const command = `echo ${Buffer.from(cmd).toString("base64")} | base64 -d | bash`;
+      const sh = opts.shell ?? self._deps.shell ?? "/bin/sh";
+      const command = `echo ${Buffer.from(cmd).toString("base64")} | base64 -d | ${sh}`;
       for await (const ev of execClient.executeCommand({ command, cwd: opts.cwd, envs: opts.env })) {
         await self._emit(LedgerEvent.ExecEvent, seq, { seq, ...ev });
         yield ev;

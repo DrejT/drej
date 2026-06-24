@@ -1,0 +1,34 @@
+{
+  "name": "@drej/flue",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.mts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "bun test"
+  },
+  "peerDependencies": {
+    "@flue/runtime": ">=1.0.0-beta",
+    "drej": ">=0.4.0"
+  },
+  "devDependencies": {
+    "@flue/runtime": "1.0.0-beta.3",
+    "bun-types": "1.3.14",
+    "drej": "workspace:*",
+    "tsdown": "0.22.3",
+    "typescript": "6.0.3"
+  }
+}

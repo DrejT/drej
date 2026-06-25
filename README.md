@@ -42,7 +42,9 @@ The optional `@drej/workflow` package adds a lazy builder for multi-step pipelin
 - **Named checkpoints** — `sb.checkpoint("tag")`, `sb.listCheckpoints()`, `client.resume(id, { tag })` to restore from any named point
 - **Environments** — `client.environment(name, { setup })` builds a snapshot once and spawns cheap isolated sandboxes from it on demand
 - **Forking** — `sb.fork()` snapshots a live sandbox and returns an independent copy without closing the original
-- **File operations** — read, write, delete, move, list directory, search by glob
+- **File operations** — read, write, delete, move, search, list, create/delete directories, file metadata, in-place patch, cross-sandbox transfer
+- **HTTP proxy** — `sb.proxy(port)` returns a URL and auth headers for any port running inside the sandbox
+- **Metrics** — `sb.metrics()` returns current CPU and memory usage
 - **Concurrency cap** — `maxConcurrency` limits simultaneous active sandboxes; `client.sandbox()` awaits a slot
 - **Sandbox history** — `client.sandboxes.list()`, `.get()`, `.delete()` for audit and cleanup
 - **Workflow builder** — `@drej/workflow` adds retry, when, forEach, parallel, and sequence over sandboxes
@@ -109,13 +111,48 @@ await sb.close();
 ### File operations
 
 ```ts
+// Basic read/write
 await sb.writeFile("/app/main.py", "print('hello')");
-
 const content = await sb.readFile("/app/main.py");
 
+// Directories
+await sb.createDirectory("/app/dist");
+await sb.deleteDirectory("/app/tmp");
+
+// File metadata
+const info = await sb.getFileInfo("/app/main.py");
+// { size, type, mode, modified_at, ... }
+
+// In-place patch — no exec/sed needed
+await sb.replaceInFiles([{ path: "/app/main.py", old: "hello", new: "world" }]);
+
+// Search, move, delete
 const files = await sb.searchFiles("*.py", "/app");
 await sb.moveFile("/tmp/out.txt", "/app/out.txt");
 await sb.deleteFile("/app/main.py");
+
+// Copy a file to another sandbox
+await sb.transfer("/app/output.json", anotherSb);
+```
+
+### HTTP proxy
+
+Send HTTP requests to a server running inside the sandbox:
+
+```ts
+await sb.exec("node server.js &");
+await sb.exec("sleep 1");
+
+const { url, headers } = await sb.proxy(3000);
+const res = await fetch(`${url}/health`, { headers });
+console.log(await res.text());
+```
+
+### Sandbox metrics
+
+```ts
+const { cpu, memory, timestamp } = await sb.metrics();
+console.log(`CPU: ${cpu}  Memory: ${memory}`);
 ```
 
 ### Execute code directly

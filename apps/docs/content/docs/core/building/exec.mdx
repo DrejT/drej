@@ -44,6 +44,21 @@ await sb.exec(script).pipe(process.stdout);
 | `strict` | `boolean` | `true` | Throw `CommandError` on non-zero exit. Set to `false` to get the exit code instead. |
 | `cwd` | `string` | — | Working directory inside the sandbox |
 | `env` | `Record<string, string>` | — | Extra environment variables for this exec only |
+| `timeoutMs` | `number` | — | Abort the command after this many milliseconds |
+
+### Exec timeout
+
+Use `timeoutMs` to abort a command that runs too long:
+
+```ts
+try {
+  await sb.exec("npm test", { timeoutMs: 30_000 }); // abort after 30s
+} catch (e) {
+  if (e instanceof CommandError) {
+    console.error("timed out or failed:", e.exitCode);
+  }
+}
+```
 
 ### Strict vs non-strict
 
@@ -128,3 +143,38 @@ CodeLanguage.Python     // "python"
 CodeLanguage.JavaScript // "javascript"
 CodeLanguage.TypeScript // "typescript"
 ```
+
+## proxy()
+
+```ts
+await sb.proxy(port: number): Promise<{ url: string; headers: Record<string, string> }>
+```
+
+Returns a proxied URL and auth headers for a port running inside the sandbox. Use this to send HTTP requests to a server started with `exec`.
+
+```ts
+await sb.exec("node server.js &");
+// wait a moment for the server to be ready
+await sb.exec("sleep 1");
+
+const { url, headers } = await sb.proxy(3000);
+const res = await fetch(`${url}/health`, { headers });
+console.log(await res.text());
+```
+
+The returned `url` is routable from outside the sandbox. The `headers` contain the execd auth token required by OpenSandbox's proxy layer — pass them along with every request.
+
+## metrics()
+
+```ts
+await sb.metrics(): Promise<{ cpu: number; memory: number; timestamp: string }>
+```
+
+Returns current CPU and memory usage for the sandbox container.
+
+```ts
+const { cpu, memory, timestamp } = await sb.metrics();
+console.log(`CPU: ${cpu}, Memory: ${memory} at ${timestamp}`);
+```
+
+Useful for monitoring resource consumption during heavy workloads or detecting runaway processes before a timeout fires.

@@ -1,7 +1,7 @@
 import { ExecClient, SnapshotState } from "@drej/opensandbox";
 import type { ControlClient, SSEEvent } from "@drej/opensandbox";
 import { SandboxError, ExecConnectionError, CommandError } from "./errors";
-import type { IStorageAdapter } from "./ledger";
+import type { IStorageAdapter, CheckpointInfo } from "./ledger";
 import { LedgerEvent } from "./ledger";
 import { ExecHandle, type ExecResult } from "./exec-handle";
 
@@ -264,6 +264,11 @@ export class Sandbox {
   async searchFiles(pattern: string, path = "/") {
     const ec = await this._getExecClient();
     return ec.searchFiles(pattern, path);
+  }
+
+  /** Return all checkpoints for this sandbox in creation order. */
+  listCheckpoints(): Promise<CheckpointInfo[]> {
+    return this._deps.adapter.listCheckpoints(this.name, this.sandboxId);
   }
 
   /**

@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import type { IStorageAdapter, LedgerEntry, LedgerEvent, SandboxDetails, ListSandboxOptions, EnvironmentRecord } from "@drej/core";
+import type { IStorageAdapter, LedgerEntry, LedgerEvent, SandboxDetails, ListSandboxOptions, EnvironmentRecord, CheckpointInfo } from "@drej/core";
 import { SandboxStatus } from "@drej/core";
 import { MIGRATION_SQL } from "./migrations";
 
@@ -161,6 +161,23 @@ export class SQLiteAdapter implements IStorageAdapter {
     this.db
       .prepare<void, [string, string]>(`DELETE FROM drej_events WHERE name = ? AND sandbox_id = ?`)
       .run(name, sandboxId);
+  }
+
+  async listCheckpoints(name: string, sandboxId: string): Promise<CheckpointInfo[]> {
+    const rows = this.db
+      .prepare<Row, [string, string]>(
+        `SELECT sandbox_id, name, step_idx, branch, event, payload, error, ts
+         FROM drej_events
+         WHERE name = ? AND sandbox_id = ? AND event = 'checkpoint_created'
+         ORDER BY ts ASC`,
+      )
+      .all(name, sandboxId);
+    return rows.map((r) => {
+      const p = r.payload !== null
+        ? (JSON.parse(r.payload) as { snapshotId: string; name?: string })
+        : { snapshotId: "" };
+      return { snapshotId: p.snapshotId, tag: p.name, createdAt: r.ts };
+    });
   }
 
   async getEnvironment(name: string): Promise<EnvironmentRecord | null> {

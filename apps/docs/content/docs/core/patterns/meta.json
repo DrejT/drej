@@ -1,4 +1,4 @@
 {
   "title": "Patterns",
-  "pages": ["timeouts-and-cancellation", "error-handling", "run-management", "observability", "flue"]
+  "pages": ["timeouts-and-cancellation", "error-handling", "run-management", "named-checkpoints", "observability", "flue"]
 }

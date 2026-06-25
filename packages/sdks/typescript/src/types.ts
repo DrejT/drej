@@ -35,6 +35,12 @@ export interface DrejOptions {
   maxConcurrency?: number;
 }
 
+/** Options for `DrejClient.resume()`. */
+export interface ResumeOptions {
+  /** Resume from the checkpoint with this tag. Defaults to the most recent checkpoint. */
+  tag?: string;
+}
+
 /** Options for `DrejClient.sandbox()`. */
 export interface SandboxOptions {
   /**

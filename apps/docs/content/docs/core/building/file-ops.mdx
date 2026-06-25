@@ -1,9 +1,9 @@
 ---
 title: File operations
-description: Write, read, move, delete, search, and list files inside the sandbox container.
+description: Write, read, move, delete, search, list, patch, and transfer files inside the sandbox container.
 ---
 
-`Sandbox` exposes six file operation methods. All operate on paths inside the container.
+`Sandbox` exposes file operation methods that cover reading, writing, patching, searching, and transferring files. All paths are inside the container.
 
 ## writeFile
 
@@ -68,13 +68,66 @@ console.log(entries.map((e) => e.path));
 const all = await sb.listDirectory("/workspace", { depth: 3 });
 ```
 
-## Pattern: patch a file via exec
+## createDirectory
 
-For in-place text replacements, use `exec()` with `sed`:
+Create a directory (and all parents) inside the container without running `exec`:
+
+```ts
+await sb.createDirectory("/workspace/src");
+await sb.createDirectory("/workspace/dist");
+```
+
+## deleteDirectory
+
+Delete a directory from the container:
+
+```ts
+await sb.deleteDirectory("/workspace/tmp");
+```
+
+## getFileInfo
+
+Return metadata for a file or directory — size, type, mode, owner, and timestamps:
+
+```ts
+const info = await sb.getFileInfo("/workspace/src/index.ts");
+console.log(info.size);        // bytes
+console.log(info.type);        // "file" | "directory" | "symlink"
+console.log(info.mode);        // unix permission bits
+console.log(info.modified_at); // ISO timestamp
+```
+
+## replaceInFiles
+
+Replace a substring in one or more files in a single API call. More efficient than `readFile` → string replace → `writeFile` for targeted edits:
+
+```ts
+await sb.replaceInFiles([
+  { path: "/app/config.json", old: "localhost", new: "0.0.0.0" },
+  { path: "/app/src/version.ts", old: "0.0.0", new: "1.2.3" },
+]);
+```
+
+## transfer
+
+Copy a file from this sandbox into another sandbox. Useful after `fork()` to move results between containers:
+
+```ts
+const fork = await sb.fork("after-build");
+
+await fork.exec("npm run build");
+await fork.transfer("/app/dist/bundle.js", sb); // copy back to original
+
+await fork.close();
+```
+
+## Pattern: patch a file
+
+Use `replaceInFiles` for in-place text replacements — no `exec`/`sed` needed:
 
 ```ts
 await sb.writeFile("/workspace/src/index.ts", 'export const VERSION = "0.0.0";\n');
-await sb.exec("sed -i 's/0.0.0/1.2.3/' /workspace/src/index.ts");
+await sb.replaceInFiles([{ path: "/workspace/src/index.ts", old: "0.0.0", new: "1.2.3" }]);
 const patched = await sb.readFile("/workspace/src/index.ts");
 console.log(patched.trim()); // 'export const VERSION = "1.2.3";'
 ```

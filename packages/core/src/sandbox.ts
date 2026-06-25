@@ -10,6 +10,8 @@ export interface ExecOptions {
   cwd?: string;
   /** Environment variables to set for this exec. */
   env?: Record<string, string>;
+  /** Abort the command after this many milliseconds. */
+  timeoutMs?: number;
   /**
    * Throw `CommandError` if the command exits with a non-zero code.
    * Defaults to `true`.
@@ -166,7 +168,7 @@ export class Sandbox {
       // base64-encode so newlines/special chars survive the JSON boundary
       const sh = opts.shell ?? self._deps.shell ?? "/bin/sh";
       const command = `echo ${Buffer.from(cmd).toString("base64")} | base64 -d | ${sh}`;
-      for await (const ev of execClient.executeCommand({ command, cwd: opts.cwd, envs: opts.env })) {
+      for await (const ev of execClient.executeCommand({ command, cwd: opts.cwd, envs: opts.env, timeout: opts.timeoutMs })) {
         await self._emit(LedgerEvent.ExecEvent, seq, { seq, ...ev });
         yield ev;
       }
@@ -266,6 +268,79 @@ export class Sandbox {
   async searchFiles(pattern: string, path = "/") {
     const ec = await this._getExecClient();
     return ec.searchFiles(pattern, path);
+  }
+
+  /** Create a directory (and parents) inside the sandbox. */
+  async createDirectory(path: string): Promise<void> {
+    const ec = await this._getExecClient();
+    await ec.createDirectory(path);
+  }
+
+  /** Delete a directory inside the sandbox. */
+  async deleteDirectory(path: string): Promise<void> {
+    const ec = await this._getExecClient();
+    await ec.deleteDirectory(path);
+  }
+
+  /** Return metadata for a file or directory (size, type, mode, timestamps). */
+  async getFileInfo(path: string): Promise<import("@drej/opensandbox").FileInfo> {
+    const ec = await this._getExecClient();
+    return ec.getFileInfo(path);
+  }
+
+  /**
+   * Replace substrings in one or more files inside the sandbox.
+   *
+   * More efficient than `readFile` → string replace → `writeFile` for targeted edits.
+   *
+   * @example
+   * ```ts
+   * await sb.replaceInFiles([{ path: "/app/config.json", old: "localhost", new: "0.0.0.0" }]);
+   * ```
+   */
+  async replaceInFiles(replacements: Array<{ path: string; old: string; new: string }>): Promise<void> {
+    const ec = await this._getExecClient();
+    await ec.replaceInFiles(replacements);
+  }
+
+  /**
+   * Copy a file from this sandbox into another sandbox.
+   *
+   * Reads the file as a UTF-8 string and writes it to the same path on the target.
+   * Use this to move results between a fork and its origin, or between parallel sandboxes.
+   *
+   * @example
+   * ```ts
+   * await sb.transfer("/app/output.json", fork);
+   * ```
+   */
+  async transfer(path: string, target: Sandbox): Promise<void> {
+    const content = await this.readFile(path);
+    await target.writeFile(path, content);
+  }
+
+  /**
+   * Return a proxied URL and auth headers for a port inside the sandbox.
+   *
+   * Use this to send HTTP requests to a server running inside the sandbox.
+   *
+   * @example
+   * ```ts
+   * await sb.exec("node server.js &");
+   * const { url, headers } = await sb.proxy(3000);
+   * const res = await fetch(`${url}/health`, { headers });
+   * ```
+   */
+  async proxy(port: number): Promise<{ url: string; headers: Record<string, string> }> {
+    const ep = await this._deps.control.getEndpoint(this.sandboxId, port);
+    const url = ep.endpoint.startsWith("http") ? ep.endpoint : `http://${ep.endpoint}`;
+    return { url, headers: ep.headers ?? {} };
+  }
+
+  /** Return current CPU and memory usage for this sandbox. */
+  async metrics(): Promise<{ cpu: number; memory: number; timestamp: string }> {
+    const ec = await this._getExecClient();
+    return ec.getMetrics();
   }
 
   /** Return all checkpoints for this sandbox in creation order. */

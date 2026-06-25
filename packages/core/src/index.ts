@@ -6,6 +6,7 @@ export type { ILogger } from "./logger";
 
 export { Sandbox, resolveExecClient } from "./sandbox";
 export type { ExecOptions, ExecCodeOptions, SandboxDeps, SandboxHooks } from "./sandbox";
+export type { FileInfo } from "@drej/opensandbox";
 
 export { ExecHandle } from "./exec-handle";
 export type { ExecResult } from "./exec-handle";

@@ -22,7 +22,7 @@ import { Environment, type EnvironmentOptions, type EnvironmentSandboxOptions } 
 export { Sandbox } from "@drej/core";
 export type { ExecHandle, ExecResult, ExecOptions, ExecCodeOptions } from "@drej/core";
 export { LedgerEvent, SandboxStatus, SandboxError, ExecConnectionError, CommandError, StepTimeoutError } from "@drej/core";
-export type { IStorageAdapter, SandboxDetails, ListSandboxOptions, LedgerEntry, EnvironmentRecord } from "@drej/core";
+export type { IStorageAdapter, SandboxDetails, ListSandboxOptions, LedgerEntry, EnvironmentRecord, FileInfo } from "@drej/core";
 export { DrejError, type DrejOptions, type SandboxOptions, type ResumeOptions } from "./types";
 export type { CheckpointInfo } from "@drej/core";
 export { Environment, type EnvironmentOptions, type EnvironmentSandboxOptions } from "./environment";
@@ -111,6 +111,7 @@ export class Drej {
       const rawSb = await this._control.createSandbox({
         image,
         env: opts.env,
+        metadata: opts.metadata,
         entrypoint: ["tail", "-f", "/dev/null"],
         resourceLimits: opts.resources,
         timeout: opts.timeout,

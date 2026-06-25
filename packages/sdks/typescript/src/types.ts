@@ -52,6 +52,8 @@ export interface SandboxOptions {
   resources: { cpu: string; memory: string; gpu?: string };
   /** Environment variables set in the container at startup. */
   env?: Record<string, string>;
+  /** Arbitrary key-value labels attached to the sandbox (e.g. `{ runId: "ci-42" }`). */
+  metadata?: Record<string, string>;
   /**
    * User-provided name for this sandbox run. Used as the ledger key.
    * Defaults to `"sandbox-<shortRunId>"` if omitted.

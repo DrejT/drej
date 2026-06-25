@@ -35,10 +35,13 @@ The optional `@drej/workflow` package adds a lazy builder for multi-step pipelin
 
 ## Features
 
-- **Sandbox as object** — `client.sandbox()` returns a live `Sandbox`; call exec, file ops, and checkpoint directly on it
+- **Sandbox as object** — `client.sandbox()` returns a live `Sandbox`; call exec, file ops, checkpoint, and fork directly on it
 - **Streaming** — `sb.exec("cmd").pipe(writable)`, iterate with `sb.exec("cmd").stdout()`, or await for `{ stdout, stderr, exitCode }`
 - **Code execution** — `sb.execCode(code, { context })` runs Python, JS, or TS; stateful sessions persist across calls
-- **Durable** — every event written to a ledger; `client.resume(sandboxId)` restores the container and replays cached exec results from before the last checkpoint
+- **Durable** — every event written to a ledger; `client.resume(sandboxId)` restores the container and replays cached exec results from before the checkpoint
+- **Named checkpoints** — `sb.checkpoint("tag")`, `sb.listCheckpoints()`, `client.resume(id, { tag })` to restore from any named point
+- **Environments** — `client.environment(name, { setup })` builds a snapshot once and spawns cheap isolated sandboxes from it on demand
+- **Forking** — `sb.fork()` snapshots a live sandbox and returns an independent copy without closing the original
 - **File operations** — read, write, delete, move, list directory, search by glob
 - **Concurrency cap** — `maxConcurrency` limits simultaneous active sandboxes; `client.sandbox()` awaits a slot
 - **Sandbox history** — `client.sandboxes.list()`, `.get()`, `.delete()` for audit and cleanup
@@ -147,6 +150,69 @@ const sbRestored = await client.resume(sb.sandboxId);
 // New execs run live against the restored container.
 await sbRestored.exec("curl https://example.com").pipe(process.stdout);
 await sbRestored.close();
+```
+
+### Named checkpoints
+
+Tag checkpoints and resume from any specific point — not just the latest:
+
+```ts
+await sb.exec("pip install numpy");
+await sb.checkpoint("after-numpy");
+
+await sb.exec("pip install torch");
+await sb.checkpoint("after-torch");
+
+await sb.close();
+
+// Resume from a specific tag
+const sbRestored = await client.resume(sb.sandboxId, { tag: "after-numpy" });
+// Container has numpy but not torch
+
+// List all checkpoints
+const checkpoints = await sb.listCheckpoints();
+// [{ tag: "after-numpy", snapshotId: "...", createdAt: ... }, ...]
+```
+
+### Environments
+
+Define a named environment with a setup recipe. The first call builds it and caches the snapshot; subsequent calls restore from that snapshot in seconds:
+
+```ts
+const env = client.environment("python-data", {
+  image: "python:3.11-slim",
+  resources: { cpu: "1", memory: "1Gi" },
+  setup: async (sb) => {
+    await sb.exec("pip install numpy pandas scikit-learn");
+  },
+});
+
+// First call: runs setup (~30s), snapshots result
+// Subsequent calls: restores snapshot (~2s), no reinstall
+const sb = await env.sandbox();
+try {
+  await sb.exec("python3 -c 'import pandas; print(pandas.__version__)'").pipe(process.stdout);
+} finally {
+  await sb.close();
+}
+```
+
+### Forking
+
+`sb.fork()` snapshots a live sandbox and returns an independent copy — without closing the original. Both containers run from the same filesystem state:
+
+```ts
+await sb.exec("npm ci");
+
+const fork = await sb.fork("after-install");
+
+// Run different workloads in parallel from the same base
+await Promise.all([
+  sb.exec("npm test").pipe(process.stdout),
+  fork.exec("npm run build").pipe(process.stdout),
+]);
+
+await Promise.all([sb.close(), fork.close()]);
 ```
 
 ### Error handling

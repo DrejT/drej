@@ -1,0 +1,33 @@
+---
+title: drejx remove
+description: Remove a sandbox entry from the current project.
+---
+
+```bash
+bunx drejx remove <name>
+```
+
+## Arguments
+
+| Argument | Description |
+|---|---|
+| `name` | The sandbox name as shown by `drejx list`. Required. |
+
+## What it does
+
+1. Looks up the sandbox by name in `.drej/sandboxes.json`.
+2. Sends a best-effort delete request to the OpenSandbox server (silently ignored if the container is already gone).
+3. Removes the entry from `.drej/sandboxes.json`.
+
+## Example
+
+```bash
+bunx drejx remove node-toolchain
+# Removed sandbox 'node-toolchain' (sb_a1b2c3d4e5f6g7h8)
+```
+
+## Notes
+
+- If the sandbox container was already stopped (the usual state after `drejx add`), the delete request is a no-op and `remove` still succeeds.
+- `remove` only removes the entry from `.drej/sandboxes.json`. It does not delete the ledger history in `.drej/ledger.db`. The audit trail is preserved.
+- To remove a sandbox that was renamed with `--name`, use the custom name, not the name from the registry item.

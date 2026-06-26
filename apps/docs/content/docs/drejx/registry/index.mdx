@@ -1,0 +1,60 @@
+---
+title: Registry
+description: Publish a JSON spec to let anyone spin up your sandbox environment with a single command.
+---
+
+A drejx registry is just a URL that returns a JSON object. There is no central registry — any URL works, including a GitHub raw file, a Gist, or your own server.
+
+<Cards>
+  <Card
+    href="/docs/drejx/registry/schema"
+    title="Registry item schema"
+    description="All fields, types, and constraints for a valid registry item."
+  />
+</Cards>
+
+## Publishing a registry item
+
+A registry item is a static JSON file. Hosting it is as simple as pushing it to a public GitHub repository and sharing the raw URL:
+
+```
+https://raw.githubusercontent.com/your-org/your-repo/main/sandboxes/node-toolchain.json
+```
+
+Anyone can then provision it with:
+
+```bash
+bunx drejx add https://raw.githubusercontent.com/your-org/your-repo/main/sandboxes/node-toolchain.json
+```
+
+## Minimal example
+
+```json
+{
+  "name": "node-toolchain",
+  "image": "node:22",
+  "resources": { "cpu": "500m", "memory": "512Mi" },
+  "setup": [
+    "npm install -g typescript eslint prettier",
+    "mkdir -p /workspace"
+  ]
+}
+```
+
+## Composition with `registryDependencies`
+
+A registry item can declare dependencies on other items. `drejx add` provisions them first, depth-first:
+
+```json
+{
+  "name": "ts-reviewer",
+  "image": "node:22",
+  "resources": { "cpu": "500m", "memory": "512Mi" },
+  "registryDependencies": [
+    "https://registry.drej.dev/node-toolchain.json"
+  ],
+  "setup": [
+    "npm install -g @typescript-eslint/parser"
+  ]
+}
+```

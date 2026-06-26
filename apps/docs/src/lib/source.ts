@@ -1,4 +1,4 @@
-import { coreDocs, workflowDocs } from "collections/server";
+import { coreDocs, workflowDocs, drejxDocs } from "collections/server";
 import { loader } from "fumadocs-core/source";
 
 export const coreSource = loader({
@@ -9,4 +9,9 @@ export const coreSource = loader({
 export const workflowSource = loader({
   baseUrl: "/docs/workflow",
   source: workflowDocs.toFumadocsSource(),
+});
+
+export const drejxSource = loader({
+  baseUrl: "/docs/drejx",
+  source: drejxDocs.toFumadocsSource(),
 });

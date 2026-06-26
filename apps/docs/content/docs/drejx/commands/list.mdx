@@ -1,0 +1,31 @@
+---
+title: drejx list
+description: List all sandboxes provisioned in the current project.
+---
+
+```bash
+bunx drejx list
+```
+
+Reads `.drej/sandboxes.json` and prints a table of all provisioned sandboxes.
+
+## Example output
+
+```
+NAME                  SANDBOX ID            AGE     URL
+node-toolchain        sb_a1b2c3d4e5f6g7    2m      https://registry.drej.dev/node-toolchain.json
+python-data-sci       sb_h8i9j0k1l2m3n4    1h      https://registry.drej.dev/python-ds.json
+```
+
+| Column | Description |
+|---|---|
+| `NAME` | The name given to the sandbox (from the registry item or `--name`). |
+| `SANDBOX ID` | The first 16 characters of the sandbox ID. Use `client.resume()` with the full ID from `.drej/sandboxes.json`. |
+| `AGE` | How long ago the sandbox was provisioned. |
+| `URL` | The registry item URL used to provision it. |
+
+## Notes
+
+- `list` shows the sandboxes tracked in this project's `.drej/sandboxes.json`. It does not query the running OpenSandbox server.
+- A sandbox appearing here does not mean its container is currently running — the container is stopped after provisioning and resumed on demand.
+- If no sandboxes have been provisioned yet, `list` prints a short message and exits cleanly.

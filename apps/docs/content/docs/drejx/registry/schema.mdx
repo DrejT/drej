@@ -1,0 +1,87 @@
+---
+title: Registry item schema
+description: Complete field reference for a drejx registry item JSON.
+---
+
+A registry item is a JSON object. Only `name`, `image`, and `resources` are required.
+
+## Full example
+
+```json
+{
+  "name": "code-reviewer",
+  "title": "Code Reviewer Agent",
+  "description": "A Node.js sandbox pre-loaded with TypeScript tooling for code review tasks.",
+  "author": "acme <https://github.com/acme>",
+  "categories": ["agent", "typescript"],
+
+  "image": "node:22",
+  "resources": { "cpu": "500m", "memory": "512Mi" },
+  "env": { "NODE_ENV": "production" },
+
+  "setup": [
+    "npm install -g typescript eslint",
+    "mkdir -p /workspace"
+  ],
+
+  "ports": [3000],
+
+  "metadata": { "version": "1.0.0" },
+
+  "registryDependencies": [
+    "https://registry.drej.dev/base-node.json"
+  ]
+}
+```
+
+## Fields
+
+### Required
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | `string` | Unique identifier for the sandbox. Used as the entry name in `drejx list`. |
+| `image` | `string \| ImageSpec` | Container image. A plain string (`"node:22"`) or an object `{ uri, auth? }` for private registries. |
+| `resources` | `ResourceSpec` | CPU and memory limits. Required by the OpenSandbox server. |
+
+**`ResourceSpec`**
+
+```json
+{ "cpu": "500m", "memory": "512Mi" }
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `cpu` | `string` | CPU limit in Kubernetes resource notation (`"500m"`, `"1"`, `"2"`). |
+| `memory` | `string` | Memory limit (`"256Mi"`, `"1Gi"`). |
+| `gpu` | `string` | Optional GPU limit. |
+
+**`ImageSpec`** (for private registries)
+
+```json
+{ "uri": "ghcr.io/your-org/your-image:latest", "auth": { "username": "x", "password": "ghp_..." } }
+```
+
+### Optional
+
+| Field | Type | Description |
+|---|---|---|
+| `title` | `string` | Human-readable display name. |
+| `description` | `string` | Short description shown in tooling. |
+| `author` | `string` | Author name and optional URL. |
+| `categories` | `string[]` | Tags for discovery (e.g. `["agent", "python"]`). |
+| `env` | `Record<string, string>` | Environment variables injected at sandbox startup. |
+| `setup` | `string[]` | Shell commands run in order after the sandbox starts. The result is checkpointed so future resumes skip setup. |
+| `ports` | `number[]` | Informational. Documents which ports the sandbox exposes. Call `sb.proxy(port)` to reach them from your code. |
+| `metadata` | `Record<string, string>` | Arbitrary key-value labels attached to the sandbox. |
+| `registryDependencies` | `string[]` | URLs of other registry items to provision first. Resolved depth-first before this item's setup runs. |
+
+## Validation
+
+`drejx add` validates the JSON before provisioning. It will error if:
+
+- `name` is missing or not a string.
+- `image` is missing.
+- `resources` is missing, or `resources.cpu` / `resources.memory` are not strings.
+
+All other fields are optional and silently ignored if malformed.

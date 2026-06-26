@@ -1,0 +1,110 @@
+---
+title: Using Sandboxes in Code
+description: Connect to a drejx-provisioned sandbox from your drej application.
+---
+
+After `drejx add` finishes, the sandbox is checkpointed and its ID is stored in `.drej/sandboxes.json`. To use it, create a `Drej` client and call `client.resume()`.
+
+## Setup
+
+```bash
+bun add drej @drej/sqlite
+```
+
+## Connecting
+
+```ts
+import { Drej } from "drej";
+import { SQLiteAdapter } from "@drej/sqlite";
+
+const client = new Drej({
+  baseUrl: "http://localhost:8080",
+  useServerProxy: true,
+  adapter: new SQLiteAdapter("./.drej/ledger.db"),
+});
+```
+
+`useServerProxy: true` is required when the server was started by `drejx init`. The values for `baseUrl` and `adapterPath` are in `.drej/config.json` if you want to read them dynamically.
+
+## Resuming a sandbox
+
+Pass the sandbox ID printed by `drejx add` (or read from `.drej/sandboxes.json`) to `client.resume()`:
+
+```ts
+const sb = await client.resume("sb_a1b2c3d4e5f6g7h8");
+try {
+  await sb.exec("node --version").pipe(process.stdout);
+} finally {
+  await sb.close();
+}
+```
+
+`resume()` restores the sandbox from its checkpoint. Because the setup was already run and checkpointed by `drejx add`, the sandbox is ready in seconds — no re-running of `setup` commands.
+
+## Reading the config and sandboxes file
+
+You can load connection details and sandbox IDs directly from the files `drejx` writes:
+
+```ts
+import { readFileSync } from "fs";
+
+const config = JSON.parse(readFileSync(".drej/config.json", "utf8"));
+const sandboxes = JSON.parse(readFileSync(".drej/sandboxes.json", "utf8"));
+
+const entry = sandboxes.find((s: { name: string }) => s.name === "node-toolchain");
+
+const client = new Drej({
+  baseUrl: config.serverUrl,
+  useServerProxy: config.useServerProxy,
+  adapter: new SQLiteAdapter(config.adapterPath),
+});
+
+const sb = await client.resume(entry.sandboxId);
+```
+
+## Accessing ports
+
+If the registry item documented exposed ports, use `sb.proxy()` to get a URL you can send HTTP requests to:
+
+```ts
+const sb = await client.resume("sb_a1b2c3d4");
+try {
+  await sb.exec("node server.js &");
+  const { url, headers } = await sb.proxy(3000);
+  const res = await fetch(`${url}/health`, { headers });
+  console.log(await res.text());
+} finally {
+  await sb.close();
+}
+```
+
+## Multiple resumes
+
+Every `client.resume()` call creates a fresh container restored from the same checkpoint. Each resume is independent — running commands on one does not affect another.
+
+```ts
+const [sb1, sb2] = await Promise.all([
+  client.resume("sb_a1b2c3d4"),
+  client.resume("sb_a1b2c3d4"),
+]);
+
+// sb1 and sb2 are separate containers, both starting from the same state
+await Promise.all([
+  sb1.exec("npm test").pipe(process.stdout),
+  sb2.exec("npm run build").pipe(process.stdout),
+]);
+
+await Promise.all([sb1.close(), sb2.close()]);
+```
+
+## Sandbox lifecycle
+
+- `client.resume()` creates a container. It costs resources until `sb.close()` is called.
+- Always call `sb.close()` when done — use `try/finally` to ensure it runs on error.
+- The original checkpoint is preserved after every resume. You can resume the same sandbox ID as many times as needed.
+
+## See also
+
+- [drej core SDK — exec](/docs/core/building/exec)
+- [drej core SDK — file operations](/docs/core/building/file-ops)
+- [drej core SDK — snapshots and resume](/docs/core/building/snapshots)

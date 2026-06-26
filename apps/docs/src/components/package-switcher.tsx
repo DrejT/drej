@@ -7,6 +7,7 @@ import { Check, ChevronsUpDown } from "lucide-react";
 const packages = [
   { value: "core", label: "Core SDK", sub: "drej" },
   { value: "workflow", label: "Workflow Builder", sub: "@drej/workflow" },
+  { value: "drejx", label: "drejx CLI", sub: "drejx" },
 ] as const;
 
 type PackageValue = (typeof packages)[number]["value"];
@@ -19,6 +20,8 @@ export function PackageSwitcher() {
 
   const current: PackageValue = pathname.startsWith("/docs/workflow")
     ? "workflow"
+    : pathname.startsWith("/docs/drejx")
+    ? "drejx"
     : "core";
   const selected = packages.find((p) => p.value === current)!;
 

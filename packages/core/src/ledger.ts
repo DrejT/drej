@@ -2,8 +2,6 @@
 export enum SandboxStatus {
   Running = "running",
   Completed = "completed",
-  Failed = "failed",
-  Cancelled = "cancelled",
 }
 
 /** Derived metadata for a sandbox session, computed from its ledger events. */
@@ -18,8 +16,6 @@ export interface SandboxDetails {
   completedAt?: number;
   /** Number of exec() calls that completed. */
   execCount: number;
-  /** Error message, present when status is `Failed`. */
-  error?: string;
 }
 
 /** Options for filtering session listings. */

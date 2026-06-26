@@ -14,7 +14,8 @@
     "packages/cli",
     "examples/*",
     "tests/integration",
-    "apps/docs"
+    "apps/docs",
+    "apps/www"
   ],
   "scripts": {
     "build": "bun run --cwd packages/opensandbox build && bun run --cwd packages/core build && bun run --cwd packages/sdks/typescript build && bun run --cwd packages/workflow build && bun run --cwd packages/adapters/sqlite build && bun run --cwd packages/adapters/postgres build && bun run --cwd packages/adapters/otel build && bun run --cwd packages/adapters/flue build",

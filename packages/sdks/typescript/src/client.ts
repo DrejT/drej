@@ -51,6 +51,7 @@ export class Drej {
   private readonly _control: ControlClient;
   private readonly _adapter: IStorageAdapter;
   private readonly _maxConcurrency: number | undefined;
+  private readonly _useServerProxy: boolean;
   private _activeCount = 0;
   private readonly _waiters: Array<() => void> = [];
   private _connectPromise: Promise<void> | null = null;
@@ -64,6 +65,7 @@ export class Drej {
     });
     this._adapter = options.adapter;
     this._maxConcurrency = options.maxConcurrency;
+    this._useServerProxy = options.useServerProxy ?? false;
 
     // Close the adapter when the event loop drains naturally (scripts, short-lived processes).
     // Long-running servers never reach beforeExit, so Postgres pools stay alive for the
@@ -137,6 +139,7 @@ export class Drej {
         onClose: () => this._releaseSlot(),
         shell: opts.shell,
         fork: (snapshotId, tag) => this._forkFromSnapshot(snapshotId, name, opts.resources, opts.shell),
+        useServerProxy: this._useServerProxy,
       });
       opts.hooks?.onSandboxCreated?.(sandboxId, name);
       return sb;
@@ -244,6 +247,7 @@ export class Drej {
         fork: resources?.cpu && resources?.memory
           ? (snapshotId, tag) => this._forkFromSnapshot(snapshotId, name, resources as { cpu: string; memory: string; gpu?: string }, undefined)
           : undefined,
+        useServerProxy: this._useServerProxy,
       }, replayCache);
     } catch (err) {
       this._releaseSlot();
@@ -431,6 +435,7 @@ export class Drej {
         onClose: () => this._releaseSlot(),
         shell: extra?.shell ?? envShell,
         fork: (snapshotId, tag) => this._forkFromSnapshot(snapshotId, sessionName, resources, extra?.shell ?? envShell),
+        useServerProxy: this._useServerProxy,
       });
       extra?.hooks?.onSandboxCreated?.(newId, sessionName);
       return sb;
@@ -468,6 +473,7 @@ export class Drej {
         onClose: () => this._releaseSlot(),
         shell,
         fork: (sid, tag) => this._forkFromSnapshot(sid, sessionName, resources, shell),
+        useServerProxy: this._useServerProxy,
       });
     } catch (err) {
       this._releaseSlot();

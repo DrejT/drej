@@ -1,0 +1,22 @@
+{
+  "name": "drejx",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": { "drejx": "./dist/index.mjs" },
+  "exports": { ".": { "import": "./dist/index.mjs" } },
+  "files": ["dist"],
+  "publishConfig": { "access": "public" },
+  "scripts": {
+    "build": "tsdown",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "drej": "workspace:*",
+    "@drej/sqlite": "workspace:*"
+  },
+  "devDependencies": {
+    "bun-types": "1.3.14",
+    "tsdown": "0.22.3",
+    "typescript": "6.0.3"
+  }
+}

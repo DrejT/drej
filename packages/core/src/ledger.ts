@@ -1,8 +1,8 @@
 /** Status of a sandbox session derived from its ledger events. */
 export enum SandboxStatus {
-  Running   = "running",
+  Running = "running",
   Completed = "completed",
-  Failed    = "failed",
+  Failed = "failed",
   Cancelled = "cancelled",
 }
 

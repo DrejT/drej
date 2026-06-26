@@ -15,9 +15,7 @@ const sb = await client.sandbox({
   resources: { cpu: "500m", memory: "256Mi" },
 });
 try {
-  const { stdout: nodeVersion } = await sb.exec(
-    "node -e \"process.stdout.write(process.version)\"",
-  );
+  const { stdout: nodeVersion } = await sb.exec('node -e "process.stdout.write(process.version)"');
 
   // Use the captured value in the next exec
   await sb.exec(`echo "Running on Node ${nodeVersion.trim()}"`).pipe(process.stdout);
@@ -64,7 +62,7 @@ The `when` predicate also receives runtime state:
 ```ts
 sb.exec("test -f /etc/hostname", { strict: false });
 sb.when(
-  (ctx) => ctx.exitCode === 0,     // ctx.exitCode, ctx.stdout, ctx.vars
+  (ctx) => ctx.exitCode === 0, // ctx.exitCode, ctx.stdout, ctx.vars
   (sb) => sb.exec("echo exists"),
   (sb) => sb.exec("echo missing"),
 );

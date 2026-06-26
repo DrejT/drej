@@ -1,6 +1,9 @@
 {
   "name": "@drej/opensandbox",
   "version": "0.1.3",
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "main": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
@@ -10,9 +13,6 @@
       "types": "./dist/index.d.mts"
     }
   },
-  "files": [
-    "dist"
-  ],
   "publishConfig": {
     "access": "public"
   },

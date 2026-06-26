@@ -48,9 +48,8 @@ Run the same operation across multiple containers simultaneously. All configs re
 
 ```ts
 await workflow(client)
-  .parallel(
-    [{ image: "node:20" }, { image: "node:22" }, { image: "node:24" }],
-    (sb) => sb.exec("npm test"),
+  .parallel([{ image: "node:20" }, { image: "node:22" }, { image: "node:24" }], (sb) =>
+    sb.exec("npm test"),
   )
   .pipe(process.stdout);
 ```
@@ -66,8 +65,18 @@ Run sandboxes one after another. Each step's callback receives the previous step
 ```ts
 await workflow(client)
   .sequence([
-    { image: "node:22", name: "build", resources: { cpu: "1", memory: "512Mi" }, run: (sb) => sb.exec("npm run build") },
-    { image: "ubuntu:22.04", name: "deploy", resources: { cpu: "500m", memory: "256Mi" }, run: (sb, prev) => sb.exec("./deploy.sh") },
+    {
+      image: "node:22",
+      name: "build",
+      resources: { cpu: "1", memory: "512Mi" },
+      run: (sb) => sb.exec("npm run build"),
+    },
+    {
+      image: "ubuntu:22.04",
+      name: "deploy",
+      resources: { cpu: "500m", memory: "256Mi" },
+      run: (sb, prev) => sb.exec("./deploy.sh"),
+    },
   ])
   .pipe(process.stdout);
 ```
@@ -90,8 +99,8 @@ Execute the workflow and return the combined result:
 
 ```ts
 interface WorkflowResult {
-  stdout: string;                    // concatenated stdout from all sandboxes
-  vars: Record<string, unknown>;     // values captured by readFile(path, as)
+  stdout: string; // concatenated stdout from all sandboxes
+  vars: Record<string, unknown>; // values captured by readFile(path, as)
 }
 ```
 
@@ -169,8 +178,8 @@ Queue a retry block. On failure, waits `delayMs` and retries up to `maxAttempts`
 
 ```ts
 interface RetryOptions {
-  delayMs?: number;                    // default: 1000
-  backoff?: "fixed" | "exponential";   // default: "fixed"
+  delayMs?: number; // default: 1000
+  backoff?: "fixed" | "exponential"; // default: "fixed"
 }
 ```
 

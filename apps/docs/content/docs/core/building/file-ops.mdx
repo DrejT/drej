@@ -91,9 +91,9 @@ Return metadata for a file or directory — size, type, mode, owner, and timesta
 
 ```ts
 const info = await sb.getFileInfo("/workspace/src/index.ts");
-console.log(info.size);        // bytes
-console.log(info.type);        // "file" | "directory" | "symlink"
-console.log(info.mode);        // unix permission bits
+console.log(info.size); // bytes
+console.log(info.type); // "file" | "directory" | "symlink"
+console.log(info.mode); // unix permission bits
 console.log(info.modified_at); // ISO timestamp
 ```
 

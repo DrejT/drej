@@ -48,8 +48,8 @@ try {
   await sb.exec("exit 42");
 } catch (e) {
   if (e instanceof CommandError) {
-    console.error(`exit ${e.exitCode}`);      // 42
-    console.error(`command: ${e.command}`);   // "exit 42"
+    console.error(`exit ${e.exitCode}`); // 42
+    console.error(`command: ${e.command}`); // "exit 42"
     console.error(`sandbox: ${e.sandboxId}`);
   }
 }
@@ -57,13 +57,13 @@ try {
 
 ### Properties
 
-| Property | Type | Description |
-|---|---|---|
-| `exitCode` | `number` | The process exit code |
-| `command` | `string` | The command string that was run |
-| `sandboxId` | `string` | The sandbox ID where it ran |
-| `message` | `string` | `"Command exited with code N: <cmd>"` |
-| `name` | `string` | `"CommandError"` |
+| Property    | Type     | Description                           |
+| ----------- | -------- | ------------------------------------- |
+| `exitCode`  | `number` | The process exit code                 |
+| `command`   | `string` | The command string that was run       |
+| `sandboxId` | `string` | The sandbox ID where it ran           |
+| `message`   | `string` | `"Command exited with code N: <cmd>"` |
+| `name`      | `string` | `"CommandError"`                      |
 
 ### Avoiding CommandError
 
@@ -81,22 +81,25 @@ Thrown when a sandbox fails to create, boot, or reach `Running` state. Also thro
 import { SandboxError } from "drej";
 
 try {
-  const sb = await client.sandbox({ image: "nonexistent:image", resources: { cpu: "500m", memory: "256Mi" } });
+  const sb = await client.sandbox({
+    image: "nonexistent:image",
+    resources: { cpu: "500m", memory: "256Mi" },
+  });
 } catch (e) {
   if (e instanceof SandboxError) {
-    console.error(e.message);           // "Sandbox <id> entered state Failed: ..."
-    console.error(e.sandboxId ?? "");   // sandbox ID if assigned before failure
+    console.error(e.message); // "Sandbox <id> entered state Failed: ..."
+    console.error(e.sandboxId ?? ""); // sandbox ID if assigned before failure
   }
 }
 ```
 
 ### Properties
 
-| Property | Type | Description |
-|---|---|---|
+| Property    | Type                  | Description                                         |
+| ----------- | --------------------- | --------------------------------------------------- |
 | `sandboxId` | `string \| undefined` | Container ID if one was assigned before the failure |
-| `message` | `string` | Describes what failed |
-| `name` | `string` | `"SandboxError"` |
+| `message`   | `string`              | Describes what failed                               |
+| `name`      | `string`              | `"SandboxError"`                                    |
 
 ## ExecConnectionError
 
@@ -109,19 +112,19 @@ try {
   await sb.exec("echo test");
 } catch (e) {
   if (e instanceof ExecConnectionError) {
-    console.error(e.message);        // "execd not ready for sandbox <id>"
-    console.error(e.sandboxId);      // the sandbox ID
+    console.error(e.message); // "execd not ready for sandbox <id>"
+    console.error(e.sandboxId); // the sandbox ID
   }
 }
 ```
 
 ### Properties
 
-| Property | Type | Description |
-|---|---|---|
-| `sandboxId` | `string` | The sandbox ID |
-| `message` | `string` | `"execd not ready for sandbox <id>"` |
-| `name` | `string` | `"ExecConnectionError"` |
+| Property    | Type     | Description                          |
+| ----------- | -------- | ------------------------------------ |
+| `sandboxId` | `string` | The sandbox ID                       |
+| `message`   | `string` | `"execd not ready for sandbox <id>"` |
+| `name`      | `string` | `"ExecConnectionError"`              |
 
 This usually means the container image doesn't include execd, or the container started but the execd process crashed.
 
@@ -137,7 +140,7 @@ try {
 } catch (e) {
   if (e instanceof DrejError) {
     console.error(e.message); // "Session nonexistent-id not found"
-    console.error(e.status);  // 404
+    console.error(e.status); // 404
   }
 }
 ```

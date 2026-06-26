@@ -1,6 +1,9 @@
 {
   "name": "drej",
   "version": "0.7.0",
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -10,9 +13,6 @@
       "types": "./src/index.ts"
     }
   },
-  "files": [
-    "dist"
-  ],
   "publishConfig": {
     "access": "public"
   },

@@ -44,40 +44,50 @@ describe("validateRegistryItem", () => {
   });
 
   it("throws with 'name' in message when name is missing", () => {
-    expect(() => validateRegistryItem({
-      image: "node:22",
-      resources: { cpu: "500m", memory: "256Mi" },
-    })).toThrow(/name/);
+    expect(() =>
+      validateRegistryItem({
+        image: "node:22",
+        resources: { cpu: "500m", memory: "256Mi" },
+      }),
+    ).toThrow(/name/);
   });
 
   it("throws with 'image' in message when image is missing", () => {
-    expect(() => validateRegistryItem({
-      name: "my-sandbox",
-      resources: { cpu: "500m", memory: "256Mi" },
-    })).toThrow(/image/);
+    expect(() =>
+      validateRegistryItem({
+        name: "my-sandbox",
+        resources: { cpu: "500m", memory: "256Mi" },
+      }),
+    ).toThrow(/image/);
   });
 
   it("throws with 'resources' in message when resources is missing", () => {
-    expect(() => validateRegistryItem({
-      name: "my-sandbox",
-      image: "node:22",
-    })).toThrow(/resources/);
+    expect(() =>
+      validateRegistryItem({
+        name: "my-sandbox",
+        image: "node:22",
+      }),
+    ).toThrow(/resources/);
   });
 
   it("throws with 'cpu' in message when resources.cpu is missing", () => {
-    expect(() => validateRegistryItem({
-      name: "my-sandbox",
-      image: "node:22",
-      resources: { memory: "256Mi" },
-    })).toThrow(/cpu/);
+    expect(() =>
+      validateRegistryItem({
+        name: "my-sandbox",
+        image: "node:22",
+        resources: { memory: "256Mi" },
+      }),
+    ).toThrow(/cpu/);
   });
 
   it("throws with 'memory' in message when resources.memory is missing", () => {
-    expect(() => validateRegistryItem({
-      name: "my-sandbox",
-      image: "node:22",
-      resources: { cpu: "500m" },
-    })).toThrow(/memory/);
+    expect(() =>
+      validateRegistryItem({
+        name: "my-sandbox",
+        image: "node:22",
+        resources: { cpu: "500m" },
+      }),
+    ).toThrow(/memory/);
   });
 
   it("rejects null", () => {

@@ -6,7 +6,8 @@ export async function remove(name: string): Promise<void> {
 
   const [config, entries] = await Promise.all([readConfig(), readSandboxes()]);
   const idx = entries.findIndex((e) => e.name === name);
-  if (idx === -1) throw new Error(`No sandbox named '${name}'. Run 'drejx list' to see available sandboxes.`);
+  if (idx === -1)
+    throw new Error(`No sandbox named '${name}'. Run 'drejx list' to see available sandboxes.`);
 
   const entry = entries[idx]!;
 

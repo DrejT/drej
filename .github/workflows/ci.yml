@@ -51,6 +51,12 @@ jobs:
         run: bunx tsc --noEmit --strict
         working-directory: packages/adapters/otel
 
+      - name: Lint
+        run: bun run lint
+
+      - name: Format check
+        run: bun run format:check
+
   test:
     name: Tests
     runs-on: ubuntu-latest

@@ -72,4 +72,3 @@ try {
 } finally {
   await sbResume.close();
 }
-

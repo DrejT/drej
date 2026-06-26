@@ -75,10 +75,9 @@ class DrejSandboxApi implements SandboxApi {
   }
 
   async stat(path: string): Promise<FileStat> {
-    const { stdout, exitCode } = await this.sb.exec(
-      `stat -c '%F|%s|%Y' ${esc(path)}`,
-      { strict: false },
-    );
+    const { stdout, exitCode } = await this.sb.exec(`stat -c '%F|%s|%Y' ${esc(path)}`, {
+      strict: false,
+    });
     if (exitCode !== 0) throw new Error(`stat: cannot stat '${path}': No such file or directory`);
     const [typeStr, sizeStr, mtimeStr] = stdout.trim().split("|");
     return {

@@ -60,19 +60,22 @@ const env = client.environment("python-base", {
 const sb = await env.sandbox();
 try {
   // Fork into two independent experiment tracks
-  const [forkA, forkB] = await Promise.all([
-    sb.fork("track-a"),
-    sb.fork("track-b"),
-  ]);
+  const [forkA, forkB] = await Promise.all([sb.fork("track-a"), sb.fork("track-b")]);
 
   await Promise.all([
-    forkA.exec("pip install -q pandas").then(() =>
-      forkA.exec("python3 -c 'import pandas; print(pandas.__version__)'").pipe(process.stdout)
-    ).finally(() => forkA.close()),
+    forkA
+      .exec("pip install -q pandas")
+      .then(() =>
+        forkA.exec("python3 -c 'import pandas; print(pandas.__version__)'").pipe(process.stdout),
+      )
+      .finally(() => forkA.close()),
 
-    forkB.exec("pip install -q torch --index-url https://download.pytorch.org/whl/cpu").then(() =>
-      forkB.exec("python3 -c 'import torch; print(torch.__version__)'").pipe(process.stdout)
-    ).finally(() => forkB.close()),
+    forkB
+      .exec("pip install -q torch --index-url https://download.pytorch.org/whl/cpu")
+      .then(() =>
+        forkB.exec("python3 -c 'import torch; print(torch.__version__)'").pipe(process.stdout),
+      )
+      .finally(() => forkB.close()),
   ]);
 } finally {
   await sb.close();
@@ -85,12 +88,12 @@ Each forked sandbox acquires a concurrency slot (counts against `DrejOptions.max
 
 ## Relationship to checkpoint and resume
 
-| | `sb.checkpoint()` | `sb.fork()` |
-|---|---|---|
-| Snapshots the container | Yes | Yes |
-| Writes `checkpoint_created` to ledger | Yes | Yes |
-| Original sandbox keeps running | Yes | Yes |
-| Returns a new live sandbox | No | Yes |
-| Use with `client.resume()` | Yes | Yes (snapshot is in ledger) |
+|                                       | `sb.checkpoint()` | `sb.fork()`                 |
+| ------------------------------------- | ----------------- | --------------------------- |
+| Snapshots the container               | Yes               | Yes                         |
+| Writes `checkpoint_created` to ledger | Yes               | Yes                         |
+| Original sandbox keeps running        | Yes               | Yes                         |
+| Returns a new live sandbox            | No                | Yes                         |
+| Use with `client.resume()`            | Yes               | Yes (snapshot is in ledger) |
 
 Because `fork()` writes a `checkpoint_created` event, the resulting snapshot is visible in `sb.listCheckpoints()` and can also be used with `client.resume()`.

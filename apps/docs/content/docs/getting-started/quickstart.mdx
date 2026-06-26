@@ -50,11 +50,12 @@ bun hello.ts
 Await the `ExecHandle` directly to get `{ stdout, stderr, exitCode }`:
 
 ```ts
-const sb = await client.sandbox({ image: "node:20-slim", resources: { cpu: "500m", memory: "256Mi" } });
+const sb = await client.sandbox({
+  image: "node:20-slim",
+  resources: { cpu: "500m", memory: "256Mi" },
+});
 try {
-  const { stdout: nodeVersion } = await sb.exec(
-    "node -e \"process.stdout.write(process.version)\"",
-  );
+  const { stdout: nodeVersion } = await sb.exec('node -e "process.stdout.write(process.version)"');
   await sb.exec(`echo "Running on Node ${nodeVersion.trim()}"`).pipe(process.stdout);
 } finally {
   await sb.close();
@@ -64,7 +65,10 @@ try {
 ## Write and read files
 
 ```ts
-const sb = await client.sandbox({ image: "ubuntu:22.04", resources: { cpu: "500m", memory: "256Mi" } });
+const sb = await client.sandbox({
+  image: "ubuntu:22.04",
+  resources: { cpu: "500m", memory: "256Mi" },
+});
 try {
   await sb.writeFile("/tmp/hello.txt", "hello from drej\n");
   const content = await sb.readFile("/tmp/hello.txt");
@@ -86,13 +90,10 @@ bun add @drej/workflow
 import { workflow } from "@drej/workflow";
 
 await workflow(client)
-  .sandbox(
-    { image: "ubuntu:22.04", resources: { cpu: "500m", memory: "512Mi" } },
-    (sb) => {
-      sb.exec("echo 'step 1'");
-      sb.retry(3, (sb) => sb.exec("npm test"), { backoff: "exponential" });
-    },
-  )
+  .sandbox({ image: "ubuntu:22.04", resources: { cpu: "500m", memory: "512Mi" } }, (sb) => {
+    sb.exec("echo 'step 1'");
+    sb.retry(3, (sb) => sb.exec("npm test"), { backoff: "exponential" });
+  })
   .pipe(process.stdout);
 ```
 

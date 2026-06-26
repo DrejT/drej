@@ -16,9 +16,11 @@ export async function list(): Promise<void> {
   for (const e of entries) {
     const ageSec = Math.floor((now - new Date(e.createdAt).getTime()) / 1_000);
     const age =
-      ageSec < 60 ? `${ageSec}s` :
-      ageSec < 3_600 ? `${Math.floor(ageSec / 60)}m` :
-      `${Math.floor(ageSec / 3_600)}h`;
+      ageSec < 60
+        ? `${ageSec}s`
+        : ageSec < 3_600
+          ? `${Math.floor(ageSec / 60)}m`
+          : `${Math.floor(ageSec / 3_600)}h`;
     const row = [e.name, e.sandboxId.slice(0, 16), age, e.url];
     console.log(row.map((v, i) => (cols[i] ? v.padEnd(cols[i]) : v)).join("  "));
   }

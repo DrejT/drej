@@ -20,7 +20,12 @@ interface RawSnapshot {
 }
 
 function flattenSnapshot(raw: RawSnapshot): Snapshot {
-  return { id: raw.id, sandboxId: raw.sandboxId, state: raw.status.state, createdAt: raw.createdAt };
+  return {
+    id: raw.id,
+    sandboxId: raw.sandboxId,
+    state: raw.status.state,
+    createdAt: raw.createdAt,
+  };
 }
 
 export class OpenSandboxError extends Error {

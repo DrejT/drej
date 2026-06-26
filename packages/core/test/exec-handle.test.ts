@@ -18,7 +18,11 @@ function stderr(text: string): SSEEvent {
 }
 
 function error(exitCode: number): SSEEvent {
-  return { type: SSEEventType.Error, error: { message: "exit", evalue: String(exitCode) }, timestamp: 0 };
+  return {
+    type: SSEEventType.Error,
+    error: { message: "exit", evalue: String(exitCode) },
+    timestamp: 0,
+  };
 }
 
 describe("ExecHandle — streaming mode", () => {
@@ -81,7 +85,9 @@ describe("ExecHandle — streaming mode", () => {
     const handle = new ExecHandle({
       type: "stream",
       gen: makeStream([stdout("out"), error(42)]),
-      onDone: async (r) => { capturedResult = r; },
+      onDone: async (r) => {
+        capturedResult = r;
+      },
     });
     await handle;
     expect((capturedResult as { exitCode: number }).exitCode).toBe(42);
@@ -98,21 +104,30 @@ describe("ExecHandle — replay mode", () => {
   });
 
   it("yields stdout via stdout() generator", async () => {
-    const handle = new ExecHandle({ type: "replay", result: { stdout: "hello", stderr: "", exitCode: 0 } });
+    const handle = new ExecHandle({
+      type: "replay",
+      result: { stdout: "hello", stderr: "", exitCode: 0 },
+    });
     const chunks: string[] = [];
     for await (const chunk of handle.stdout()) chunks.push(chunk);
     expect(chunks.join("")).toBe("hello");
   });
 
   it("pipe() works in replay mode", async () => {
-    const handle = new ExecHandle({ type: "replay", result: { stdout: "piped", stderr: "", exitCode: 0 } });
+    const handle = new ExecHandle({
+      type: "replay",
+      result: { stdout: "piped", stderr: "", exitCode: 0 },
+    });
     const written: string[] = [];
     await handle.pipe({ write: (c) => written.push(c) });
     expect(written.join("")).toBe("piped");
   });
 
   it("result() works in replay mode", async () => {
-    const handle = new ExecHandle({ type: "replay", result: { stdout: "x", stderr: "", exitCode: 5 } });
+    const handle = new ExecHandle({
+      type: "replay",
+      result: { stdout: "x", stderr: "", exitCode: 5 },
+    });
     const result = await handle.result();
     expect(result.exitCode).toBe(5);
   });

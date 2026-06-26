@@ -1,6 +1,9 @@
 {
   "name": "@drej/postgres",
   "version": "0.2.0",
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "main": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
@@ -10,9 +13,6 @@
       "types": "./dist/index.d.mts"
     }
   },
-  "files": [
-    "dist"
-  ],
   "publishConfig": {
     "access": "public"
   },
@@ -20,8 +20,8 @@
     "build": "tsdown"
   },
   "dependencies": {
-    "postgres": "3.4.9",
-    "@drej/core": "workspace:*"
+    "@drej/core": "workspace:*",
+    "postgres": "3.4.9"
   },
   "devDependencies": {
     "bun-types": "1.3.14",

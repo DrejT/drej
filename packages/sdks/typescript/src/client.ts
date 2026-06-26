@@ -10,22 +10,40 @@ import {
   type EnvironmentRecord,
   type CheckpointInfo,
 } from "@drej/core";
-import {
-  ControlClient,
-  SandboxState,
-  SnapshotState,
-} from "@drej/opensandbox";
+import { ControlClient, SandboxState, SnapshotState } from "@drej/opensandbox";
 
 import { DrejError, type DrejOptions, type SandboxOptions, type ResumeOptions } from "./types";
-import { Environment, type EnvironmentOptions, type EnvironmentSandboxOptions } from "./environment";
+import {
+  Environment,
+  type EnvironmentOptions,
+  type EnvironmentSandboxOptions,
+} from "./environment";
 
 export { Sandbox } from "@drej/core";
 export type { ExecHandle, ExecResult, ExecOptions, ExecCodeOptions } from "@drej/core";
-export { LedgerEvent, SandboxStatus, SandboxError, ExecConnectionError, CommandError, StepTimeoutError } from "@drej/core";
-export type { IStorageAdapter, SandboxDetails, ListSandboxOptions, LedgerEntry, EnvironmentRecord, FileInfo } from "@drej/core";
+export {
+  LedgerEvent,
+  SandboxStatus,
+  SandboxError,
+  ExecConnectionError,
+  CommandError,
+  StepTimeoutError,
+} from "@drej/core";
+export type {
+  IStorageAdapter,
+  SandboxDetails,
+  ListSandboxOptions,
+  LedgerEntry,
+  EnvironmentRecord,
+  FileInfo,
+} from "@drej/core";
 export { DrejError, type DrejOptions, type SandboxOptions, type ResumeOptions } from "./types";
 export type { CheckpointInfo } from "@drej/core";
-export { Environment, type EnvironmentOptions, type EnvironmentSandboxOptions } from "./environment";
+export {
+  Environment,
+  type EnvironmentOptions,
+  type EnvironmentSandboxOptions,
+} from "./environment";
 
 /**
  * Main entry point for drej. Manages sandbox lifecycle and session history.
@@ -81,7 +99,7 @@ export class Drej {
 
   /** Lazily initialises the adapter on first use. Concurrent callers share the same promise. */
   private _ensureConnected(): Promise<void> {
-    this._connectPromise ??= (this._adapter.connect?.() ?? Promise.resolve());
+    this._connectPromise ??= this._adapter.connect?.() ?? Promise.resolve();
     return this._connectPromise;
   }
 
@@ -138,7 +156,8 @@ export class Drej {
         hooks: opts.hooks,
         onClose: () => this._releaseSlot(),
         shell: opts.shell,
-        fork: (snapshotId, tag) => this._forkFromSnapshot(snapshotId, name, opts.resources, opts.shell),
+        fork: (snapshotId, tag) =>
+          this._forkFromSnapshot(snapshotId, name, opts.resources, opts.shell),
         useServerProxy: this._useServerProxy,
       });
       opts.hooks?.onSandboxCreated?.(sandboxId, name);
@@ -187,18 +206,26 @@ export class Drej {
     let checkpointIdx: number;
     if (tag) {
       checkpointIdx = entries.findIndex(
-        (e) => e.event === LedgerEvent.CheckpointCreated && (e.payload as { name?: string } | undefined)?.name === tag,
+        (e) =>
+          e.event === LedgerEvent.CheckpointCreated &&
+          (e.payload as { name?: string } | undefined)?.name === tag,
       );
-      if (checkpointIdx === -1) throw new DrejError(`No checkpoint with tag '${tag}' found for session ${sandboxId}`, 404);
+      if (checkpointIdx === -1)
+        throw new DrejError(`No checkpoint with tag '${tag}' found for session ${sandboxId}`, 404);
     } else {
       checkpointIdx = entries.map((e) => e.event).lastIndexOf(LedgerEvent.CheckpointCreated);
-      if (checkpointIdx === -1) throw new DrejError(`No checkpoint found for session ${sandboxId}`, 404);
+      if (checkpointIdx === -1)
+        throw new DrejError(`No checkpoint found for session ${sandboxId}`, 404);
     }
 
     const { snapshotId } = entries[checkpointIdx].payload as { snapshotId: string };
 
     const createdEntry = entries.find((e) => e.event === LedgerEvent.SandboxCreated);
-    const resources = (createdEntry?.payload as { resources?: { cpu?: string; memory?: string; gpu?: string } } | undefined)?.resources;
+    const resources = (
+      createdEntry?.payload as
+        | { resources?: { cpu?: string; memory?: string; gpu?: string } }
+        | undefined
+    )?.resources;
 
     const replayCache = new Map<number, ExecResult>();
     const pendingStdout = new Map<number, string[]>();
@@ -240,15 +267,27 @@ export class Drej {
         payload: { sandboxId: newSessionId, resumedFrom: sandboxId, snapshotId },
       });
 
-      return new Sandbox(newSessionId, name, {
-        control: this._control,
-        adapter: this._adapter,
-        onClose: () => this._releaseSlot(),
-        fork: resources?.cpu && resources?.memory
-          ? (snapshotId, tag) => this._forkFromSnapshot(snapshotId, name, resources as { cpu: string; memory: string; gpu?: string }, undefined)
-          : undefined,
-        useServerProxy: this._useServerProxy,
-      }, replayCache);
+      return new Sandbox(
+        newSessionId,
+        name,
+        {
+          control: this._control,
+          adapter: this._adapter,
+          onClose: () => this._releaseSlot(),
+          fork:
+            resources?.cpu && resources?.memory
+              ? (snapshotId, tag) =>
+                  this._forkFromSnapshot(
+                    snapshotId,
+                    name,
+                    resources as { cpu: string; memory: string; gpu?: string },
+                    undefined,
+                  )
+              : undefined,
+          useServerProxy: this._useServerProxy,
+        },
+        replayCache,
+      );
     } catch (err) {
       this._releaseSlot();
       throw err;
@@ -357,7 +396,11 @@ export class Drej {
     await this._buildEnvironment(name, opts);
   }
 
-  async _envSandbox(name: string, opts: EnvironmentOptions, extra?: EnvironmentSandboxOptions): Promise<Sandbox> {
+  async _envSandbox(
+    name: string,
+    opts: EnvironmentOptions,
+    extra?: EnvironmentSandboxOptions,
+  ): Promise<Sandbox> {
     await this._ensureConnected();
 
     const record = await this._adapter.getEnvironment(name);
@@ -385,7 +428,12 @@ export class Drej {
     const image = typeof opts.image === "string" ? opts.image : opts.image.uri;
     const buildName = `env-${name}-build`;
 
-    const sb = await this.sandbox({ image: opts.image, resources: opts.resources, name: buildName, shell: opts.shell });
+    const sb = await this.sandbox({
+      image: opts.image,
+      resources: opts.resources,
+      name: buildName,
+      shell: opts.shell,
+    });
     try {
       await opts.setup(sb);
       await sb.checkpoint(`env:${name}`);
@@ -394,7 +442,8 @@ export class Drej {
     }
 
     const checkpoint = await this._adapter.lastCheckpoint(buildName, sb.sandboxId);
-    if (!checkpoint) throw new DrejError(`Environment build for '${name}' produced no checkpoint`, 500);
+    if (!checkpoint)
+      throw new DrejError(`Environment build for '${name}' produced no checkpoint`, 500);
     const { snapshotId } = checkpoint.payload as { snapshotId: string };
 
     await this._adapter.saveEnvironment({ name, snapshotId, image, builtAt: Date.now() });
@@ -434,7 +483,8 @@ export class Drej {
         hooks: extra?.hooks,
         onClose: () => this._releaseSlot(),
         shell: extra?.shell ?? envShell,
-        fork: (snapshotId, tag) => this._forkFromSnapshot(snapshotId, sessionName, resources, extra?.shell ?? envShell),
+        fork: (snapshotId, tag) =>
+          this._forkFromSnapshot(snapshotId, sessionName, resources, extra?.shell ?? envShell),
         useServerProxy: this._useServerProxy,
       });
       extra?.hooks?.onSandboxCreated?.(newId, sessionName);
@@ -487,7 +537,10 @@ export class Drej {
       const s = await this._control.getSandbox(sandboxId);
       if (s.status.state === SandboxState.Running) return;
       if (s.status.state === SandboxState.Failed || s.status.state === SandboxState.Terminated) {
-        throw new DrejError(`Sandbox ${sandboxId} entered state ${s.status.state}: ${s.status.message ?? ""}`, 500);
+        throw new DrejError(
+          `Sandbox ${sandboxId} entered state ${s.status.state}: ${s.status.message ?? ""}`,
+          500,
+        );
       }
       await new Promise<void>((r) => setTimeout(r, 1_000));
     }

@@ -22,7 +22,10 @@ This is a hard limit on the container — not on individual commands.
 Use the bash `timeout` command to limit how long a single command can run. The `timeout` utility exits with code `124` if the limit is reached:
 
 ```ts
-const sb = await client.sandbox({ image: "ubuntu:22.04", resources: { cpu: "500m", memory: "256Mi" } });
+const sb = await client.sandbox({
+  image: "ubuntu:22.04",
+  resources: { cpu: "500m", memory: "256Mi" },
+});
 try {
   // Times out after 1 second, exits with 124
   const { exitCode } = await sb.exec("timeout 1 sleep 30 || echo 'timed out'", { strict: false });
@@ -69,7 +72,10 @@ try {
 For commands that might run indefinitely, combine `timeout` with error handling:
 
 ```ts
-const sb = await client.sandbox({ image: "ubuntu:22.04", resources: { cpu: "500m", memory: "256Mi" } });
+const sb = await client.sandbox({
+  image: "ubuntu:22.04",
+  resources: { cpu: "500m", memory: "256Mi" },
+});
 try {
   const result = await sb.exec("timeout 60 ./run-tests.sh", { strict: false });
   if (result.exitCode === 124) {
@@ -92,11 +98,10 @@ import { workflow } from "@drej/workflow";
 
 await workflow(client)
   .sandbox({ image: "ubuntu:22.04", resources: { cpu: "500m", memory: "256Mi" } }, (sb) => {
-    sb.retry(
-      5,
-      (sb) => sb.exec("curl --retry 0 --max-time 10 https://example.com"),
-      { delayMs: 1000, backoff: "exponential" },
-    );
+    sb.retry(5, (sb) => sb.exec("curl --retry 0 --max-time 10 https://example.com"), {
+      delayMs: 1000,
+      backoff: "exponential",
+    });
   })
   .pipe(process.stdout);
 ```

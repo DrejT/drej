@@ -1,7 +1,19 @@
 import { existsSync } from "fs";
 import { mkdir } from "fs/promises";
-import { checkDocker, getContainerState, startContainer, runContainer, pollHealth } from "../docker.js";
-import { configPath, writeConfig, serverConfigDir, serverConfigPath, serverConfigContent } from "../config.js";
+import {
+  checkDocker,
+  getContainerState,
+  startContainer,
+  runContainer,
+  pollHealth,
+} from "../docker.js";
+import {
+  configPath,
+  writeConfig,
+  serverConfigDir,
+  serverConfigPath,
+  serverConfigContent,
+} from "../config.js";
 
 const CONTAINER_NAME = "drejx-opensandbox";
 const SERVER_URL = "http://localhost:8080";
@@ -26,12 +38,18 @@ export async function init(): Promise<void> {
     console.log("Starting OpenSandbox in Docker...");
     await runContainer([
       "-d",
-      "--name", CONTAINER_NAME,
-      "-p", "8080:8080",
-      "-v", "/var/run/docker.sock:/var/run/docker.sock",
-      "-v", `${serverConfigPath()}:/etc/opensandbox/config.toml:ro`,
-      "-e", "SANDBOX_CONFIG_PATH=/etc/opensandbox/config.toml",
-      "-e", "OPENSANDBOX_INSECURE_SERVER=YES",
+      "--name",
+      CONTAINER_NAME,
+      "-p",
+      "8080:8080",
+      "-v",
+      "/var/run/docker.sock:/var/run/docker.sock",
+      "-v",
+      `${serverConfigPath()}:/etc/opensandbox/config.toml:ro`,
+      "-e",
+      "SANDBOX_CONFIG_PATH=/etc/opensandbox/config.toml",
+      "-e",
+      "OPENSANDBOX_INSECURE_SERVER=YES",
       "opensandbox/server:latest",
     ]);
   }

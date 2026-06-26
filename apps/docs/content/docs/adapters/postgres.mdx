@@ -25,7 +25,7 @@ const client = new Drej({
 
 await client.connect(); // runs CREATE TABLE IF NOT EXISTS migrations
 // ...
-await client.close();   // releases the connection pool
+await client.close(); // releases the connection pool
 ```
 
 ## Constructor
@@ -34,8 +34,8 @@ await client.close();   // releases the connection pool
 new PostgresAdapter(connectionString: string)
 ```
 
-| Argument | Type | Description |
-|---|---|---|
+| Argument           | Type     | Description                                                                |
+| ------------------ | -------- | -------------------------------------------------------------------------- |
 | `connectionString` | `string` | Postgres connection string, e.g. `"postgres://user:pass@host:5432/dbname"` |
 
 ## Connection string format
@@ -75,9 +75,7 @@ CREATE TABLE IF NOT EXISTS drej_events (
 ## Environment-based config
 
 ```ts
-const adapter = new PostgresAdapter(
-  process.env.DATABASE_URL ?? "postgres://localhost/drej_dev",
-);
+const adapter = new PostgresAdapter(process.env.DATABASE_URL ?? "postgres://localhost/drej_dev");
 ```
 
 For production, set `DATABASE_URL` in your environment and never hardcode credentials.

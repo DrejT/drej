@@ -10,11 +10,18 @@ function makeSandbox(execResults: Record<string, string> = {}) {
     exec: vi.fn().mockImplementation((cmd: string) => {
       const stdout = execResults[cmd] ?? `output of: ${cmd}`;
       return {
-        [Symbol.asyncIterator]: async function* () { yield stdout; },
-        stdout: async function* () { yield stdout; },
+        [Symbol.asyncIterator]: async function* () {
+          yield stdout;
+        },
+        stdout: async function* () {
+          yield stdout;
+        },
         result: async () => ({ stdout, stderr: "", exitCode: 0 }),
-        then: (ok: (r: unknown) => unknown) => Promise.resolve(ok({ stdout, stderr: "", exitCode: 0 })),
-        pipe: async (w: { write(s: string): unknown }) => { w.write(stdout); },
+        then: (ok: (r: unknown) => unknown) =>
+          Promise.resolve(ok({ stdout, stderr: "", exitCode: 0 })),
+        pipe: async (w: { write(s: string): unknown }) => {
+          w.write(stdout);
+        },
       };
     }),
     execCode: vi.fn(),
@@ -50,7 +57,10 @@ describe("SandboxBuilder — queue construction", () => {
 
   it("queues when op", () => {
     const sb = new SandboxBuilder();
-    sb.when((ctx) => ctx.exitCode === 0, (sb) => sb.exec("echo pass"));
+    sb.when(
+      (ctx) => ctx.exitCode === 0,
+      (sb) => sb.exec("echo pass"),
+    );
     expect(sb._ops[0]).toMatchObject({ kind: "when" });
   });
 
@@ -112,8 +122,12 @@ describe("flushOps — when primitive", () => {
     const sb = new SandboxBuilder();
     sb.when(
       (ctx) => ctx.exitCode === 0,
-      (sb) => { sb.exec("echo pass"); },
-      (sb) => { sb.exec("echo fail"); },
+      (sb) => {
+        sb.exec("echo pass");
+      },
+      (sb) => {
+        sb.exec("echo fail");
+      },
     );
 
     const sandbox = makeSandbox();
@@ -128,8 +142,12 @@ describe("flushOps — when primitive", () => {
     const sb = new SandboxBuilder();
     sb.when(
       (ctx) => ctx.exitCode === 0,
-      (sb) => { sb.exec("echo pass"); },
-      (sb) => { sb.exec("echo fail"); },
+      (sb) => {
+        sb.exec("echo pass");
+      },
+      (sb) => {
+        sb.exec("echo fail");
+      },
     );
 
     const sandbox = makeSandbox();
@@ -159,7 +177,9 @@ describe("flushOps — forEach primitive", () => {
 describe("flushOps — retry primitive", () => {
   it("succeeds on first attempt without retrying", async () => {
     const sb = new SandboxBuilder();
-    sb.retry(3, (sb) => { sb.exec("cmd"); });
+    sb.retry(3, (sb) => {
+      sb.exec("cmd");
+    });
 
     const sandbox = makeSandbox();
     await flushOps(sandbox as any, sb._ops, makeCtx());
@@ -175,22 +195,36 @@ describe("flushOps — retry primitive", () => {
         if (attempts < 3) {
           return {
             stdout: async function* () {},
-            result: async () => { throw new Error("failed"); },
-            then: (_ok: unknown, reject: (e: Error) => unknown) => Promise.resolve(reject!(new Error("failed"))),
-            pipe: async () => { throw new Error("failed"); },
+            result: async () => {
+              throw new Error("failed");
+            },
+            then: (_ok: unknown, reject: (e: Error) => unknown) =>
+              Promise.resolve(reject!(new Error("failed"))),
+            pipe: async () => {
+              throw new Error("failed");
+            },
           };
         }
         return {
-          stdout: async function* () { yield "success"; },
+          stdout: async function* () {
+            yield "success";
+          },
           result: async () => ({ stdout: "success", stderr: "", exitCode: 0 }),
-          then: (ok: (r: unknown) => unknown) => Promise.resolve(ok({ stdout: "success", stderr: "", exitCode: 0 })),
+          then: (ok: (r: unknown) => unknown) =>
+            Promise.resolve(ok({ stdout: "success", stderr: "", exitCode: 0 })),
           pipe: async () => {},
         };
       }),
     };
 
     const sb = new SandboxBuilder();
-    sb.retry(5, (sb) => { sb.exec("flaky-cmd"); }, { delayMs: 0 });
+    sb.retry(
+      5,
+      (sb) => {
+        sb.exec("flaky-cmd");
+      },
+      { delayMs: 0 },
+    );
 
     await flushOps(sandbox as any, sb._ops, makeCtx());
     expect(attempts).toBe(3);
@@ -200,14 +234,25 @@ describe("flushOps — retry primitive", () => {
     const sandbox = {
       exec: vi.fn().mockImplementation(() => ({
         stdout: async function* () {},
-        result: async () => { throw new Error("always fails"); },
-        then: (_ok: unknown, reject: (e: Error) => unknown) => Promise.resolve(reject!(new Error("always fails"))),
-        pipe: async () => { throw new Error("always fails"); },
+        result: async () => {
+          throw new Error("always fails");
+        },
+        then: (_ok: unknown, reject: (e: Error) => unknown) =>
+          Promise.resolve(reject!(new Error("always fails"))),
+        pipe: async () => {
+          throw new Error("always fails");
+        },
       })),
     };
 
     const sb = new SandboxBuilder();
-    sb.retry(3, (sb) => { sb.exec("broken"); }, { delayMs: 0 });
+    sb.retry(
+      3,
+      (sb) => {
+        sb.exec("broken");
+      },
+      { delayMs: 0 },
+    );
 
     await expect(flushOps(sandbox as any, sb._ops, makeCtx())).rejects.toThrow("always fails");
     expect(sandbox.exec).toHaveBeenCalledTimes(3);

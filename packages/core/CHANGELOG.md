@@ -25,7 +25,7 @@
       .exec("git rev-parse HEAD", { capture: sha })
       .searchFiles("**/*.ts", { as: tsFiles })
       .forEach(tsFiles, (s, file) => s.exec(`tsc ${file}`))
-      .exec("deploy.sh", { envs: { GIT_SHA: sha } })
+      .exec("deploy.sh", { envs: { GIT_SHA: sha } }),
   );
   ```
 
@@ -77,9 +77,7 @@
 
   ```ts
   workflow("deploy").sandbox({ image: { uri: "node:20-slim" } }, (s) =>
-    s
-      .exec("git rev-parse HEAD", { capture: "sha" })
-      .exec("echo deploying commit {{sha}}")
+    s.exec("git rev-parse HEAD", { capture: "sha" }).exec("echo deploying commit {{sha}}"),
   );
   ```
 
@@ -94,7 +92,7 @@
     s
       .exec('node -e "process.version" > /tmp/version.txt')
       .readFile("/tmp/version.txt", { as: "version" })
-      .exec("echo Node version: {{version}}")
+      .exec("echo Node version: {{version}}"),
   );
   ```
 
@@ -139,7 +137,7 @@
     s
       .exec("npm ci")
       .snapshot() // checkpoint: deps installed
-      .exec("npm test")
+      .exec("npm test"),
   );
   ```
 

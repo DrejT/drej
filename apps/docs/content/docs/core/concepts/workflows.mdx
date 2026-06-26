@@ -37,6 +37,7 @@ try {
 ```
 
 Use the direct API when:
+
 - You need to branch on output values mid-workflow
 - You want to run different commands based on external state
 - Your workflow is straightforward (a few steps, no retry logic)
@@ -49,18 +50,16 @@ Use the direct API when:
 import { workflow } from "@drej/workflow";
 
 await workflow(client)
-  .sandbox(
-    { image: "node:22", resources: { cpu: "500m", memory: "512Mi" } },
-    (sb) => {
-      sb.exec("npm ci");
-      sb.checkpoint("after-install");
-      sb.retry(3, (sb) => sb.exec("npm test"), { backoff: "exponential" });
-    },
-  )
+  .sandbox({ image: "node:22", resources: { cpu: "500m", memory: "512Mi" } }, (sb) => {
+    sb.exec("npm ci");
+    sb.checkpoint("after-install");
+    sb.retry(3, (sb) => sb.exec("npm test"), { backoff: "exponential" });
+  })
   .pipe(process.stdout);
 ```
 
 Use the workflow builder when:
+
 - You need `retry`, `when`, `forEach`, or `parallel`
 - You want lifecycle managed automatically (no try/finally)
 - You're building multi-sandbox pipelines with `.parallel()` or `.sequence()`
@@ -72,14 +71,22 @@ Use the workflow builder when:
 ```ts
 // Sequential: stage 2 starts after stage 1 finishes
 await workflow(client)
-  .sandbox({ image: "node:22", resources: { cpu: "500m", memory: "256Mi" } }, (sb) => { sb.exec("npm run build"); })
-  .sandbox({ image: "ubuntu:22.04", resources: { cpu: "500m", memory: "256Mi" } }, (sb) => { sb.exec("./deploy.sh"); })
+  .sandbox({ image: "node:22", resources: { cpu: "500m", memory: "256Mi" } }, (sb) => {
+    sb.exec("npm run build");
+  })
+  .sandbox({ image: "ubuntu:22.04", resources: { cpu: "500m", memory: "256Mi" } }, (sb) => {
+    sb.exec("./deploy.sh");
+  })
   .pipe(process.stdout);
 
 // Parallel: all run simultaneously, results merged
 await workflow(client)
   .parallel(
-    [{ image: "node:20", resources: { cpu: "500m", memory: "256Mi" } }, { image: "node:22", resources: { cpu: "500m", memory: "256Mi" } }, { image: "node:24", resources: { cpu: "500m", memory: "256Mi" } }],
+    [
+      { image: "node:20", resources: { cpu: "500m", memory: "256Mi" } },
+      { image: "node:22", resources: { cpu: "500m", memory: "256Mi" } },
+      { image: "node:24", resources: { cpu: "500m", memory: "256Mi" } },
+    ],
     (sb) => sb.exec("npm test"),
   )
   .pipe(process.stdout);
@@ -87,8 +94,18 @@ await workflow(client)
 // Sequence: each step receives the previous step's result
 await workflow(client)
   .sequence([
-    { image: "node:22", name: "build", resources: { cpu: "500m", memory: "256Mi" }, run: (sb) => sb.exec("npm run build") },
-    { image: "ubuntu:22.04", name: "deploy", resources: { cpu: "500m", memory: "256Mi" }, run: (sb, prev) => sb.exec("./deploy.sh") },
+    {
+      image: "node:22",
+      name: "build",
+      resources: { cpu: "500m", memory: "256Mi" },
+      run: (sb) => sb.exec("npm run build"),
+    },
+    {
+      image: "ubuntu:22.04",
+      name: "deploy",
+      resources: { cpu: "500m", memory: "256Mi" },
+      run: (sb, prev) => sb.exec("./deploy.sh"),
+    },
   ])
   .pipe(process.stdout);
 ```

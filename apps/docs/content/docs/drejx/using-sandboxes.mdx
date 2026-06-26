@@ -83,10 +83,7 @@ try {
 Every `client.resume()` call creates a fresh container restored from the same checkpoint. Each resume is independent — running commands on one does not affect another.
 
 ```ts
-const [sb1, sb2] = await Promise.all([
-  client.resume("sb_a1b2c3d4"),
-  client.resume("sb_a1b2c3d4"),
-]);
+const [sb1, sb2] = await Promise.all([client.resume("sb_a1b2c3d4"), client.resume("sb_a1b2c3d4")]);
 
 // sb1 and sb2 are separate containers, both starting from the same state
 await Promise.all([

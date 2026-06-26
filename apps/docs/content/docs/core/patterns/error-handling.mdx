@@ -10,7 +10,10 @@ By default, `sb.exec()` throws `CommandError` if the command exits with a non-ze
 ```ts
 import { CommandError } from "drej";
 
-const sb = await client.sandbox({ image: "debian:bookworm-slim", resources: { cpu: "500m", memory: "256Mi" } });
+const sb = await client.sandbox({
+  image: "debian:bookworm-slim",
+  resources: { cpu: "500m", memory: "256Mi" },
+});
 try {
   await sb.exec("echo 'about to fail'").pipe(process.stdout);
   await sb.exec("exit 42"); // throws CommandError
@@ -26,6 +29,7 @@ try {
 ```
 
 `CommandError` properties:
+
 - `exitCode: number` — the process exit code
 - `command: string` — the command string
 - `sandboxId: string` — which sandbox it ran in
@@ -50,7 +54,10 @@ This is useful for commands where a non-zero exit is a valid outcome (like `test
 Combine non-strict exec with conditional logic:
 
 ```ts
-const sb = await client.sandbox({ image: "debian:bookworm-slim", resources: { cpu: "500m", memory: "256Mi" } });
+const sb = await client.sandbox({
+  image: "debian:bookworm-slim",
+  resources: { cpu: "500m", memory: "256Mi" },
+});
 try {
   const { exitCode } = await sb.exec("exit 1", { strict: false });
   if (exitCode === 0) {
@@ -84,7 +91,10 @@ Thrown when a sandbox fails to create, boot, or reach `Running` state:
 import { SandboxError } from "drej";
 
 try {
-  const sb = await client.sandbox({ image: "nonexistent:latest", resources: { cpu: "500m", memory: "256Mi" } });
+  const sb = await client.sandbox({
+    image: "nonexistent:latest",
+    resources: { cpu: "500m", memory: "256Mi" },
+  });
 } catch (e) {
   if (e instanceof SandboxError) {
     console.error(`SandboxError: ${e.message}`, e.sandboxId ?? "");

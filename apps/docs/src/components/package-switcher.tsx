@@ -21,8 +21,8 @@ export function PackageSwitcher() {
   const current: PackageValue = pathname.startsWith("/docs/workflow")
     ? "workflow"
     : pathname.startsWith("/docs/drejx")
-    ? "drejx"
-    : "core";
+      ? "drejx"
+      : "core";
   const selected = packages.find((p) => p.value === current)!;
 
   useEffect(() => {

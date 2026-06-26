@@ -1,5 +1,13 @@
 import { Database } from "bun:sqlite";
-import type { IStorageAdapter, LedgerEntry, LedgerEvent, SandboxDetails, ListSandboxOptions, EnvironmentRecord, CheckpointInfo } from "@drej/core";
+import type {
+  IStorageAdapter,
+  LedgerEntry,
+  LedgerEvent,
+  SandboxDetails,
+  ListSandboxOptions,
+  EnvironmentRecord,
+  CheckpointInfo,
+} from "@drej/core";
 import { SandboxStatus } from "@drej/core";
 import { MIGRATION_SQL } from "./migrations";
 
@@ -139,9 +147,7 @@ export class SQLiteAdapter implements IStorageAdapter {
   }
 
   async listSandboxDetails(name: string, opts?: ListSandboxOptions): Promise<SandboxDetails[]> {
-    const rows = this.db
-      .prepare<AggRow, [string]>(AGG_SQL("WHERE name = ?"))
-      .all(name);
+    const rows = this.db.prepare<AggRow, [string]>(AGG_SQL("WHERE name = ?")).all(name);
     return applyOpts(rows.map(aggRowToDetails), opts);
   }
 
@@ -173,18 +179,23 @@ export class SQLiteAdapter implements IStorageAdapter {
       )
       .all(name, sandboxId);
     return rows.map((r) => {
-      const p = r.payload !== null
-        ? (JSON.parse(r.payload) as { snapshotId: string; name?: string })
-        : { snapshotId: "" };
+      const p =
+        r.payload !== null
+          ? (JSON.parse(r.payload) as { snapshotId: string; name?: string })
+          : { snapshotId: "" };
       return { snapshotId: p.snapshotId, tag: p.name, createdAt: r.ts };
     });
   }
 
   async getEnvironment(name: string): Promise<EnvironmentRecord | null> {
     const row = this.db
-      .prepare<EnvRow, [string]>("SELECT name, snapshot_id, image, built_at FROM drej_environments WHERE name = ?")
+      .prepare<EnvRow, [string]>(
+        "SELECT name, snapshot_id, image, built_at FROM drej_environments WHERE name = ?",
+      )
       .get(name);
-    return row ? { name: row.name, snapshotId: row.snapshot_id, image: row.image, builtAt: row.built_at } : null;
+    return row
+      ? { name: row.name, snapshotId: row.snapshot_id, image: row.image, builtAt: row.built_at }
+      : null;
   }
 
   async saveEnvironment(record: EnvironmentRecord): Promise<void> {
@@ -202,8 +213,15 @@ export class SQLiteAdapter implements IStorageAdapter {
 
   async listEnvironments(): Promise<EnvironmentRecord[]> {
     const rows = this.db
-      .prepare<EnvRow, []>("SELECT name, snapshot_id, image, built_at FROM drej_environments ORDER BY built_at DESC")
+      .prepare<EnvRow, []>(
+        "SELECT name, snapshot_id, image, built_at FROM drej_environments ORDER BY built_at DESC",
+      )
       .all();
-    return rows.map((r) => ({ name: r.name, snapshotId: r.snapshot_id, image: r.image, builtAt: r.built_at }));
+    return rows.map((r) => ({
+      name: r.name,
+      snapshotId: r.snapshot_id,
+      image: r.image,
+      builtAt: r.built_at,
+    }));
   }
 }

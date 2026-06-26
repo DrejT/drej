@@ -10,15 +10,29 @@ export type SandboxOp =
   | { kind: "moveFile"; from: string; to: string }
   | { kind: "checkpoint"; name?: string }
   | { kind: "retry"; maxAttempts: number; fn: (sb: SandboxBuilder) => void; opts: RetryOptions }
-  | { kind: "when"; pred: WhenPredicate; then: (sb: SandboxBuilder) => void; else?: (sb: SandboxBuilder) => void }
-  | { kind: "forEach"; items: unknown[]; fn: (sb: SandboxBuilder, item: unknown, index: number) => void; opts: ForEachOptions };
+  | {
+      kind: "when";
+      pred: WhenPredicate;
+      then: (sb: SandboxBuilder) => void;
+      else?: (sb: SandboxBuilder) => void;
+    }
+  | {
+      kind: "forEach";
+      items: unknown[];
+      fn: (sb: SandboxBuilder, item: unknown, index: number) => void;
+      opts: ForEachOptions;
+    };
 
 export interface RetryOptions {
   backoff?: "fixed" | "exponential";
   delayMs?: number;
 }
 
-export type WhenPredicate = (ctx: { stdout: string; exitCode: number; vars: Record<string, unknown> }) => boolean;
+export type WhenPredicate = (ctx: {
+  stdout: string;
+  exitCode: number;
+  vars: Record<string, unknown>;
+}) => boolean;
 
 export interface ForEachOptions {
   concurrency?: number;
@@ -119,7 +133,7 @@ export class SandboxBuilder {
     then: (sb: SandboxBuilder) => void,
     otherwise?: (sb: SandboxBuilder) => void,
   ): this {
-    this._ops.push({ kind: "when", pred, then, "else": otherwise });
+    this._ops.push({ kind: "when", pred, then, else: otherwise });
     return this;
   }
 
@@ -154,7 +168,11 @@ export interface FlushContext {
 }
 
 /** Flush a SandboxBuilder's op queue against a live Sandbox. */
-export async function flushOps(sandbox: Sandbox, ops: SandboxOp[], ctx: FlushContext): Promise<void> {
+export async function flushOps(
+  sandbox: Sandbox,
+  ops: SandboxOp[],
+  ctx: FlushContext,
+): Promise<void> {
   for (const op of ops) {
     switch (op.kind) {
       case "exec": {

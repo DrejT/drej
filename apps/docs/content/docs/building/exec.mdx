@@ -39,11 +39,11 @@ await sb.exec(script).pipe(process.stdout);
 
 ### ExecOptions
 
-| Option | Type | Default | Description |
-|---|---|---|---|
-| `strict` | `boolean` | `true` | Throw `CommandError` on non-zero exit. Set to `false` to get the exit code instead. |
-| `cwd` | `string` | — | Working directory inside the sandbox |
-| `env` | `Record<string, string>` | — | Extra environment variables for this exec only |
+| Option   | Type                     | Default | Description                                                                         |
+| -------- | ------------------------ | ------- | ----------------------------------------------------------------------------------- |
+| `strict` | `boolean`                | `true`  | Throw `CommandError` on non-zero exit. Set to `false` to get the exit code instead. |
+| `cwd`    | `string`                 | —       | Working directory inside the sandbox                                                |
+| `env`    | `Record<string, string>` | —       | Extra environment variables for this exec only                                      |
 
 ### Strict vs non-strict
 
@@ -67,9 +67,7 @@ if (exitCode === 0) {
 ### Using captured output in subsequent commands
 
 ```ts
-const { stdout: nodeVersion } = await sb.exec(
-  "node -e \"process.stdout.write(process.version)\"",
-);
+const { stdout: nodeVersion } = await sb.exec('node -e "process.stdout.write(process.version)"');
 
 await sb.exec(`echo "Building with ${nodeVersion.trim()}"`).pipe(process.stdout);
 ```
@@ -94,11 +92,15 @@ const sb = await client.sandbox({
 Each call without a context runs in an isolated interpreter session:
 
 ```ts
-await sb.execCode(`
+await sb
+  .execCode(
+    `
 import sys, math
 print(f"Python {sys.version.split()[0]}")
 print(f"pi = {math.pi:.6f}")
-`.trim()).pipe(process.stdout);
+`.trim(),
+  )
+  .pipe(process.stdout);
 ```
 
 ### Stateful execution
@@ -115,8 +117,8 @@ await sb.execCode(`print(f"sum = {sum(data)}")`, { context: ctx }).pipe(process.
 
 ### ExecCodeOptions
 
-| Option | Type | Description |
-|---|---|---|
+| Option    | Type                                     | Description                                                                            |
+| --------- | ---------------------------------------- | -------------------------------------------------------------------------------------- |
 | `context` | `{ id: string, language: CodeLanguage }` | Stateful interpreter session. Variables defined in one call are available in the next. |
 
 ### CodeLanguage
@@ -124,7 +126,7 @@ await sb.execCode(`print(f"sum = {sum(data)}")`, { context: ctx }).pipe(process.
 ```ts
 import { CodeLanguage } from "drej";
 
-CodeLanguage.Python     // "python"
-CodeLanguage.JavaScript // "javascript"
-CodeLanguage.TypeScript // "typescript"
+CodeLanguage.Python; // "python"
+CodeLanguage.JavaScript; // "javascript"
+CodeLanguage.TypeScript; // "typescript"
 ```

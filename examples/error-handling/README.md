@@ -17,10 +17,10 @@ bun start
 
 ## What it shows
 
-| Pattern | Description |
-|---------|-------------|
-| Non-strict exec | `exec("...", { strict: false })` returns the result; you inspect `exitCode` yourself |
-| Strict exec (default) | Non-zero exit throws `CommandError` — catch it to handle the failure |
-| Error types | `CommandError`, `SandboxError`, `ExecConnectionError` — when each is thrown |
+| Pattern               | Description                                                                          |
+| --------------------- | ------------------------------------------------------------------------------------ |
+| Non-strict exec       | `exec("...", { strict: false })` returns the result; you inspect `exitCode` yourself |
+| Strict exec (default) | Non-zero exit throws `CommandError` — catch it to handle the failure                 |
+| Error types           | `CommandError`, `SandboxError`, `ExecConnectionError` — when each is thrown          |
 
 Two sandboxes run sequentially, one per pattern.

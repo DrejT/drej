@@ -23,10 +23,18 @@ export class ConsoleLogger implements ILogger {
     else console.log(out);
   }
 
-  debug(msg: string, meta?: Record<string, unknown>) { this.log(LogLevel.Debug, "[DEBUG]", msg, meta); }
-  info(msg: string, meta?: Record<string, unknown>) { this.log(LogLevel.Info, "[INFO]", msg, meta); }
-  warn(msg: string, meta?: Record<string, unknown>) { this.log(LogLevel.Warn, "[WARN]", msg, meta); }
-  error(msg: string, meta?: Record<string, unknown>) { this.log(LogLevel.Error, "[ERROR]", msg, meta); }
+  debug(msg: string, meta?: Record<string, unknown>) {
+    this.log(LogLevel.Debug, "[DEBUG]", msg, meta);
+  }
+  info(msg: string, meta?: Record<string, unknown>) {
+    this.log(LogLevel.Info, "[INFO]", msg, meta);
+  }
+  warn(msg: string, meta?: Record<string, unknown>) {
+    this.log(LogLevel.Warn, "[WARN]", msg, meta);
+  }
+  error(msg: string, meta?: Record<string, unknown>) {
+    this.log(LogLevel.Error, "[ERROR]", msg, meta);
+  }
 }
 
 export const noopLogger: ILogger = {

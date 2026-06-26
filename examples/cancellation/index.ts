@@ -50,7 +50,7 @@ console.log("\n=== Pattern C: CommandError ===");
 const sbC = await client.sandbox({ image, resources, name: "cancellation-c" });
 try {
   await sbC.exec("echo 'step 1'").pipe(process.stdout);
-  await sbC.exec("exit 1");  // throws CommandError
+  await sbC.exec("exit 1"); // throws CommandError
 } catch (e) {
   if (e instanceof CommandError) {
     console.log(`caught CommandError: exit ${e.exitCode}`);
@@ -58,4 +58,3 @@ try {
 } finally {
   await sbC.close();
 }
-

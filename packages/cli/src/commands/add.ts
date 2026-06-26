@@ -4,7 +4,10 @@ import { readConfig } from "../config.js";
 import { readSandboxes, writeSandboxes } from "../sandboxes.js";
 import { validateRegistryItem, type RegistryItem } from "../schema.js";
 
-export async function add(url: string, opts: { name?: string; server?: string } = {}): Promise<void> {
+export async function add(
+  url: string,
+  opts: { name?: string; server?: string } = {},
+): Promise<void> {
   if (!url) throw new Error("Usage: drejx add <url>");
 
   const config = await readConfig();

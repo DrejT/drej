@@ -33,9 +33,9 @@ await workflow(client)
 
 ### RetryOptions
 
-| Option | Type | Default | Description |
-|---|---|---|---|
-| `delayMs` | `number` | `1000` | Delay between retries in milliseconds |
+| Option    | Type                       | Default   | Description                                    |
+| --------- | -------------------------- | --------- | ---------------------------------------------- |
+| `delayMs` | `number`                   | `1000`    | Delay between retries in milliseconds          |
 | `backoff` | `"fixed" \| "exponential"` | `"fixed"` | `"exponential"` doubles the delay each attempt |
 
 With exponential backoff, attempt delays are: `delayMs`, `delayMs * 2`, `delayMs * 4`, etc.
@@ -50,8 +50,12 @@ await workflow(client)
     sb.exec("test -f /etc/hostname", { strict: false });
     sb.when(
       (ctx) => ctx.exitCode === 0,
-      (sb) => { sb.exec('echo "/etc/hostname exists"'); },
-      (sb) => { sb.exec('echo "/etc/hostname missing"'); },
+      (sb) => {
+        sb.exec('echo "/etc/hostname exists"');
+      },
+      (sb) => {
+        sb.exec('echo "/etc/hostname missing"');
+      },
     );
   })
   .pipe(process.stdout);
@@ -76,9 +80,9 @@ await workflow(client)
 
 ### ForEachOptions
 
-| Option | Type | Default | Description |
-|---|---|---|---|
-| `concurrency` | `number` | `1` | Number of items to process simultaneously (within the same sandbox) |
+| Option        | Type     | Default | Description                                                         |
+| ------------- | -------- | ------- | ------------------------------------------------------------------- |
+| `concurrency` | `number` | `1`     | Number of items to process simultaneously (within the same sandbox) |
 
 ## parallel
 
@@ -137,9 +141,13 @@ await workflow(client)
 
 ```ts
 sb.forEach(["a", "b", "c"], (sb, item) => {
-  sb.retry(3, (sb) => {
-    sb.exec(`process ${item}`);
-  }, { backoff: "exponential" });
+  sb.retry(
+    3,
+    (sb) => {
+      sb.exec(`process ${item}`);
+    },
+    { backoff: "exponential" },
+  );
 
   sb.when(
     (ctx) => ctx.exitCode === 0,

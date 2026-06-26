@@ -1,5 +1,13 @@
 import postgres from "postgres";
-import type { IStorageAdapter, LedgerEntry, LedgerEvent, SandboxDetails, ListSandboxOptions, EnvironmentRecord, CheckpointInfo } from "@drej/core";
+import type {
+  IStorageAdapter,
+  LedgerEntry,
+  LedgerEvent,
+  SandboxDetails,
+  ListSandboxOptions,
+  EnvironmentRecord,
+  CheckpointInfo,
+} from "@drej/core";
 import { SandboxStatus } from "@drej/core";
 import { MIGRATION_SQL } from "./migrations";
 
@@ -159,7 +167,9 @@ export class PostgresAdapter implements IStorageAdapter {
   }
 
   async getEnvironment(name: string): Promise<EnvironmentRecord | null> {
-    const rows = await this.sql<{ name: string; snapshot_id: string; image: string; built_at: string }[]>`
+    const rows = await this.sql<
+      { name: string; snapshot_id: string; image: string; built_at: string }[]
+    >`
       SELECT name, snapshot_id, image, built_at FROM drej_environments WHERE name = ${name}
     `;
     if (!rows.length) return null;
@@ -183,9 +193,16 @@ export class PostgresAdapter implements IStorageAdapter {
   }
 
   async listEnvironments(): Promise<EnvironmentRecord[]> {
-    const rows = await this.sql<{ name: string; snapshot_id: string; image: string; built_at: string }[]>`
+    const rows = await this.sql<
+      { name: string; snapshot_id: string; image: string; built_at: string }[]
+    >`
       SELECT name, snapshot_id, image, built_at FROM drej_environments ORDER BY built_at DESC
     `;
-    return rows.map((r) => ({ name: r.name, snapshotId: r.snapshot_id, image: r.image, builtAt: Number(r.built_at) }));
+    return rows.map((r) => ({
+      name: r.name,
+      snapshotId: r.snapshot_id,
+      image: r.image,
+      builtAt: Number(r.built_at),
+    }));
   }
 }

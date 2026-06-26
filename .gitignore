@@ -7,3 +7,4 @@ plans/
 *.db
 *.db-shm
 *.db-wal
+.drej

@@ -7,6 +7,7 @@ import { Check, ChevronsUpDown } from "lucide-react";
 const packages = [
   { value: "core", label: "Core SDK", sub: "drej" },
   { value: "workflow", label: "Workflow Builder", sub: "@drej/workflow" },
+  { value: "drejx", label: "drejx CLI", sub: "drejx" },
 ] as const;
 
 type PackageValue = (typeof packages)[number]["value"];
@@ -19,6 +20,8 @@ export function PackageSwitcher() {
 
   const current: PackageValue = pathname.startsWith("/docs/workflow")
     ? "workflow"
+    : pathname.startsWith("/docs/drejx")
+    ? "drejx"
     : "core";
   const selected = packages.find((p) => p.value === current)!;
 
@@ -33,7 +36,7 @@ export function PackageSwitcher() {
   }, [open]);
 
   return (
-    <div ref={ref} className="relative px-2 pb-3">
+    <div ref={ref} className="relative pb-3">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -48,7 +51,7 @@ export function PackageSwitcher() {
       </button>
 
       {open && (
-        <div className="absolute inset-x-2 top-full z-50 mt-1 flex flex-col gap-0.5 rounded-lg border border-fd-border bg-fd-popover p-1 shadow-md">
+        <div className="absolute inset-x-0 top-full z-50 mt-1 flex flex-col gap-0.5 rounded-lg border border-fd-border bg-fd-popover p-1 shadow-md">
           {packages.map((pkg) => {
             const isActive = pkg.value === current;
             return (

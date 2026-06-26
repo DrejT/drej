@@ -101,8 +101,9 @@ export class ControlClient {
   }
 
   // Returns { endpoint, headers: { "X-EXECD-ACCESS-TOKEN": "..." } }
-  getEndpoint(sandboxId: string, port: number): Promise<SandboxEndpoint> {
-    return this.request("GET", `/v1/sandboxes/${sandboxId}/endpoints/${port}`);
+  getEndpoint(sandboxId: string, port: number, useServerProxy?: boolean): Promise<SandboxEndpoint> {
+    const qs = useServerProxy ? "?use_server_proxy=true" : "";
+    return this.request("GET", `/v1/sandboxes/${sandboxId}/endpoints/${port}${qs}`);
   }
 
   getDiagnosticLogs(sandboxId: string): Promise<DiagnosticLog[]> {

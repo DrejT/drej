@@ -33,15 +33,21 @@ export interface DrejOptions {
    * Omit for no limit.
    */
   maxConcurrency?: number;
+  /**
+   * Route execd and proxy traffic through the OpenSandbox server instead of
+   * connecting to sandbox containers directly. Required when the server runs
+   * in Docker (e.g. started via `drejx init`). Defaults to `false`.
+   */
+  useServerProxy?: boolean;
 }
 
-/** Options for `DrejClient.resume()`. */
+/** Options for `Drej.resume()`. */
 export interface ResumeOptions {
   /** Resume from the checkpoint with this tag. Defaults to the most recent checkpoint. */
   tag?: string;
 }
 
-/** Options for `DrejClient.sandbox()`. */
+/** Options for `Drej.sandbox()`. */
 export interface SandboxOptions {
   /**
    * Container image to run. Pass a string (`"node:22"`) or a full `ImageSpec`

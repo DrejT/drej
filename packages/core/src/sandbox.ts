@@ -45,12 +45,14 @@ export interface SandboxDeps {
   control: ControlClient;
   adapter: IStorageAdapter;
   hooks?: SandboxHooks;
-  /** Called when `close()` completes — used by DrejClient for concurrency accounting. */
+  /** Called when `close()` completes — used by `Drej` for concurrency accounting. */
   onClose?: () => void;
   /** Default shell for all `exec()` calls on this sandbox. Defaults to `"/bin/sh"`. */
   shell?: string;
-  /** Called by `fork()` to create a new Sandbox from a snapshot — injected by DrejClient. */
+  /** Called by `fork()` to create a new Sandbox from a snapshot — injected by `Drej`. */
   fork?: (snapshotId: string, tag?: string) => Promise<Sandbox>;
+  /** Route execd and proxy calls through the OpenSandbox server. Required when the server runs in Docker. */
+  useServerProxy?: boolean;
 }
 
 /**
@@ -61,10 +63,11 @@ export interface SandboxDeps {
 export async function resolveExecClient(
   control: ControlClient,
   sandboxId: string,
+  useServerProxy?: boolean,
   retries = 15,
   delayMs = 1_000,
 ): Promise<ExecClient> {
-  const ep = await control.getEndpoint(sandboxId, 44772);
+  const ep = await control.getEndpoint(sandboxId, 44772, useServerProxy);
   const baseUrl = ep.endpoint.startsWith("http") ? ep.endpoint : `http://${ep.endpoint}`;
   const token = ep.headers?.["X-EXECD-ACCESS-TOKEN"] ?? "";
   const client = new ExecClient({ baseUrl, accessToken: token });
@@ -123,7 +126,7 @@ export class Sandbox {
 
   private async _getExecClient(): Promise<ExecClient> {
     if (!this._execClient) {
-      this._execClient = await resolveExecClient(this._deps.control, this.sandboxId);
+      this._execClient = await resolveExecClient(this._deps.control, this.sandboxId, this._deps.useServerProxy);
     }
     return this._execClient;
   }
@@ -332,7 +335,7 @@ export class Sandbox {
    * ```
    */
   async proxy(port: number): Promise<{ url: string; headers: Record<string, string> }> {
-    const ep = await this._deps.control.getEndpoint(this.sandboxId, port);
+    const ep = await this._deps.control.getEndpoint(this.sandboxId, port, this._deps.useServerProxy);
     const url = ep.endpoint.startsWith("http") ? ep.endpoint : `http://${ep.endpoint}`;
     return { url, headers: ep.headers ?? {} };
   }

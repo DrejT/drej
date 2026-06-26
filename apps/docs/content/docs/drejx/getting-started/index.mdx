@@ -1,0 +1,38 @@
+---
+title: What is drejx?
+description: drejx lets you spin up a pre-configured sandbox environment from a URL — no Dockerfile knowledge, no manual setup.
+---
+
+`drejx` is a CLI for the drej registry. A registry item is a JSON spec that describes a sandbox — its base image, setup commands, and resource limits. Anyone with the URL can provision a live, ready-to-use sandbox from it with a single command.
+
+```bash
+bunx drejx init
+bunx drejx add https://example.com/my-agent.json
+```
+
+The first command starts a local OpenSandbox server via Docker. The second fetches the spec, provisions a sandbox, runs any setup commands, and saves a reference so you can resume it from your code.
+
+## When to use drejx
+
+- You want to share a reproducible sandbox environment (a pre-loaded Node.js toolchain, a Python data-science environment, a code review agent) with your team or the public.
+- You want to provision sandboxes from a URL without writing any provisioning code.
+- You want a local OpenSandbox server running without manually configuring or running `uvx opensandbox-server`.
+
+## How it relates to drej
+
+`drejx` uses the `drej` SDK under the hood. Once you run `drejx add`, you use the standard `drej` client in your code to connect to the provisioned sandbox — `drejx` just handles the provisioning step.
+
+## Next steps
+
+<Cards>
+  <Card
+    href="/docs/drejx/getting-started/quickstart"
+    title="Quickstart"
+    description="Install, init, and add your first registry sandbox."
+  />
+  <Card
+    href="/docs/drejx/commands"
+    title="Commands"
+    description="Full reference for every drejx command."
+  />
+</Cards>

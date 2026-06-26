@@ -90,7 +90,7 @@ export interface LedgerEntry {
 export interface CheckpointInfo {
   /** OpenSandbox snapshot ID. */
   snapshotId: string;
-  /** User-supplied tag, if provided when calling `sb.checkpoint(tag)`. */
+  /** User-supplied name, if provided when calling `sb.checkpoint(name)`. */
   tag?: string;
   /** Unix timestamp (ms) when the checkpoint was created. */
   createdAt: number;
@@ -122,7 +122,6 @@ export interface EnvironmentRecord {
  * ```ts
  * import { SQLiteAdapter } from "@drej/sqlite";
  * const client = new Drej({ baseUrl, adapter: new SQLiteAdapter("./drej.db") });
- * await client.connect();
  * ```
  */
 export interface IStorageAdapter {

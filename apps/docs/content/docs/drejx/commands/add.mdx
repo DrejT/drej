@@ -1,0 +1,90 @@
+---
+title: drejx add
+description: Fetch a registry item from a URL and provision a sandbox from it.
+---
+
+```bash
+bunx drejx add <url> [options]
+```
+
+## Arguments
+
+| Argument | Description |
+|---|---|
+| `url` | URL or local file path to a registry item JSON. Required. |
+
+## Options
+
+| Option | Description |
+|---|---|
+| `--name <name>` | Override the sandbox name. Defaults to the `name` field in the registry item. |
+| `--server <url>` | Use a different OpenSandbox server. Defaults to `serverUrl` in `.drej/config.json`. |
+
+## What it does
+
+1. Reads `.drej/config.json` for the default server URL.
+2. Fetches the URL and validates it as a registry item.
+3. Resolves any `registryDependencies` first (depth-first, recursive).
+4. Creates a sandbox with the image, resources, and env from the spec.
+5. Runs each command in `setup` in order, streaming output to your terminal.
+6. Checkpoints the sandbox so future `client.resume()` calls skip setup entirely.
+7. Closes the sandbox.
+8. Appends an entry to `.drej/sandboxes.json` with the sandbox ID, name, source URL, and timestamp.
+
+## Examples
+
+**From a URL:**
+
+```bash
+bunx drejx add https://registry.drej.dev/node-toolchain.json
+```
+
+**From a local file:**
+
+```bash
+bunx drejx add ./my-sandbox.json
+```
+
+**With a custom name:**
+
+```bash
+bunx drejx add https://registry.drej.dev/node-toolchain.json --name ci-env
+```
+
+**Against a remote server:**
+
+```bash
+bunx drejx add https://registry.drej.dev/node-toolchain.json --server https://sandbox.mycompany.com
+```
+
+## Output
+
+The sandbox ID printed at the end is what you pass to `client.resume()`:
+
+```
+Sandbox ready: sb_a1b2c3d4  (node-toolchain)
+Resume it with: client.resume("sb_a1b2c3d4")
+```
+
+It is also stored in `.drej/sandboxes.json` so you can retrieve it with `drejx list`.
+
+## `.drej/sandboxes.json`
+
+Each `add` appends one entry:
+
+```json
+[
+  {
+    "name": "node-toolchain",
+    "sandboxId": "sb_a1b2c3d4e5f6g7h8",
+    "url": "https://registry.drej.dev/node-toolchain.json",
+    "createdAt": "2026-06-26T10:00:00.000Z"
+  }
+]
+```
+
+## Notes
+
+- `drejx add` requires `drejx init` to have been run first (`.drej/config.json` must exist).
+- If a spec has no `setup` commands, the sandbox is created and checkpointed immediately with no setup time.
+- If two specs share a `registryDependency`, the dependency is provisioned once per `add` invocation — it is not deduplicated across invocations.

@@ -36,7 +36,7 @@ export function PackageSwitcher() {
   }, [open]);
 
   return (
-    <div ref={ref} className="relative px-2 pb-3">
+    <div ref={ref} className="relative px-3 pb-3">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -51,7 +51,7 @@ export function PackageSwitcher() {
       </button>
 
       {open && (
-        <div className="absolute inset-x-2 top-full z-50 mt-1 flex flex-col gap-0.5 rounded-lg border border-fd-border bg-fd-popover p-1 shadow-md">
+        <div className="absolute inset-x-0 top-full z-50 mt-1 flex flex-col gap-0.5 rounded-lg border border-fd-border bg-fd-popover p-1 shadow-md">
           {packages.map((pkg) => {
             const isActive = pkg.value === current;
             return (

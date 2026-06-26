@@ -96,6 +96,14 @@
         "drej": "workspace:*",
       },
     },
+    "examples/ports": {
+      "name": "drej-example-ports",
+      "version": "0.0.1",
+      "dependencies": {
+        "@drej/sqlite": "workspace:*",
+        "drej": "workspace:*",
+      },
+    },
     "examples/read-file": {
       "name": "drej-example-read-file",
       "version": "0.0.1",
@@ -106,6 +114,14 @@
     },
     "examples/run-bash-script": {
       "name": "drej-example-run-bash-script",
+      "version": "0.0.1",
+      "dependencies": {
+        "@drej/sqlite": "workspace:*",
+        "drej": "workspace:*",
+      },
+    },
+    "examples/sandbox-fork": {
+      "name": "drej-example-sandbox-fork",
       "version": "0.0.1",
       "dependencies": {
         "@drej/sqlite": "workspace:*",
@@ -1167,9 +1183,13 @@
 
     "drej-example-hello-world": ["drej-example-hello-world@workspace:examples/hello-world"],
 
+    "drej-example-ports": ["drej-example-ports@workspace:examples/ports"],
+
     "drej-example-read-file": ["drej-example-read-file@workspace:examples/read-file"],
 
     "drej-example-run-bash-script": ["drej-example-run-bash-script@workspace:examples/run-bash-script"],
+
+    "drej-example-sandbox-fork": ["drej-example-sandbox-fork@workspace:examples/sandbox-fork"],
 
     "drej-example-snapshot-replay": ["drej-example-snapshot-replay@workspace:examples/snapshot-replay"],
 

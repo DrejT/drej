@@ -16,14 +16,14 @@ const client = new Drej({
   baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://localhost:8080",
   apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",
   adapter: new SQLiteAdapter("./ledger.db"),
+  useServerProxy: process.env.USE_SERVER_PROXY !== "false",
 });
 
 const env = client.environment("python-data-science", {
-  image: "debian:bookworm-slim",
+  image: "python:3.11-slim",
   resources: { cpu: "500m", memory: "512Mi" },
   setup: async (sb) => {
     console.log("  Running setup (install packages)...");
-    await sb.exec("apt-get update -qq && apt-get install -y python3-pip --no-install-recommends -q");
     await sb.exec("pip install --quiet numpy pandas");
     console.log("  Setup complete.");
   },
@@ -42,9 +42,9 @@ const sb = await env.sandbox();
 console.log(`Ready in ${Date.now() - t0}ms  (sandbox ${sb.sandboxId})`);
 
 try {
-  console.log("\n$ python3 -c \"import numpy, pandas; print(numpy.__version__, pandas.__version__)\"");
+  console.log('\n$ python3 -c "import numpy, pandas; print(numpy.__version__, pandas.__version__)"');
   await sb.exec(
-    "python3 -c \"import numpy, pandas; print(numpy.__version__, pandas.__version__)\"",
+    'python3 -c "import numpy, pandas; print(numpy.__version__, pandas.__version__)"',
   ).pipe(process.stdout);
 } finally {
   await sb.close();

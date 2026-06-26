@@ -21,7 +21,7 @@ Example: before writing a `bun build` command or debugging a workspace install i
 ## Commands
 
 ```bash
-# Run an example (requires uvx opensandbox-server)
+# Run an example (requires OpenSandbox server — use drejx init or uvx opensandbox-server)
 bun examples/hello-world/index.ts
 
 # Run all unit tests
@@ -41,6 +41,7 @@ bunx tsc --noEmit --strict --project packages/workflow/tsconfig.json
 bunx tsc --noEmit --strict --project packages/adapters/postgres/tsconfig.json
 bunx tsc --noEmit --strict --project packages/adapters/sqlite/tsconfig.json
 bunx tsc --noEmit --strict --project packages/adapters/otel/tsconfig.json
+bunx tsc --noEmit --strict --project packages/cli/tsconfig.json
 
 # Changesets (required on every PR touching publishable packages)
 bunx changeset        # add a changeset
@@ -62,7 +63,7 @@ bunx changeset status # verify one exists
 ### Integration test conventions
 
 - **Run with**: `bun examples/<name>/index.ts` from the repo root (examples are also the integration tests).
-- **Requires**: `uvx opensandbox-server` running locally (see Local OpenSandbox setup).
+- **Requires**: OpenSandbox server running locally — either `drejx init` (Docker-based, recommended) or `uvx opensandbox-server` (manual). If using `drejx init`, pass `useServerProxy: true` to `new Drej(...)` so the SDK routes through the server instead of container-direct IPs.
 - **Client setup**: `new Drej({ baseUrl: ..., adapter: new SQLiteAdapter("./ledger.db") })` — no `connect()` or `close()` needed.
 - **Sandbox lifecycle**: always wrap in `try/finally { await sb.close(); }` to avoid container leaks.
 - **Assertion**: `const { stdout } = await sb.exec("cmd")` — assert on the returned value. For error cases, catch `CommandError`.
@@ -108,6 +109,17 @@ packages/adapters/sqlite/         — SQLite storage adapter (published as "@dre
 
 packages/adapters/otel/           — OpenTelemetry hooks adapter (published as "@drej/otel")
   src/index.ts                    — otelHooks(tracer, opts?) → SandboxHooks
+
+packages/cli/                     — drejx CLI (published to npm as "drejx", not part of changeset versioning)
+  src/index.ts                    — CLI entry point (shebang, command dispatch)
+  src/commands/init.ts            — drejx init: starts OpenSandbox in Docker, writes .drej/config.json
+  src/commands/add.ts             — drejx add <url>: fetches registry item, builds sandbox, checkpoints
+  src/commands/list.ts            — drejx list: prints sandboxes from .drej/sandboxes.json
+  src/commands/remove.ts          — drejx remove <name>: deletes sandbox entry
+  src/schema.ts                   — RegistryItem interface + validateRegistryItem()
+  src/config.ts                   — DrejxConfig, readConfig(), writeConfig(), serverConfigContent()
+  src/sandboxes.ts                — SandboxEntry, readSandboxes(), writeSandboxes()
+  src/docker.ts                   — checkDocker(), getContainerState(), startContainer(), runContainer(), pollHealth()
 ```
 
 ### Key design points
@@ -132,9 +144,11 @@ packages/adapters/otel/           — OpenTelemetry hooks adapter (published as 
 
 **Resource limits required**: `SandboxOptions.resources` (`{ cpu: string; memory: string; gpu?: string }`) is required — the OpenSandbox server rejects requests without it. Always pass at least `{ cpu: "500m", memory: "256Mi" }`. This applies to `client.sandbox()`, `workflow().sandbox()`, and every step in `workflow().sequence()`.
 
+**Server proxy mode**: When OpenSandbox runs in Docker (via `drejx init`), sandbox containers are on a bridge network and their IPs are unreachable from the host. Set `useServerProxy: true` in `DrejOptions` to route execd and proxy traffic through the server (`?use_server_proxy=true` on `getEndpoint`). The server then returns `{eip}/sandboxes/{id}/proxy/{port}` URLs that are reachable from the host. The server config must have `eip = "http://localhost:8080"` set — `drejx init` writes this automatically.
+
 ## Environment variables
 
-`DrejClient` is configured via constructor options, not environment variables. The consuming application is responsible for reading env vars and passing them in:
+`Drej` is configured via constructor options, not environment variables. The consuming application is responsible for reading env vars and passing them in:
 
 | Option | Description |
 |---|---|
@@ -142,8 +156,17 @@ packages/adapters/otel/           — OpenTelemetry hooks adapter (published as 
 | `apiKey` | OpenSandbox API key (empty string for local dev) |
 | `adapter` | `IStorageAdapter` implementation (SQLiteAdapter or PostgresAdapter) |
 | `maxConcurrency` | Max simultaneous workflow runs (default: unlimited) |
+| `useServerProxy` | Route execd/proxy traffic through the server — required when server runs in Docker via `drejx init` (default: `false`) |
 
 ## Local OpenSandbox setup
+
+### Option 1 — drejx init (recommended)
+
+`bunx drejx init` starts OpenSandbox in a Docker container (`opensandbox/server:latest`) and writes `~/.config/drejx/server.toml` and `.drej/config.json` automatically. This is the preferred path for users running the full drejx workflow.
+
+When using a server started this way, pass `useServerProxy: true` to `new Drej(...)` — direct container IPs are not reachable from the host over Docker's bridge network.
+
+### Option 2 — uvx (manual)
 
 Run `uvx opensandbox-server` with `~/.sandbox.toml`:
 
@@ -165,6 +188,8 @@ mode = "direct"
 [egress]
 mode = "dns"
 ```
+
+The `uvx` path does not need `useServerProxy` — the server is on the host, so direct container IPs are reachable.
 
 ## SDK focus
 

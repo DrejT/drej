@@ -10,6 +10,7 @@ const client = new Drej({
   baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://localhost:8080",
   apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",
   adapter: new SQLiteAdapter("./ledger.db"),
+  useServerProxy: process.env.USE_SERVER_PROXY !== "false",
 });
 
 const sbA = await client.sandbox({

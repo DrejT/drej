@@ -1,6 +1,12 @@
 # snapshot-replay
 
-Demonstrates drej's snapshot and replay feature: run a workflow once to install dependencies and capture a snapshot, then replay from that snapshot — skipping the install — to run updated code against the same environment.
+Demonstrates drej's checkpoint and resume feature: run once to install dependencies and capture a snapshot, then resume from that snapshot — skipping the install — to run updated code against the same environment.
+
+## Setup
+
+```bash
+bunx drejx init   # starts OpenSandbox in Docker (one-time setup)
+```
 
 ## Run
 
@@ -14,9 +20,12 @@ bun start
 **Initial run**
 1. Creates a Python 3.11 sandbox
 2. Installs `requests` via pip
-3. Captures a snapshot after the install step
-4. Runs a script against httpbin
+3. Captures a checkpoint (`after-install`)
+4. Runs a script and closes the sandbox
 
-**Replay**
-1. Boots a new sandbox from the snapshot (pip install already done)
-2. Runs an updated script that fetches a different endpoint
+**Resumed run**
+1. Calls `client.resume(sandboxId)` — boots from the snapshot
+2. The `pip install` call returns cached output instantly (never re-runs)
+3. Runs an updated script on the restored container
+
+Run `bun start` twice to see the difference: first run takes ~30–60s; the resume takes ~2–3s.

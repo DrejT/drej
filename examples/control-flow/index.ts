@@ -14,21 +14,20 @@ const client = new Drej({
   baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://localhost:8080",
   apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",
   adapter: new SQLiteAdapter("./ledger.db"),
+  useServerProxy: process.env.USE_SERVER_PROXY !== "false",
 });
 
 await workflow(client)
   .sandbox(
     { image: "ubuntu:22.04", resources: { cpu: "500m", memory: "512Mi" }, name: "control-flow" },
     (sb) => {
-      // retry — retries a flaky command up to 5 times with exponential backoff
+      // retry — fails the first 2 attempts, succeeds on the 3rd
       sb.retry(
         5,
         (sb) => {
-          sb.exec(`
-            R=$((RANDOM % 2))
-            if [ $R -eq 0 ]; then echo "[retry] tails — failing"; exit 1; fi
-            echo "[retry] heads — success"
-          `);
+          sb.exec(
+            'COUNT=$(cat /tmp/attempt 2>/dev/null || echo 0); COUNT=$((COUNT+1)); echo $COUNT > /tmp/attempt; echo "[retry] attempt $COUNT"; [ $COUNT -ge 3 ] && echo "[retry] succeeded" || { echo "[retry] failing"; exit 1; }',
+          );
         },
         { delayMs: 200, backoff: "exponential" },
       );
@@ -50,4 +49,3 @@ await workflow(client)
     },
   )
   .pipe(process.stdout);
-

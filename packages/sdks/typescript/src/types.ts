@@ -75,4 +75,13 @@ export interface SandboxOptions {
    * Defaults to `"/bin/sh"`.
    */
   shell?: string;
+  /**
+   * Override the container entrypoint. Defaults to `["tail", "-f", "/dev/null"]`
+   * which keeps the container alive without a TTY.
+   *
+   * Set this when using images that need their own init process — for example,
+   * `opensandbox/code-interpreter` requires `["/opt/code-interpreter/code-interpreter.sh"]`
+   * to start the Jupyter kernel service that `execCode()` depends on.
+   */
+  entrypoint?: string[];
 }

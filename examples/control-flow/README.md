@@ -1,6 +1,12 @@
 # control-flow
 
-Demonstrates all of drej's built-in control-flow primitives in a single workflow.
+Demonstrates all of drej's built-in workflow control-flow primitives in a single sandbox.
+
+## Setup
+
+```bash
+bunx drejx init   # starts OpenSandbox in Docker (one-time setup)
+```
 
 ## Run
 
@@ -14,6 +20,5 @@ bun start
 | Primitive | Description |
 |-----------|-------------|
 | `retry`   | Retries a flaky command up to 5 times with exponential backoff |
-| `when`    | Branches conditionally on workflow state |
-| `forEach` | Iterates over a list with a loop variable |
-| `parallel`| Runs two branches concurrently inside the same sandbox |
+| `when`    | Branches conditionally based on the previous exec's exit code |
+| `forEach` | Iterates over a list, running a command per item |

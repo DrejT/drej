@@ -10,7 +10,7 @@ export interface OtelHooksOptions {
 /**
  * Returns `SandboxHooks` that emit OpenTelemetry traces for every sandbox run.
  *
- * Pass the result to `client.sandbox(opts, { hooks: otelHooks(tracer) })`.
+ * Pass the result via the `hooks` field of `SandboxOptions` when calling `client.sandbox()`.
  *
  * Span structure:
  * ```
@@ -25,7 +25,7 @@ export interface OtelHooksOptions {
  * import { trace } from "@opentelemetry/api";
  *
  * const tracer = trace.getTracer("my-app");
- * const sb = await client.sandbox({ image: "node:22", resources: { cpu: "500m", memory: "256Mi" } }, { hooks: otelHooks(tracer) });
+ * const sb = await client.sandbox({ image: "node:22", resources: { cpu: "500m", memory: "256Mi" }, hooks: otelHooks(tracer) });
  * ```
  */
 export function otelHooks(tracer: Tracer, opts: OtelHooksOptions = {}): SandboxHooks {

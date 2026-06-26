@@ -35,13 +35,13 @@ export interface DrejOptions {
   maxConcurrency?: number;
 }
 
-/** Options for `DrejClient.resume()`. */
+/** Options for `Drej.resume()`. */
 export interface ResumeOptions {
   /** Resume from the checkpoint with this tag. Defaults to the most recent checkpoint. */
   tag?: string;
 }
 
-/** Options for `DrejClient.sandbox()`. */
+/** Options for `Drej.sandbox()`. */
 export interface SandboxOptions {
   /**
    * Container image to run. Pass a string (`"node:22"`) or a full `ImageSpec`

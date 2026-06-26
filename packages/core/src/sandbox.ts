@@ -45,11 +45,11 @@ export interface SandboxDeps {
   control: ControlClient;
   adapter: IStorageAdapter;
   hooks?: SandboxHooks;
-  /** Called when `close()` completes — used by DrejClient for concurrency accounting. */
+  /** Called when `close()` completes — used by `Drej` for concurrency accounting. */
   onClose?: () => void;
   /** Default shell for all `exec()` calls on this sandbox. Defaults to `"/bin/sh"`. */
   shell?: string;
-  /** Called by `fork()` to create a new Sandbox from a snapshot — injected by DrejClient. */
+  /** Called by `fork()` to create a new Sandbox from a snapshot — injected by `Drej`. */
   fork?: (snapshotId: string, tag?: string) => Promise<Sandbox>;
 }
 

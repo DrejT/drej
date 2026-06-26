@@ -114,7 +114,7 @@ export class Drej {
         image,
         env: opts.env,
         metadata: opts.metadata,
-        entrypoint: ["tail", "-f", "/dev/null"],
+        entrypoint: opts.entrypoint ?? ["tail", "-f", "/dev/null"],
         resourceLimits: opts.resources,
         timeout: opts.timeout,
       });

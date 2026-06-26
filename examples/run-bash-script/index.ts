@@ -5,6 +5,7 @@ const client = new Drej({
   baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://localhost:8080",
   apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",
   adapter: new SQLiteAdapter("./ledger.db"),
+  useServerProxy: process.env.USE_SERVER_PROXY !== "false",
 });
 
 const script = `
@@ -36,7 +37,7 @@ const sb = await client.sandbox({
 console.log(`Sandbox ID: ${sb.sandboxId}\n`);
 
 try {
-  await sb.exec(script).pipe(process.stdout);
+  await sb.exec(script, { shell: "/bin/bash" }).pipe(process.stdout);
 } finally {
   await sb.close();
 }

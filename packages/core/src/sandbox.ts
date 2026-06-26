@@ -191,10 +191,31 @@ export class Sandbox {
   }
 
   /**
+   * Create a code execution context for use with `execCode()`.
+   *
+   * The code interpreter requires a context for every `execCode()` call. Call
+   * this once per session (or once per isolated scope), then pass the returned
+   * object as `opts.context` to `execCode()`. Variables defined in one call
+   * are visible to subsequent calls sharing the same context.
+   *
+   * @example
+   * ```ts
+   * const ctx = await sb.createCodeContext(CodeLanguage.Python);
+   * await sb.execCode('x = 42', { context: ctx });
+   * await sb.execCode('print(x)', { context: ctx }); // prints 42
+   * ```
+   */
+  async createCodeContext(language: import("@drej/opensandbox").CodeLanguage): Promise<import("@drej/opensandbox").CodeContext> {
+    const ec = await this._getExecClient();
+    return ec.createContext(language as string);
+  }
+
+  /**
    * Execute code via the sandbox's code interpreter (Python, JS, etc.).
    *
    * Uses the execd `/code` endpoint for stateful, Jupyter-style execution.
    * Contexts persist across calls — use `opts.context` to target a specific one.
+   * Create a context first with `sb.createCodeContext(language)`.
    */
   execCode(code: string, opts: ExecCodeOptions = {}): ExecHandle {
     const seq = ++this._seq;

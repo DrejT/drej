@@ -60,7 +60,9 @@ describe("Sandbox.fork()", () => {
     const events = appendCalls.map((c: [{ event: string }]) => c[0].event);
     expect(events).toContain(LedgerEvent.CheckpointCreated);
 
-    const cpEntry = appendCalls.find((c: [{ event: string }]) => c[0].event === LedgerEvent.CheckpointCreated);
+    const cpEntry = appendCalls.find(
+      (c: [{ event: string }]) => c[0].event === LedgerEvent.CheckpointCreated,
+    );
     expect((cpEntry![0] as any).payload.snapshotId).toBe("snap-xyz");
 
     expect(forkFn).toHaveBeenCalledWith("snap-xyz", undefined);
@@ -83,7 +85,9 @@ describe("Sandbox.fork()", () => {
     expect(forkFn).toHaveBeenCalledWith("snap-tagged", "after-install");
 
     const appendCalls = (adapter.append as ReturnType<typeof vi.fn>).mock.calls;
-    const cpEntry = appendCalls.find((c: [{ event: string }]) => c[0].event === LedgerEvent.CheckpointCreated);
+    const cpEntry = appendCalls.find(
+      (c: [{ event: string }]) => c[0].event === LedgerEvent.CheckpointCreated,
+    );
     expect((cpEntry![0] as any).payload.name).toBe("after-install");
   });
 

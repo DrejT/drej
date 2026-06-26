@@ -47,14 +47,14 @@ Requires a code-interpreter image (e.g. `opensandbox/code-interpreter`).
 
 ## File operations
 
-| Method | Description |
-|---|---|
-| `sb.writeFile(path, content)` | Write a UTF-8 string into the container |
-| `sb.readFile(path)` | Read a file as a UTF-8 string |
-| `sb.moveFile(from, to)` | Move or rename a file inside the container |
-| `sb.deleteFile(path)` | Delete a file from the container |
+| Method                           | Description                                                   |
+| -------------------------------- | ------------------------------------------------------------- |
+| `sb.writeFile(path, content)`    | Write a UTF-8 string into the container                       |
+| `sb.readFile(path)`              | Read a file as a UTF-8 string                                 |
+| `sb.moveFile(from, to)`          | Move or rename a file inside the container                    |
+| `sb.deleteFile(path)`            | Delete a file from the container                              |
 | `sb.searchFiles(pattern, path?)` | Search for files matching a glob; returns an array of matches |
-| `sb.listDirectory(path, opts?)` | List directory entries; `opts.depth` controls recursion depth |
+| `sb.listDirectory(path, opts?)`  | List directory entries; `opts.depth` controls recursion depth |
 
 See [File operations](/docs/building/file-ops) for full examples.
 

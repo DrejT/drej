@@ -14,15 +14,15 @@ describe("serverConfigContent", () => {
     expect(serverConfigContent()).toContain("[docker]");
   });
 
-  it("contains eip = \"http://localhost:8080\"", () => {
+  it('contains eip = "http://localhost:8080"', () => {
     expect(serverConfigContent()).toContain(`eip = "http://localhost:8080"`);
   });
 
-  it("contains type = \"docker\"", () => {
+  it('contains type = "docker"', () => {
     expect(serverConfigContent()).toContain(`type = "docker"`);
   });
 
-  it("contains network_mode = \"bridge\"", () => {
+  it('contains network_mode = "bridge"', () => {
     expect(serverConfigContent()).toContain(`network_mode = "bridge"`);
   });
 

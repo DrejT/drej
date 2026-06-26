@@ -19,11 +19,13 @@ bun start        # ~2–3s on subsequent runs (restores from snapshot)
 ## What it does
 
 **First run** — environment not yet cached:
+
 1. Installs Python 3 and pip into a `debian:bookworm-slim` container
 2. Installs `numpy` and `pandas` via pip
 3. Snapshots the container and saves the snapshot ID to the ledger
 
 **Subsequent runs** — environment cached:
+
 1. Finds the existing snapshot in the ledger
 2. Boots directly from the snapshot — no apt-get or pip install
 3. Runs `import numpy, pandas` to prove packages are already present

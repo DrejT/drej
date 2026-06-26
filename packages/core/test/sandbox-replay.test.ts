@@ -22,7 +22,9 @@ function makeExecClient(events: SSEEvent[] = []) {
   return {
     listContexts: vi.fn().mockResolvedValue([]),
     executeCommand: vi.fn().mockImplementation(() =>
-      (async function* () { for (const ev of events) yield ev; })()
+      (async function* () {
+        for (const ev of events) yield ev;
+      })(),
     ),
   };
 }
@@ -83,8 +85,8 @@ describe("Sandbox replay mode", () => {
     const sb = new Sandbox("sb-1", "test", makeDeps(adapter), replayCache);
     (sb as any)._execClient = execClient;
 
-    const r1 = await sb.exec("npm ci");       // seq=1, cached
-    const r2 = await sb.exec("npm test");     // seq=2, live
+    const r1 = await sb.exec("npm ci"); // seq=1, cached
+    const r2 = await sb.exec("npm test"); // seq=2, live
 
     expect(r1.stdout).toBe("cached\n");
     expect(r2.stdout).toBe("live output\n");
@@ -106,9 +108,9 @@ describe("Sandbox replay mode", () => {
     (sb as any)._execClient = execClient;
 
     const results = await Promise.all([
-      sb.exec("cmd1"),  // seq=1, cached
-      sb.exec("cmd2"),  // seq=2, cached
-      sb.exec("cmd3"),  // seq=3, live
+      sb.exec("cmd1"), // seq=1, cached
+      sb.exec("cmd2"), // seq=2, cached
+      sb.exec("cmd3"), // seq=3, live
     ]);
 
     expect(results[0].stdout).toBe("a\n");

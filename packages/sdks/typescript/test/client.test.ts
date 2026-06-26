@@ -43,10 +43,7 @@ describe("Drej lazy connect", () => {
     const adapter = makeAdapter();
     const client = makeClient(adapter);
     // Trigger two concurrent first uses
-    await Promise.all([
-      client.sandboxes.list(),
-      client.sandboxes.list(),
-    ]);
+    await Promise.all([client.sandboxes.list(), client.sandboxes.list()]);
     expect(adapter.connect).toHaveBeenCalledOnce();
   });
 });
@@ -64,7 +61,13 @@ describe("Drej.sandboxes", () => {
 
   it("sessions.list() delegates to listAllSandboxDetails()", async () => {
     const details: SandboxDetails[] = [
-      { name: "ci", sandboxId: "s1", status: SandboxStatus.Completed, startedAt: 1000, execCount: 2 },
+      {
+        name: "ci",
+        sandboxId: "s1",
+        status: SandboxStatus.Completed,
+        startedAt: 1000,
+        execCount: 2,
+      },
     ];
     (adapter.listAllSandboxDetails as ReturnType<typeof vi.fn>).mockResolvedValue(details);
 
@@ -75,7 +78,10 @@ describe("Drej.sandboxes", () => {
 
   it("sessions.list(opts) forwards opts", async () => {
     await client.sandboxes.list({ limit: 5, status: SandboxStatus.Running });
-    expect(adapter.listAllSandboxDetails).toHaveBeenCalledWith({ limit: 5, status: SandboxStatus.Running });
+    expect(adapter.listAllSandboxDetails).toHaveBeenCalledWith({
+      limit: 5,
+      status: SandboxStatus.Running,
+    });
   });
 
   it("sessions.listByName(name) delegates to listSandboxDetails(name)", async () => {
@@ -90,7 +96,11 @@ describe("Drej.sandboxes", () => {
 
   it("sessions.get(name, sandboxId) delegates to getSandboxDetails()", async () => {
     const details: SandboxDetails = {
-      name: "ci", sandboxId: "s1", status: SandboxStatus.Completed, startedAt: 1000, execCount: 1,
+      name: "ci",
+      sandboxId: "s1",
+      status: SandboxStatus.Completed,
+      startedAt: 1000,
+      execCount: 1,
     };
     (adapter.getSandboxDetails as ReturnType<typeof vi.fn>).mockResolvedValue(details);
 
@@ -135,7 +145,9 @@ describe("Drej concurrency slot", () => {
     await (client as any)._acquireSlot();
 
     let resolved = false;
-    const pending = (client as any)._acquireSlot().then(() => { resolved = true; });
+    const pending = (client as any)._acquireSlot().then(() => {
+      resolved = true;
+    });
 
     // Not yet resolved — no free slot
     await Promise.resolve();
@@ -237,11 +249,17 @@ describe("Drej._getOrBuildEnvironment concurrency guard", () => {
     const client = makeClient(adapter);
 
     let resolveBuild!: (id: string) => void;
-    const buildPromise = new Promise<string>((r) => { resolveBuild = r; });
+    const buildPromise = new Promise<string>((r) => {
+      resolveBuild = r;
+    });
     const buildSpy = vi.fn().mockReturnValue(buildPromise);
     (client as any)._buildEnvironment = buildSpy;
 
-    const opts = { image: "debian:slim", resources: { cpu: "500m", memory: "256Mi" }, setup: async () => {} };
+    const opts = {
+      image: "debian:slim",
+      resources: { cpu: "500m", memory: "256Mi" },
+      setup: async () => {},
+    };
 
     const p1 = (client as any)._getOrBuildEnvironment("py", opts);
     const p2 = (client as any)._getOrBuildEnvironment("py", opts);
@@ -261,7 +279,11 @@ describe("Drej._getOrBuildEnvironment concurrency guard", () => {
     const buildSpy = vi.fn().mockResolvedValue("snap-1");
     (client as any)._buildEnvironment = buildSpy;
 
-    const opts = { image: "debian:slim", resources: { cpu: "500m", memory: "256Mi" }, setup: async () => {} };
+    const opts = {
+      image: "debian:slim",
+      resources: { cpu: "500m", memory: "256Mi" },
+      setup: async () => {},
+    };
 
     await (client as any)._getOrBuildEnvironment("py", opts);
     await (client as any)._getOrBuildEnvironment("py", opts);

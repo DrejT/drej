@@ -25,7 +25,9 @@ describe("pollHealth", () => {
       return new Response(JSON.stringify({ status: "starting" }), { status: 200 });
     }) as unknown as typeof globalThis.fetch;
 
-    await expect(pollHealth("http://localhost:8080/health", 100)).rejects.toThrow(/did not become healthy/);
+    await expect(pollHealth("http://localhost:8080/health", 100)).rejects.toThrow(
+      /did not become healthy/,
+    );
   });
 
   it("throws after timeout if server is unreachable", async () => {
@@ -33,6 +35,8 @@ describe("pollHealth", () => {
       throw new Error("ECONNREFUSED");
     }) as unknown as typeof globalThis.fetch;
 
-    await expect(pollHealth("http://localhost:8080/health", 100)).rejects.toThrow(/did not become healthy/);
+    await expect(pollHealth("http://localhost:8080/health", 100)).rejects.toThrow(
+      /did not become healthy/,
+    );
   });
 });

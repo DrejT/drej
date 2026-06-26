@@ -28,13 +28,10 @@ await client.connect();
 
 ```ts
 await workflow(client)
-  .sandbox(
-    { image: "node:22", resources: { cpu: "500m", memory: "512Mi" } },
-    (sb) => {
-      sb.exec("node --version");
-      sb.exec("npm --version");
-    },
-  )
+  .sandbox({ image: "node:22", resources: { cpu: "500m", memory: "512Mi" } }, (sb) => {
+    sb.exec("node --version");
+    sb.exec("npm --version");
+  })
   .pipe(process.stdout);
 
 await client.close();
@@ -48,13 +45,10 @@ Use `.result()` instead of `.pipe()` to get the combined stdout and any captured
 
 ```ts
 const { stdout, vars } = await workflow(client)
-  .sandbox(
-    { image: "node:22", resources: { cpu: "500m", memory: "512Mi" } },
-    (sb) => {
-      sb.exec("node --version > /tmp/ver.txt");
-      sb.readFile("/tmp/ver.txt", "nodeVersion");
-    },
-  )
+  .sandbox({ image: "node:22", resources: { cpu: "500m", memory: "512Mi" } }, (sb) => {
+    sb.exec("node --version > /tmp/ver.txt");
+    sb.readFile("/tmp/ver.txt", "nodeVersion");
+  })
   .result();
 
 console.log(vars.nodeVersion); // "v22.x.x\n"

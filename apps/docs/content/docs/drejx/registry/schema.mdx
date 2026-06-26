@@ -19,18 +19,13 @@ A registry item is a JSON object. Only `name`, `image`, and `resources` are requ
   "resources": { "cpu": "500m", "memory": "512Mi" },
   "env": { "NODE_ENV": "production" },
 
-  "setup": [
-    "npm install -g typescript eslint",
-    "mkdir -p /workspace"
-  ],
+  "setup": ["npm install -g typescript eslint", "mkdir -p /workspace"],
 
   "ports": [3000],
 
   "metadata": { "version": "1.0.0" },
 
-  "registryDependencies": [
-    "https://registry.drej.dev/base-node.json"
-  ]
+  "registryDependencies": ["https://registry.drej.dev/base-node.json"]
 }
 ```
 
@@ -38,11 +33,11 @@ A registry item is a JSON object. Only `name`, `image`, and `resources` are requ
 
 ### Required
 
-| Field | Type | Description |
-|---|---|---|
-| `name` | `string` | Unique identifier for the sandbox. Used as the entry name in `drejx list`. |
-| `image` | `string \| ImageSpec` | Container image. A plain string (`"node:22"`) or an object `{ uri, auth? }` for private registries. |
-| `resources` | `ResourceSpec` | CPU and memory limits. Required by the OpenSandbox server. |
+| Field       | Type                  | Description                                                                                         |
+| ----------- | --------------------- | --------------------------------------------------------------------------------------------------- |
+| `name`      | `string`              | Unique identifier for the sandbox. Used as the entry name in `drejx list`.                          |
+| `image`     | `string \| ImageSpec` | Container image. A plain string (`"node:22"`) or an object `{ uri, auth? }` for private registries. |
+| `resources` | `ResourceSpec`        | CPU and memory limits. Required by the OpenSandbox server.                                          |
 
 **`ResourceSpec`**
 
@@ -50,11 +45,11 @@ A registry item is a JSON object. Only `name`, `image`, and `resources` are requ
 { "cpu": "500m", "memory": "512Mi" }
 ```
 
-| Field | Type | Description |
-|---|---|---|
-| `cpu` | `string` | CPU limit in Kubernetes resource notation (`"500m"`, `"1"`, `"2"`). |
-| `memory` | `string` | Memory limit (`"256Mi"`, `"1Gi"`). |
-| `gpu` | `string` | Optional GPU limit. |
+| Field    | Type     | Description                                                         |
+| -------- | -------- | ------------------------------------------------------------------- |
+| `cpu`    | `string` | CPU limit in Kubernetes resource notation (`"500m"`, `"1"`, `"2"`). |
+| `memory` | `string` | Memory limit (`"256Mi"`, `"1Gi"`).                                  |
+| `gpu`    | `string` | Optional GPU limit.                                                 |
 
 **`ImageSpec`** (for private registries)
 
@@ -64,17 +59,17 @@ A registry item is a JSON object. Only `name`, `image`, and `resources` are requ
 
 ### Optional
 
-| Field | Type | Description |
-|---|---|---|
-| `title` | `string` | Human-readable display name. |
-| `description` | `string` | Short description shown in tooling. |
-| `author` | `string` | Author name and optional URL. |
-| `categories` | `string[]` | Tags for discovery (e.g. `["agent", "python"]`). |
-| `env` | `Record<string, string>` | Environment variables injected at sandbox startup. |
-| `setup` | `string[]` | Shell commands run in order after the sandbox starts. The result is checkpointed so future resumes skip setup. |
-| `ports` | `number[]` | Informational. Documents which ports the sandbox exposes. Call `sb.proxy(port)` to reach them from your code. |
-| `metadata` | `Record<string, string>` | Arbitrary key-value labels attached to the sandbox. |
-| `registryDependencies` | `string[]` | URLs of other registry items to provision first. Resolved depth-first before this item's setup runs. |
+| Field                  | Type                     | Description                                                                                                    |
+| ---------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `title`                | `string`                 | Human-readable display name.                                                                                   |
+| `description`          | `string`                 | Short description shown in tooling.                                                                            |
+| `author`               | `string`                 | Author name and optional URL.                                                                                  |
+| `categories`           | `string[]`               | Tags for discovery (e.g. `["agent", "python"]`).                                                               |
+| `env`                  | `Record<string, string>` | Environment variables injected at sandbox startup.                                                             |
+| `setup`                | `string[]`               | Shell commands run in order after the sandbox starts. The result is checkpointed so future resumes skip setup. |
+| `ports`                | `number[]`               | Informational. Documents which ports the sandbox exposes. Call `sb.proxy(port)` to reach them from your code.  |
+| `metadata`             | `Record<string, string>` | Arbitrary key-value labels attached to the sandbox.                                                            |
+| `registryDependencies` | `string[]`               | URLs of other registry items to provision first. Resolved depth-first before this item's setup runs.           |
 
 ## Validation
 

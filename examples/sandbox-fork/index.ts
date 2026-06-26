@@ -49,10 +49,7 @@ try {
 
   console.log("\n=== Forking into two tracks ===\n");
 
-  [forkA, forkB] = await Promise.all([
-    sb.fork("track-a"),
-    sb.fork("track-b"),
-  ]);
+  [forkA, forkB] = await Promise.all([sb.fork("track-a"), sb.fork("track-b")]);
 
   console.log(`fork-a id: ${forkA.sandboxId}`);
   console.log(`fork-b id: ${forkB.sandboxId}`);
@@ -62,12 +59,12 @@ try {
   console.log("\n=== Running in parallel ===\n");
 
   await Promise.all([
-    forkA.writeFile("/tmp/run.py", scriptA).then(() =>
-      forkA!.exec("python3 /tmp/run.py").pipe(process.stdout)
-    ),
-    forkB.writeFile("/tmp/run.py", scriptB).then(() =>
-      forkB!.exec("python3 /tmp/run.py").pipe(process.stdout)
-    ),
+    forkA
+      .writeFile("/tmp/run.py", scriptA)
+      .then(() => forkA!.exec("python3 /tmp/run.py").pipe(process.stdout)),
+    forkB
+      .writeFile("/tmp/run.py", scriptB)
+      .then(() => forkB!.exec("python3 /tmp/run.py").pipe(process.stdout)),
   ]);
 
   // ── Checkpoints are recorded in the original sandbox's ledger ─────────────
@@ -78,9 +75,5 @@ try {
     console.log(`  ${cp.tag} → ${cp.snapshotId}`);
   }
 } finally {
-  await Promise.all([
-    forkA?.close(),
-    forkB?.close(),
-    sb.close(),
-  ]);
+  await Promise.all([forkA?.close(), forkB?.close(), sb.close()]);
 }

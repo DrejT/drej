@@ -25,9 +25,7 @@ export default async function Page({ params }: { params: Promise<{ slug?: string
   return (
     <DocsPage toc={isOverview ? [] : page.data.toc} full={isOverview}>
       <DocsTitle>{page.data.title}</DocsTitle>
-      {page.data.description && (
-        <DocsDescription>{page.data.description}</DocsDescription>
-      )}
+      {page.data.description && <DocsDescription>{page.data.description}</DocsDescription>}
       <DocsBody>
         <MDX components={{ ...defaultMdxComponents }} />
       </DocsBody>

@@ -21,15 +21,15 @@ Sessions are returned newest first.
 
 Each session has:
 
-| Field | Type | Description |
-|---|---|---|
-| `sandboxId` | `string` | OpenSandbox container ID |
-| `name` | `string` | User-provided name (or auto-generated) |
-| `status` | `SandboxStatus` | `"running"`, `"completed"`, `"failed"`, or `"cancelled"` |
-| `startedAt` | `number` | Unix timestamp (ms) of `sandbox_created` event |
-| `completedAt` | `number?` | Unix timestamp (ms) of `sandbox_closed` event |
-| `execCount` | `number` | Number of completed execs |
-| `error` | `string?` | Error message if status is `failed` |
+| Field         | Type            | Description                                              |
+| ------------- | --------------- | -------------------------------------------------------- |
+| `sandboxId`   | `string`        | OpenSandbox container ID                                 |
+| `name`        | `string`        | User-provided name (or auto-generated)                   |
+| `status`      | `SandboxStatus` | `"running"`, `"completed"`, `"failed"`, or `"cancelled"` |
+| `startedAt`   | `number`        | Unix timestamp (ms) of `sandbox_created` event           |
+| `completedAt` | `number?`       | Unix timestamp (ms) of `sandbox_closed` event            |
+| `execCount`   | `number`        | Number of completed execs                                |
+| `error`       | `string?`       | Error message if status is `failed`                      |
 
 ## Filter by name
 
@@ -99,7 +99,8 @@ const completed = await client.sandboxes.list({ status: SandboxStatus.Completed 
 
 for (const session of completed) {
   const ageMs = Date.now() - session.startedAt;
-  if (ageMs > 7 * 24 * 60 * 60 * 1000) { // older than 7 days
+  if (ageMs > 7 * 24 * 60 * 60 * 1000) {
+    // older than 7 days
     await client.sandboxes.delete(session.name, session.sandboxId);
   }
 }

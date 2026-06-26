@@ -18,7 +18,11 @@ async function spawn(cmd: string[]): Promise<{ ok: boolean; stdout: string; stde
 export async function checkDocker(): Promise<void> {
   const { ok, stderr } = await spawn(["docker", "info"]);
   if (!ok) {
-    if (stderr.includes("Cannot connect") || stderr.includes("daemon") || stderr.includes("socket")) {
+    if (
+      stderr.includes("Cannot connect") ||
+      stderr.includes("daemon") ||
+      stderr.includes("socket")
+    ) {
       throw new Error("Docker daemon is not running. Start Docker and try again.");
     }
     throw new Error("Docker is not available. Install Docker and try again.");
@@ -48,10 +52,12 @@ export async function pollHealth(url: string, timeoutMs = 60_000): Promise<void>
     try {
       const res = await fetch(url);
       if (res.ok) {
-        const body = await res.json() as { status?: string };
+        const body = (await res.json()) as { status?: string };
         if (body.status === "healthy") return;
       }
-    } catch { /* not ready yet */ }
+    } catch {
+      /* not ready yet */
+    }
     await new Promise<void>((r) => setTimeout(r, 1_000));
   }
   throw new Error(`OpenSandbox did not become healthy within ${timeoutMs / 1_000}s`);

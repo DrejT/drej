@@ -51,8 +51,8 @@ Explicit promise form. Equivalent to `await handle`.
 
 ```ts
 interface ExecResult {
-  stdout: string;   // full stdout as a string
-  stderr: string;   // full stderr as a string
+  stdout: string; // full stdout as a string
+  stderr: string; // full stderr as a string
   exitCode: number; // process exit code (0 = success)
 }
 ```
@@ -75,8 +75,8 @@ An `ExecHandle` can only be consumed once — the underlying stream is driven by
 const handle = sb.exec("long-running-command");
 
 // These share the same stream — start them before any awaiting
-void handle.pipe(process.stdout);                      // stream as it runs
-const { exitCode } = await handle.result();            // get result when done
+void handle.pipe(process.stdout); // stream as it runs
+const { exitCode } = await handle.result(); // get result when done
 ```
 
 ## In the workflow builder

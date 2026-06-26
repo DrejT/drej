@@ -126,7 +126,11 @@ export class Sandbox {
 
   private async _getExecClient(): Promise<ExecClient> {
     if (!this._execClient) {
-      this._execClient = await resolveExecClient(this._deps.control, this.sandboxId, this._deps.useServerProxy);
+      this._execClient = await resolveExecClient(
+        this._deps.control,
+        this.sandboxId,
+        this._deps.useServerProxy,
+      );
     }
     return this._execClient;
   }
@@ -171,7 +175,12 @@ export class Sandbox {
       // base64-encode so newlines/special chars survive the JSON boundary
       const sh = opts.shell ?? self._deps.shell ?? "/bin/sh";
       const command = `echo ${Buffer.from(cmd).toString("base64")} | base64 -d | ${sh}`;
-      for await (const ev of execClient.executeCommand({ command, cwd: opts.cwd, envs: opts.env, timeout: opts.timeoutMs })) {
+      for await (const ev of execClient.executeCommand({
+        command,
+        cwd: opts.cwd,
+        envs: opts.env,
+        timeout: opts.timeoutMs,
+      })) {
         await self._emit(LedgerEvent.ExecEvent, seq, { seq, ...ev });
         yield ev;
       }
@@ -205,7 +214,9 @@ export class Sandbox {
    * await sb.execCode('print(x)', { context: ctx }); // prints 42
    * ```
    */
-  async createCodeContext(language: import("@drej/opensandbox").CodeLanguage): Promise<import("@drej/opensandbox").CodeContext> {
+  async createCodeContext(
+    language: import("@drej/opensandbox").CodeLanguage,
+  ): Promise<import("@drej/opensandbox").CodeContext> {
     const ec = await this._getExecClient();
     return ec.createContext(language as string);
   }
@@ -322,7 +333,9 @@ export class Sandbox {
    * await sb.replaceInFiles([{ path: "/app/config.json", old: "localhost", new: "0.0.0.0" }]);
    * ```
    */
-  async replaceInFiles(replacements: Array<{ path: string; old: string; new: string }>): Promise<void> {
+  async replaceInFiles(
+    replacements: Array<{ path: string; old: string; new: string }>,
+  ): Promise<void> {
     const ec = await this._getExecClient();
     await ec.replaceInFiles(replacements);
   }
@@ -356,7 +369,11 @@ export class Sandbox {
    * ```
    */
   async proxy(port: number): Promise<{ url: string; headers: Record<string, string> }> {
-    const ep = await this._deps.control.getEndpoint(this.sandboxId, port, this._deps.useServerProxy);
+    const ep = await this._deps.control.getEndpoint(
+      this.sandboxId,
+      port,
+      this._deps.useServerProxy,
+    );
     const url = ep.endpoint.startsWith("http") ? ep.endpoint : `http://${ep.endpoint}`;
     return { url, headers: ep.headers ?? {} };
   }
@@ -389,7 +406,8 @@ export class Sandbox {
    * ```
    */
   async fork(tag?: string): Promise<Sandbox> {
-    if (!this._deps.fork) throw new SandboxError("fork() is not supported on this sandbox", this.sandboxId);
+    if (!this._deps.fork)
+      throw new SandboxError("fork() is not supported on this sandbox", this.sandboxId);
     const snap = await this._deps.control.createSnapshot(this.sandboxId);
     await this._waitForSnapshot(snap.id);
     await this._emit(LedgerEvent.CheckpointCreated, -1, { snapshotId: snap.id, name: tag });
@@ -420,7 +438,10 @@ export class Sandbox {
       }
       await new Promise<void>((r) => setTimeout(r, 2_000));
     }
-    throw new SandboxError(`Snapshot ${snapshotId} did not become ready within ${timeoutMs}ms`, this.sandboxId);
+    throw new SandboxError(
+      `Snapshot ${snapshotId} did not become ready within ${timeoutMs}ms`,
+      this.sandboxId,
+    );
   }
 
   /**

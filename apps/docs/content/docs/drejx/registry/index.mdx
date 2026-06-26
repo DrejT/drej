@@ -34,10 +34,7 @@ bunx drejx add https://raw.githubusercontent.com/your-org/your-repo/main/sandbox
   "name": "node-toolchain",
   "image": "node:22",
   "resources": { "cpu": "500m", "memory": "512Mi" },
-  "setup": [
-    "npm install -g typescript eslint prettier",
-    "mkdir -p /workspace"
-  ]
+  "setup": ["npm install -g typescript eslint prettier", "mkdir -p /workspace"]
 }
 ```
 
@@ -50,11 +47,7 @@ A registry item can declare dependencies on other items. `drejx add` provisions 
   "name": "ts-reviewer",
   "image": "node:22",
   "resources": { "cpu": "500m", "memory": "512Mi" },
-  "registryDependencies": [
-    "https://registry.drej.dev/node-toolchain.json"
-  ],
-  "setup": [
-    "npm install -g @typescript-eslint/parser"
-  ]
+  "registryDependencies": ["https://registry.drej.dev/node-toolchain.json"],
+  "setup": ["npm install -g @typescript-eslint/parser"]
 }
 ```

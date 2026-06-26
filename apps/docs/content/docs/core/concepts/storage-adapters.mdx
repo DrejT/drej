@@ -8,15 +8,16 @@ Every exec, checkpoint, and sandbox lifecycle event is written to a storage adap
 ## Why persistence matters
 
 The ledger enables:
+
 - **Audit** — see which commands ran, when, and what they output
 - **Resume** — `client.resume(sandboxId)` reads the ledger to rebuild replay cache and restore the container
 - **Observability** — `client.sandboxes.list()` returns run history across all sessions
 
 ## Choosing an adapter
 
-| Adapter | Package | When to use |
-|---|---|---|
-| `SQLiteAdapter` | `@drej/sqlite` | Local dev, single-process apps, scripts |
+| Adapter           | Package          | When to use                              |
+| ----------------- | ---------------- | ---------------------------------------- |
+| `SQLiteAdapter`   | `@drej/sqlite`   | Local dev, single-process apps, scripts  |
 | `PostgresAdapter` | `@drej/postgres` | Production, multi-process, shared ledger |
 
 ## SQLite
@@ -56,21 +57,21 @@ Always call `await client.connect()` before first use and `await client.close()`
 ```ts
 await client.connect(); // opens connection, runs migrations
 // ... use client ...
-await client.close();   // releases connections
+await client.close(); // releases connections
 ```
 
 `connect()` is where migrations run — `CREATE TABLE IF NOT EXISTS` so it's safe to call on every startup.
 
 ## Events written to the ledger
 
-| Event | When |
-|---|---|
-| `sandbox_created` | Container created and reached Running state |
-| `exec_start` | `sb.exec()` or `sb.execCode()` called |
-| `exec_event` | Stdout/stderr chunk received from execd |
-| `exec_complete` | exec finished; payload has `{ seq, exitCode }` |
+| Event                | When                                                      |
+| -------------------- | --------------------------------------------------------- |
+| `sandbox_created`    | Container created and reached Running state               |
+| `exec_start`         | `sb.exec()` or `sb.execCode()` called                     |
+| `exec_event`         | Stdout/stderr chunk received from execd                   |
+| `exec_complete`      | exec finished; payload has `{ seq, exitCode }`            |
 | `checkpoint_created` | `sb.checkpoint()` completed; payload has `{ snapshotId }` |
-| `sandbox_closed` | `sb.close()` called |
+| `sandbox_closed`     | `sb.close()` called                                       |
 
 ## Custom adapter
 

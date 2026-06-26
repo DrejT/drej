@@ -17,10 +17,10 @@ bun start
 
 ## What it shows
 
-| Pattern | Description |
-|---------|-------------|
-| `try/finally` | Guarantees `sb.close()` runs even when an exec throws |
+| Pattern        | Description                                           |
+| -------------- | ----------------------------------------------------- |
+| `try/finally`  | Guarantees `sb.close()` runs even when an exec throws |
 | Bash `timeout` | Limits a command's wall-clock time at the shell level |
-| `CommandError` | Catching the error thrown by a non-zero exit code |
+| `CommandError` | Catching the error thrown by a non-zero exit code     |
 
 Three sandboxes run sequentially, each demonstrating one pattern.

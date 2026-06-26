@@ -14,22 +14,22 @@ html {
   --font-mono: var(--font-geist-mono);
 
   /* drej palette — fumadocs token overrides */
-  --color-fd-background:           #FFFFFF;
-  --color-fd-foreground:           #111318;
-  --color-fd-muted:                #EDF4F6;
-  --color-fd-muted-foreground:     #687680;
-  --color-fd-popover:              #FFFFFF;
-  --color-fd-popover-foreground:   #111318;
-  --color-fd-card:                 #F5FAFB;
-  --color-fd-card-foreground:      #111318;
-  --color-fd-border:               #DDE6E9;
-  --color-fd-primary:              #0C5164;
-  --color-fd-primary-foreground:   #FFFFFF;
-  --color-fd-secondary:            #EDF4F6;
+  --color-fd-background: #ffffff;
+  --color-fd-foreground: #111318;
+  --color-fd-muted: #edf4f6;
+  --color-fd-muted-foreground: #687680;
+  --color-fd-popover: #ffffff;
+  --color-fd-popover-foreground: #111318;
+  --color-fd-card: #f5fafb;
+  --color-fd-card-foreground: #111318;
+  --color-fd-border: #dde6e9;
+  --color-fd-primary: #0c5164;
+  --color-fd-primary-foreground: #ffffff;
+  --color-fd-secondary: #edf4f6;
   --color-fd-secondary-foreground: #111318;
-  --color-fd-accent:               #E0EDF0;
-  --color-fd-accent-foreground:    #111318;
-  --color-fd-ring:                 #0C5164;
+  --color-fd-accent: #e0edf0;
+  --color-fd-accent-foreground: #111318;
+  --color-fd-ring: #0c5164;
 }
 
 @layer base {

@@ -29,7 +29,10 @@ try {
   // Write files
   await sb.writeFile("/workspace/src/index.ts", 'export const VERSION = "0.0.0";\n');
   await sb.writeFile("/workspace/src/util.ts", 'export const helper = () => "ok";\n');
-  await sb.writeFile("/workspace/src/config.json", JSON.stringify({ host: "localhost", port: 3000 }, null, 2));
+  await sb.writeFile(
+    "/workspace/src/config.json",
+    JSON.stringify({ host: "localhost", port: 3000 }, null, 2),
+  );
 
   // File metadata
   const info = await sb.getFileInfo("/workspace/src/index.ts");
@@ -56,7 +59,10 @@ try {
 
   // List directory
   const distEntries = await sb.listDirectory("/workspace/dist");
-  console.log("Dist entries:", distEntries.map((e: { path: string }) => e.path));
+  console.log(
+    "Dist entries:",
+    distEntries.map((e: { path: string }) => e.path),
+  );
 
   // Transfer a file to a second sandbox
   const sb2 = await client.sandbox({
@@ -76,7 +82,10 @@ try {
   await sb.deleteFile("/workspace/src/util.ts");
   await sb.deleteDirectory("/workspace/src");
   const remaining = await sb.listDirectory("/workspace");
-  console.log("Remaining:", remaining.map((e: { path: string }) => e.path));
+  console.log(
+    "Remaining:",
+    remaining.map((e: { path: string }) => e.path),
+  );
 } finally {
   await sb.close();
 }

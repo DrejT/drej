@@ -36,8 +36,12 @@ await workflow(client)
       sb.exec("test -f /etc/hostname", { strict: false });
       sb.when(
         (ctx) => ctx.exitCode === 0,
-        (sb) => { sb.exec('echo "[when] /etc/hostname exists"'); },
-        (sb) => { sb.exec('echo "[when] /etc/hostname missing"'); },
+        (sb) => {
+          sb.exec('echo "[when] /etc/hostname exists"');
+        },
+        (sb) => {
+          sb.exec('echo "[when] /etc/hostname missing"');
+        },
       );
 
       // forEach — run a command for each item in a list

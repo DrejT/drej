@@ -31,7 +31,9 @@ const env = client.environment("python-data-science", {
 
 const existing = await env.info();
 if (existing) {
-  console.log(`Environment cached (built ${new Date(existing.builtAt).toISOString()}, snapshot ${existing.snapshotId})`);
+  console.log(
+    `Environment cached (built ${new Date(existing.builtAt).toISOString()}, snapshot ${existing.snapshotId})`,
+  );
 } else {
   console.log("No cached environment — will build on first sandbox() call.");
 }
@@ -42,10 +44,12 @@ const sb = await env.sandbox();
 console.log(`Ready in ${Date.now() - t0}ms  (sandbox ${sb.sandboxId})`);
 
 try {
-  console.log('\n$ python3 -c "import numpy, pandas; print(numpy.__version__, pandas.__version__)"');
-  await sb.exec(
-    'python3 -c "import numpy, pandas; print(numpy.__version__, pandas.__version__)"',
-  ).pipe(process.stdout);
+  console.log(
+    '\n$ python3 -c "import numpy, pandas; print(numpy.__version__, pandas.__version__)"',
+  );
+  await sb
+    .exec('python3 -c "import numpy, pandas; print(numpy.__version__, pandas.__version__)"')
+    .pipe(process.stdout);
 } finally {
   await sb.close();
 }

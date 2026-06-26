@@ -15,12 +15,12 @@ new Drej(options: DrejOptions)
 
 ### DrejOptions
 
-| Option | Type | Required | Description |
-|---|---|---|---|
-| `baseUrl` | `string` | Yes | OpenSandbox server URL, e.g. `"http://localhost:8080"` |
-| `apiKey` | `string` | No | OpenSandbox API key. Empty string for local dev with no auth. |
-| `adapter` | `IStorageAdapter` | Yes | Storage adapter for the run ledger |
-| `maxConcurrency` | `number` | No | Max simultaneous active sandboxes. Omit for no limit. |
+| Option           | Type              | Required | Description                                                   |
+| ---------------- | ----------------- | -------- | ------------------------------------------------------------- |
+| `baseUrl`        | `string`          | Yes      | OpenSandbox server URL, e.g. `"http://localhost:8080"`        |
+| `apiKey`         | `string`          | No       | OpenSandbox API key. Empty string for local dev with no auth. |
+| `adapter`        | `IStorageAdapter` | Yes      | Storage adapter for the run ledger                            |
+| `maxConcurrency` | `number`          | No       | Max simultaneous active sandboxes. Omit for no limit.         |
 
 ```ts
 const client = new Drej({
@@ -93,7 +93,7 @@ Throws `DrejError` (404) if the session is not found or has no checkpoint.
 const sbResume = await client.resume(originalSandboxId);
 try {
   await sbResume.exec("pip install -q requests").pipe(process.stdout); // replayed
-  await sbResume.exec("python3 script.py").pipe(process.stdout);       // live
+  await sbResume.exec("python3 script.py").pipe(process.stdout); // live
 } finally {
   await sbResume.close();
 }
@@ -131,11 +131,11 @@ await client.sandboxes.delete("my-job", sandboxId);
 
 ### ListSandboxOptions
 
-| Option | Type | Description |
-|---|---|---|
+| Option   | Type            | Description                                                             |
+| -------- | --------------- | ----------------------------------------------------------------------- |
 | `status` | `SandboxStatus` | Filter by status: `"running"`, `"completed"`, `"failed"`, `"cancelled"` |
-| `limit` | `number` | Max results to return |
-| `before` | `number` | Return only sessions started before this Unix timestamp (ms) |
+| `limit`  | `number`        | Max results to return                                                   |
+| `before` | `number`        | Return only sessions started before this Unix timestamp (ms)            |
 
 ## Sandbox class
 
@@ -143,22 +143,22 @@ See [Sandbox](#sandbox) below for the object returned by `sandbox()` and `resume
 
 ### Sandbox methods
 
-| Method | Returns | Description |
-|---|---|---|
-| `sb.exec(cmd, opts?)` | `ExecHandle` | Run a shell command |
-| `sb.execCode(code, opts?)` | `ExecHandle` | Run code via the interpreter |
-| `sb.writeFile(path, content)` | `Promise<void>` | Write a file into the container |
-| `sb.readFile(path)` | `Promise<string>` | Read a file from the container |
-| `sb.moveFile(from, to)` | `Promise<void>` | Move/rename a file |
-| `sb.deleteFile(path)` | `Promise<void>` | Delete a file |
-| `sb.searchFiles(pattern, path?)` | `Promise<SearchResult[]>` | Search for files matching a glob |
-| `sb.listDirectory(path, opts?)` | `Promise<DirEntry[]>` | List directory entries |
-| `sb.checkpoint(name?)` | `Promise<void>` | Snapshot the container |
-| `sb.close()` | `Promise<void>` | Delete the container and release resources |
+| Method                           | Returns                   | Description                                |
+| -------------------------------- | ------------------------- | ------------------------------------------ |
+| `sb.exec(cmd, opts?)`            | `ExecHandle`              | Run a shell command                        |
+| `sb.execCode(code, opts?)`       | `ExecHandle`              | Run code via the interpreter               |
+| `sb.writeFile(path, content)`    | `Promise<void>`           | Write a file into the container            |
+| `sb.readFile(path)`              | `Promise<string>`         | Read a file from the container             |
+| `sb.moveFile(from, to)`          | `Promise<void>`           | Move/rename a file                         |
+| `sb.deleteFile(path)`            | `Promise<void>`           | Delete a file                              |
+| `sb.searchFiles(pattern, path?)` | `Promise<SearchResult[]>` | Search for files matching a glob           |
+| `sb.listDirectory(path, opts?)`  | `Promise<DirEntry[]>`     | List directory entries                     |
+| `sb.checkpoint(name?)`           | `Promise<void>`           | Snapshot the container                     |
+| `sb.close()`                     | `Promise<void>`           | Delete the container and release resources |
 
 ### Sandbox properties
 
-| Property | Type | Description |
-|---|---|---|
-| `sb.sandboxId` | `string` | OpenSandbox container ID |
-| `sb.name` | `string` | User-provided name or auto-generated |
+| Property       | Type     | Description                          |
+| -------------- | -------- | ------------------------------------ |
+| `sb.sandboxId` | `string` | OpenSandbox container ID             |
+| `sb.name`      | `string` | User-provided name or auto-generated |

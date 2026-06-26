@@ -106,7 +106,9 @@ export class WorkflowBuilder {
     return this._execute(undefined);
   }
 
-  private async _execute(sink: { write(chunk: string): unknown } | undefined): Promise<WorkflowResult> {
+  private async _execute(
+    sink: { write(chunk: string): unknown } | undefined,
+  ): Promise<WorkflowResult> {
     const combined: WorkflowResult = { stdout: "", vars: {} };
 
     for (const stage of this._stages) {

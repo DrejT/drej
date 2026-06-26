@@ -35,29 +35,29 @@ import type {
 
 ## Method reference
 
-| Method | Required | Description |
-|---|---|---|
-| `connect()` | No | Initialize connections. Called by `client.connect()`. |
-| `close()` | No | Release connections. Called by `client.close()`. |
-| `append(entry)` | Yes | Persist a single ledger event. Called during every exec. |
-| `readAll(name, sandboxId)` | Yes | Return all events for a session in ascending `ts` order. Used by `resume()`. |
-| `lastCheckpoint(name, sandboxId)` | Yes | Return the most recent `checkpoint_created` entry, or `null`. |
-| `listSandboxDetails(name, opts?)` | Yes | Return sessions with this name, newest first. |
-| `listAllSandboxDetails(opts?)` | Yes | Return all sessions across all names, newest first. |
-| `getSandboxDetails(name, sandboxId)` | Yes | Return a single session, or `null`. |
-| `deleteSandbox(name, sandboxId)` | Yes | Delete all events for a session. |
+| Method                               | Required | Description                                                                  |
+| ------------------------------------ | -------- | ---------------------------------------------------------------------------- |
+| `connect()`                          | No       | Initialize connections. Called by `client.connect()`.                        |
+| `close()`                            | No       | Release connections. Called by `client.close()`.                             |
+| `append(entry)`                      | Yes      | Persist a single ledger event. Called during every exec.                     |
+| `readAll(name, sandboxId)`           | Yes      | Return all events for a session in ascending `ts` order. Used by `resume()`. |
+| `lastCheckpoint(name, sandboxId)`    | Yes      | Return the most recent `checkpoint_created` entry, or `null`.                |
+| `listSandboxDetails(name, opts?)`    | Yes      | Return sessions with this name, newest first.                                |
+| `listAllSandboxDetails(opts?)`       | Yes      | Return all sessions across all names, newest first.                          |
+| `getSandboxDetails(name, sandboxId)` | Yes      | Return a single session, or `null`.                                          |
+| `deleteSandbox(name, sandboxId)`     | Yes      | Delete all events for a session.                                             |
 
 ## LedgerEntry
 
 ```ts
 interface LedgerEntry {
-  ts: number;           // Unix timestamp in milliseconds
-  name: string;         // sandbox name
+  ts: number; // Unix timestamp in milliseconds
+  name: string; // sandbox name
   sandboxId: string;
-  stepIndex: number;    // -1 for sandbox-level events
-  branch?: number;      // parallel branch index
+  stepIndex: number; // -1 for sandbox-level events
+  branch?: number; // parallel branch index
   event: LedgerEvent;
-  payload?: unknown;    // event-specific data
+  payload?: unknown; // event-specific data
   error?: string;
 }
 ```
@@ -84,8 +84,9 @@ export class MemoryAdapter implements IStorageAdapter {
   }
 
   async lastCheckpoint(name: string, sandboxId: string): Promise<LedgerEntry | null> {
-    const checkpoints = (await this.readAll(name, sandboxId))
-      .filter((e) => e.event === LedgerEvent.CheckpointCreated);
+    const checkpoints = (await this.readAll(name, sandboxId)).filter(
+      (e) => e.event === LedgerEvent.CheckpointCreated,
+    );
     return checkpoints.at(-1) ?? null;
   }
 

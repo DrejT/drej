@@ -22,7 +22,10 @@ client.sandbox(opts)
 Always wrap sandbox usage in `try/finally` so the container is cleaned up even if an exec throws:
 
 ```ts
-const sb = await client.sandbox({ image: "ubuntu:22.04", resources: { cpu: "500m", memory: "256Mi" } });
+const sb = await client.sandbox({
+  image: "ubuntu:22.04",
+  resources: { cpu: "500m", memory: "256Mi" },
+});
 try {
   await sb.exec("npm ci");
   await sb.exec("npm test").pipe(process.stdout);
@@ -35,11 +38,11 @@ try {
 
 `sb.exec()` returns an `ExecHandle` — a `PromiseLike<ExecResult>` with three consumption modes:
 
-| Mode | How | When to use |
-|---|---|---|
-| Await | `const { stdout, exitCode } = await sb.exec(...)` | You need the full result before continuing |
-| Pipe | `await sb.exec(...).pipe(process.stdout)` | Real-time output to a writable |
-| Generator | `for await (const chunk of sb.exec(...).stdout())` | Process chunks individually |
+| Mode      | How                                                | When to use                                |
+| --------- | -------------------------------------------------- | ------------------------------------------ |
+| Await     | `const { stdout, exitCode } = await sb.exec(...)`  | You need the full result before continuing |
+| Pipe      | `await sb.exec(...).pipe(process.stdout)`          | Real-time output to a writable             |
+| Generator | `for await (const chunk of sb.exec(...).stdout())` | Process chunks individually                |
 
 All three modes drive the same underlying SSE stream from execd. `.result()` resolves to `{ stdout, stderr, exitCode }` once the stream is fully consumed.
 

@@ -24,7 +24,7 @@ const client = new Drej({
 
 await client.connect(); // creates the file and runs migrations
 // ...
-await client.close();   // closes the database connection
+await client.close(); // closes the database connection
 ```
 
 The file is created if it doesn't exist. `connect()` runs `CREATE TABLE IF NOT EXISTS` migrations so it's safe to call on every startup.
@@ -35,9 +35,9 @@ The file is created if it doesn't exist. `connect()` runs `CREATE TABLE IF NOT E
 new SQLiteAdapter(path: string)
 ```
 
-| Argument | Type | Description |
-|---|---|---|
-| `path` | `string` | File path for the SQLite database. Use `":memory:"` for an in-memory database (data lost on close). |
+| Argument | Type     | Description                                                                                         |
+| -------- | -------- | --------------------------------------------------------------------------------------------------- |
+| `path`   | `string` | File path for the SQLite database. Use `":memory:"` for an in-memory database (data lost on close). |
 
 ## WAL mode
 
@@ -57,6 +57,7 @@ const adapter = new SQLiteAdapter(":memory:");
 ## When to switch to Postgres
 
 Switch to `@drej/postgres` when:
+
 - Multiple processes need to share the same ledger
 - You're deploying to a platform without persistent local disk
 - You need to query ledger data with SQL from external tools

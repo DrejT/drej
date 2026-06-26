@@ -20,9 +20,7 @@ const sb = await client.sandbox({
 console.log(`Sandbox ID: ${sb.sandboxId}`);
 
 try {
-  const { stdout: nodeVersion } = await sb.exec(
-    "node -e \"process.stdout.write(process.version)\"",
-  );
+  const { stdout: nodeVersion } = await sb.exec('node -e "process.stdout.write(process.version)"');
 
   await sb.exec(`echo "Running on Node ${nodeVersion.trim()}"`, { strict: false });
 
@@ -40,4 +38,3 @@ try {
 } finally {
   await sb.close();
 }
-

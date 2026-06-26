@@ -84,8 +84,20 @@ describe("SQLiteAdapter", () => {
     });
 
     it("returns the most recent checkpoint_created event", async () => {
-      await db.append(entry({ ts: 1000, event: LedgerEvent.CheckpointCreated, payload: { snapshotId: "snap-1" } }));
-      await db.append(entry({ ts: 2000, event: LedgerEvent.CheckpointCreated, payload: { snapshotId: "snap-2" } }));
+      await db.append(
+        entry({
+          ts: 1000,
+          event: LedgerEvent.CheckpointCreated,
+          payload: { snapshotId: "snap-1" },
+        }),
+      );
+      await db.append(
+        entry({
+          ts: 2000,
+          event: LedgerEvent.CheckpointCreated,
+          payload: { snapshotId: "snap-2" },
+        }),
+      );
       const cp = await db.lastCheckpoint("test-session", "session-1");
       expect((cp!.payload as any).snapshotId).toBe("snap-2");
     });
@@ -98,14 +110,24 @@ describe("SQLiteAdapter", () => {
 
   // ── session details ─────────────────────────────────────────────────────────
 
-  async function seedSession(name: string, sandboxId: string, opts: { close?: boolean; execCount?: number } = {}) {
+  async function seedSession(
+    name: string,
+    sandboxId: string,
+    opts: { close?: boolean; execCount?: number } = {},
+  ) {
     const ts = Date.now();
-    await db.append(entry({ name, sandboxId, ts, stepIndex: -1, event: LedgerEvent.SandboxCreated }));
+    await db.append(
+      entry({ name, sandboxId, ts, stepIndex: -1, event: LedgerEvent.SandboxCreated }),
+    );
     for (let i = 0; i < (opts.execCount ?? 1); i++) {
-      await db.append(entry({ name, sandboxId, ts: ts + i + 1, stepIndex: i, event: LedgerEvent.ExecComplete }));
+      await db.append(
+        entry({ name, sandboxId, ts: ts + i + 1, stepIndex: i, event: LedgerEvent.ExecComplete }),
+      );
     }
     if (opts.close) {
-      await db.append(entry({ name, sandboxId, ts: ts + 100, stepIndex: -1, event: LedgerEvent.SandboxClosed }));
+      await db.append(
+        entry({ name, sandboxId, ts: ts + 100, stepIndex: -1, event: LedgerEvent.SandboxClosed }),
+      );
     }
   }
 
@@ -201,21 +223,41 @@ describe("SQLiteAdapter", () => {
     });
 
     it("saveEnvironment + getEnvironment round-trips all fields", async () => {
-      await db.saveEnvironment({ name: "py", snapshotId: "snap-1", image: "debian:slim", builtAt: 1000 });
+      await db.saveEnvironment({
+        name: "py",
+        snapshotId: "snap-1",
+        image: "debian:slim",
+        builtAt: 1000,
+      });
       const r = await db.getEnvironment("py");
       expect(r).toEqual({ name: "py", snapshotId: "snap-1", image: "debian:slim", builtAt: 1000 });
     });
 
     it("saveEnvironment upserts: second write updates the record", async () => {
-      await db.saveEnvironment({ name: "py", snapshotId: "snap-1", image: "debian:slim", builtAt: 1000 });
-      await db.saveEnvironment({ name: "py", snapshotId: "snap-2", image: "debian:slim", builtAt: 2000 });
+      await db.saveEnvironment({
+        name: "py",
+        snapshotId: "snap-1",
+        image: "debian:slim",
+        builtAt: 1000,
+      });
+      await db.saveEnvironment({
+        name: "py",
+        snapshotId: "snap-2",
+        image: "debian:slim",
+        builtAt: 2000,
+      });
       const r = await db.getEnvironment("py");
       expect(r?.snapshotId).toBe("snap-2");
       expect(r?.builtAt).toBe(2000);
     });
 
     it("deleteEnvironment removes the record", async () => {
-      await db.saveEnvironment({ name: "py", snapshotId: "snap-1", image: "debian:slim", builtAt: 1000 });
+      await db.saveEnvironment({
+        name: "py",
+        snapshotId: "snap-1",
+        image: "debian:slim",
+        builtAt: 1000,
+      });
       await db.deleteEnvironment("py");
       expect(await db.getEnvironment("py")).toBeNull();
     });
@@ -225,8 +267,18 @@ describe("SQLiteAdapter", () => {
     });
 
     it("listEnvironments returns all records newest-first", async () => {
-      await db.saveEnvironment({ name: "py", snapshotId: "snap-1", image: "debian:slim", builtAt: 1000 });
-      await db.saveEnvironment({ name: "node", snapshotId: "snap-2", image: "node:22", builtAt: 2000 });
+      await db.saveEnvironment({
+        name: "py",
+        snapshotId: "snap-1",
+        image: "debian:slim",
+        builtAt: 1000,
+      });
+      await db.saveEnvironment({
+        name: "node",
+        snapshotId: "snap-2",
+        image: "node:22",
+        builtAt: 2000,
+      });
       const list = await db.listEnvironments();
       expect(list).toHaveLength(2);
       expect(list[0].name).toBe("node");
@@ -238,8 +290,18 @@ describe("SQLiteAdapter", () => {
     });
 
     it("deleteEnvironment does not affect other records", async () => {
-      await db.saveEnvironment({ name: "py", snapshotId: "snap-1", image: "debian:slim", builtAt: 1000 });
-      await db.saveEnvironment({ name: "node", snapshotId: "snap-2", image: "node:22", builtAt: 2000 });
+      await db.saveEnvironment({
+        name: "py",
+        snapshotId: "snap-1",
+        image: "debian:slim",
+        builtAt: 1000,
+      });
+      await db.saveEnvironment({
+        name: "node",
+        snapshotId: "snap-2",
+        image: "node:22",
+        builtAt: 2000,
+      });
       await db.deleteEnvironment("py");
       expect(await db.getEnvironment("node")).not.toBeNull();
     });

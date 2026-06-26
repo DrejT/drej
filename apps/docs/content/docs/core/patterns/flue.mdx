@@ -49,30 +49,30 @@ export default defineAgent({
 ## API
 
 ```ts
-function drej(sandbox: Sandbox, opts?: { cwd?: string }): SandboxFactory
+function drej(sandbox: Sandbox, opts?: { cwd?: string }): SandboxFactory;
 ```
 
-| Parameter | Type | Description |
-|---|---|---|
-| `sandbox` | `Sandbox` | An already-created drej sandbox. Lifecycle is the caller's responsibility — the adapter never calls `sb.close()`. |
-| `opts.cwd` | `string` | Working directory passed to `createSandboxSessionEnv`. Defaults to `"/"`. |
+| Parameter  | Type      | Description                                                                                                       |
+| ---------- | --------- | ----------------------------------------------------------------------------------------------------------------- |
+| `sandbox`  | `Sandbox` | An already-created drej sandbox. Lifecycle is the caller's responsibility — the adapter never calls `sb.close()`. |
+| `opts.cwd` | `string`  | Working directory passed to `createSandboxSessionEnv`. Defaults to `"/"`.                                         |
 
 ## SandboxApi coverage
 
 The adapter implements all nine `SandboxApi` methods:
 
-| Method | Backed by |
-|---|---|
-| `exec(cmd, opts?)` | `sb.exec()` with `strict: false`. Timeout via `Promise.race` + `Math.ceil`. |
-| `readFile(path)` | `sb.readFile()` |
-| `readFileBuffer(path)` | `sb.exec("base64 -w0 <path>")` → decoded `Uint8Array` |
-| `writeFile(path, string)` | `sb.writeFile()` |
-| `writeFile(path, Uint8Array)` | Base64-encoded, piped through `base64 -d` in the container |
-| `stat(path)` | `sb.exec("stat -c '%F\|%s\|%Y' <path>")` → parsed `FileStat` |
-| `readdir(path)` | `sb.listDirectory(path, { depth: 1 })` → entry names |
-| `exists(path)` | `sb.exec("test -e <path>")` → exit code check |
-| `mkdir(path, opts?)` | `sb.exec("mkdir [-p] <path>")` |
-| `rm(path, opts?)` | `sb.exec("rm [-r] [-f] <path>")` |
+| Method                        | Backed by                                                                   |
+| ----------------------------- | --------------------------------------------------------------------------- |
+| `exec(cmd, opts?)`            | `sb.exec()` with `strict: false`. Timeout via `Promise.race` + `Math.ceil`. |
+| `readFile(path)`              | `sb.readFile()`                                                             |
+| `readFileBuffer(path)`        | `sb.exec("base64 -w0 <path>")` → decoded `Uint8Array`                       |
+| `writeFile(path, string)`     | `sb.writeFile()`                                                            |
+| `writeFile(path, Uint8Array)` | Base64-encoded, piped through `base64 -d` in the container                  |
+| `stat(path)`                  | `sb.exec("stat -c '%F\|%s\|%Y' <path>")` → parsed `FileStat`                |
+| `readdir(path)`               | `sb.listDirectory(path, { depth: 1 })` → entry names                        |
+| `exists(path)`                | `sb.exec("test -e <path>")` → exit code check                               |
+| `mkdir(path, opts?)`          | `sb.exec("mkdir [-p] <path>")`                                              |
+| `rm(path, opts?)`             | `sb.exec("rm [-r] [-f] <path>")`                                            |
 
 ## Known limits
 

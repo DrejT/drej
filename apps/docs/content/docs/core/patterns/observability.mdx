@@ -40,14 +40,14 @@ const sb = await client.sandbox({
 
 ## Hook signatures
 
-| Hook | When | Arguments |
-|---|---|---|
-| `onSandboxCreated` | Container created and running | `(sandboxId, name)` |
-| `onExecStart` | `sb.exec()` called | `(sandboxId, seq, cmd)` |
-| `onExecComplete` | exec finished | `(sandboxId, seq, ExecResult)` |
-| `onCheckpoint` | `sb.checkpoint()` completed | `(sandboxId, snapshotId, name?)` |
-| `onSandboxClosed` | `sb.close()` completed | `(sandboxId)` |
-| `onSandboxFailed` | sandbox creation or boot failed | `(sandboxId, error)` |
+| Hook               | When                            | Arguments                        |
+| ------------------ | ------------------------------- | -------------------------------- |
+| `onSandboxCreated` | Container created and running   | `(sandboxId, name)`              |
+| `onExecStart`      | `sb.exec()` called              | `(sandboxId, seq, cmd)`          |
+| `onExecComplete`   | exec finished                   | `(sandboxId, seq, ExecResult)`   |
+| `onCheckpoint`     | `sb.checkpoint()` completed     | `(sandboxId, snapshotId, name?)` |
+| `onSandboxClosed`  | `sb.close()` completed          | `(sandboxId)`                    |
+| `onSandboxFailed`  | sandbox creation or boot failed | `(sandboxId, error)`             |
 
 ## OpenTelemetry with @drej/otel
 
@@ -80,9 +80,9 @@ sandbox.run            ← root span (drej.sandbox.id, drej.sandbox.name)
 
 ### OtelHooksOptions
 
-| Option | Type | Default | Description |
-|---|---|---|---|
-| `recordExitCode` | `boolean` | `true` | Add `process.exit_code` attribute to exec spans |
+| Option           | Type      | Default | Description                                     |
+| ---------------- | --------- | ------- | ----------------------------------------------- |
+| `recordExitCode` | `boolean` | `true`  | Add `process.exit_code` attribute to exec spans |
 
 ```ts
 const hooks = otelHooks(tracer, { recordExitCode: false });

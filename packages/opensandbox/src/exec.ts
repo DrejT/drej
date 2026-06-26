@@ -27,7 +27,11 @@ async function* parseSSE(stream: ReadableStream<Uint8Array>): AsyncGenerator<SSE
         if (!trimmed) continue;
         if (trimmed.startsWith("{")) {
           // execd sends raw JSON lines, not data:-prefixed SSE
-          try { yield JSON.parse(trimmed) as SSEEvent; } catch { /* skip malformed */ }
+          try {
+            yield JSON.parse(trimmed) as SSEEvent;
+          } catch {
+            /* skip malformed */
+          }
         } else {
           let type: string | undefined;
           let data: string | undefined;
@@ -84,7 +88,11 @@ export class ExecClient {
     return res.json() as Promise<T>;
   }
 
-  private async *streamRequest(method: string, path: string, body?: unknown): AsyncGenerator<SSEEvent> {
+  private async *streamRequest(
+    method: string,
+    path: string,
+    body?: unknown,
+  ): AsyncGenerator<SSEEvent> {
     const res = await fetch(`${this.baseUrl}${path}`, {
       method,
       headers: {
@@ -149,7 +157,10 @@ export class ExecClient {
   }
 
   async getFileInfo(path: string): Promise<FileInfo> {
-    const map = await this.request<Record<string, FileInfo>>("GET", `/files/info?path=${encodeURIComponent(path)}`);
+    const map = await this.request<Record<string, FileInfo>>(
+      "GET",
+      `/files/info?path=${encodeURIComponent(path)}`,
+    );
     const entry = map[path];
     if (!entry) throw new Error(`getFileInfo: no entry for path ${path}`);
     return entry;
@@ -182,8 +193,14 @@ export class ExecClient {
   async uploadFile(path: string, content: Blob | BufferSource | string): Promise<void> {
     // execd requires File objects (not Blob) so Content-Disposition includes a filename attribute.
     const formData = new FormData();
-    formData.append("metadata", new File([JSON.stringify({ path })], "metadata.json", { type: "application/json" }));
-    formData.append("file", new File([content], path.split("/").pop() ?? "file", { type: "application/octet-stream" }));
+    formData.append(
+      "metadata",
+      new File([JSON.stringify({ path })], "metadata.json", { type: "application/json" }),
+    );
+    formData.append(
+      "file",
+      new File([content], path.split("/").pop() ?? "file", { type: "application/octet-stream" }),
+    );
     const res = await fetch(`${this.baseUrl}/files/upload`, {
       method: "POST",
       headers: this.authHeader,

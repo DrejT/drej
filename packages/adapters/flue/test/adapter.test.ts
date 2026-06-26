@@ -17,7 +17,16 @@ import { drej } from "../src/index.ts";
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 type ExecResult = { stdout: string; stderr: string; exitCode: number };
-type FileInfoStub = { path: string; type: string; size: number; mode: number; modified_at: string; created_at: string; owner: string; group: string };
+type FileInfoStub = {
+  path: string;
+  type: string;
+  size: number;
+  mode: number;
+  modified_at: string;
+  created_at: string;
+  owner: string;
+  group: string;
+};
 
 type SandboxStub = {
   exec: (cmd: string, opts?: any) => PromiseLike<ExecResult>;
@@ -28,7 +37,8 @@ type SandboxStub = {
 
 function makeStub(overrides: Partial<SandboxStub> = {}): Sandbox {
   return {
-    exec: overrides.exec ?? ((_cmd, _opts) => Promise.resolve({ stdout: "", stderr: "", exitCode: 0 })),
+    exec:
+      overrides.exec ?? ((_cmd, _opts) => Promise.resolve({ stdout: "", stderr: "", exitCode: 0 })),
     readFile: overrides.readFile ?? ((_path) => Promise.resolve("")),
     writeFile: overrides.writeFile ?? ((_path, _content) => Promise.resolve()),
     listDirectory: overrides.listDirectory ?? ((_path, _opts) => Promise.resolve([])),
@@ -67,7 +77,9 @@ describe("exec", () => {
   });
 
   it("returns non-zero exitCode without throwing", async () => {
-    const sb = makeStub({ exec: () => Promise.resolve({ stdout: "", stderr: "err", exitCode: 1 }) });
+    const sb = makeStub({
+      exec: () => Promise.resolve({ stdout: "", stderr: "err", exitCode: 1 }),
+    });
     const api = await getApi(sb);
     const { exitCode } = await api.exec("false");
     expect(exitCode).toBe(1);
@@ -83,7 +95,9 @@ describe("exec", () => {
     let rejectMsg = "";
     const sb = makeStub({ exec: () => new Promise(() => {}) });
     const api = await getApi(sb);
-    await api.exec("x", { timeoutMs: 1.3 }).catch((e: Error) => { rejectMsg = e.message; });
+    await api.exec("x", { timeoutMs: 1.3 }).catch((e: Error) => {
+      rejectMsg = e.message;
+    });
     expect(rejectMsg).toBe("exec timed out after 2ms"); // ceil(1.3) = 2
   });
 
@@ -142,7 +156,12 @@ describe("readFileBuffer", () => {
 describe("writeFile", () => {
   it("delegates string content to sb.writeFile", async () => {
     let wrote: any;
-    const sb = makeStub({ writeFile: (p, c) => { wrote = { p, c }; return Promise.resolve(); } });
+    const sb = makeStub({
+      writeFile: (p, c) => {
+        wrote = { p, c };
+        return Promise.resolve();
+      },
+    });
     const api = await getApi(sb);
     await api.writeFile("/out.txt", "hello");
     expect(wrote).toEqual({ p: "/out.txt", c: "hello" });
@@ -151,7 +170,10 @@ describe("writeFile", () => {
   it("base64-encodes Uint8Array content and pipes through base64 -d", async () => {
     let execCmd = "";
     const sb = makeStub({
-      exec: (cmd) => { execCmd = cmd; return Promise.resolve({ stdout: "", stderr: "", exitCode: 0 }); },
+      exec: (cmd) => {
+        execCmd = cmd;
+        return Promise.resolve({ stdout: "", stderr: "", exitCode: 0 });
+      },
     });
     const api = await getApi(sb);
     const data = new Uint8Array([0x01, 0x02, 0x03]);
@@ -215,8 +237,26 @@ describe("readdir", () => {
     const sb = makeStub({
       listDirectory: () =>
         Promise.resolve([
-          { path: "/base/a", type: "file", size: 0, mode: 0o644, modified_at: "", created_at: "", owner: "", group: "" },
-          { path: "/base/b", type: "directory", size: 0, mode: 0o755, modified_at: "", created_at: "", owner: "", group: "" },
+          {
+            path: "/base/a",
+            type: "file",
+            size: 0,
+            mode: 0o644,
+            modified_at: "",
+            created_at: "",
+            owner: "",
+            group: "",
+          },
+          {
+            path: "/base/b",
+            type: "directory",
+            size: 0,
+            mode: 0o755,
+            modified_at: "",
+            created_at: "",
+            owner: "",
+            group: "",
+          },
         ]),
     });
     const api = await getApi(sb);
@@ -227,8 +267,26 @@ describe("readdir", () => {
     const sb = makeStub({
       listDirectory: () =>
         Promise.resolve([
-          { path: "/d/child", type: "file", size: 0, mode: 0, modified_at: "", created_at: "", owner: "", group: "" },
-          { path: "/d/child/grandchild", type: "file", size: 0, mode: 0, modified_at: "", created_at: "", owner: "", group: "" },
+          {
+            path: "/d/child",
+            type: "file",
+            size: 0,
+            mode: 0,
+            modified_at: "",
+            created_at: "",
+            owner: "",
+            group: "",
+          },
+          {
+            path: "/d/child/grandchild",
+            type: "file",
+            size: 0,
+            mode: 0,
+            modified_at: "",
+            created_at: "",
+            owner: "",
+            group: "",
+          },
         ]),
     });
     const api = await getApi(sb);
@@ -239,7 +297,16 @@ describe("readdir", () => {
     const sb = makeStub({
       listDirectory: () =>
         Promise.resolve([
-          { path: "/base/x", type: "file", size: 0, mode: 0, modified_at: "", created_at: "", owner: "", group: "" },
+          {
+            path: "/base/x",
+            type: "file",
+            size: 0,
+            mode: 0,
+            modified_at: "",
+            created_at: "",
+            owner: "",
+            group: "",
+          },
         ]),
     });
     const api = await getApi(sb);
@@ -268,7 +335,12 @@ describe("exists", () => {
 describe("mkdir", () => {
   it("calls mkdir without -p by default", async () => {
     let cmd = "";
-    const sb = makeStub({ exec: (c) => { cmd = c; return Promise.resolve({ stdout: "", stderr: "", exitCode: 0 }); } });
+    const sb = makeStub({
+      exec: (c) => {
+        cmd = c;
+        return Promise.resolve({ stdout: "", stderr: "", exitCode: 0 });
+      },
+    });
     const api = await getApi(sb);
     await api.mkdir("/new/dir");
     expect(cmd).toMatch(/^mkdir '/);
@@ -277,7 +349,12 @@ describe("mkdir", () => {
 
   it("passes -p when recursive is true", async () => {
     let cmd = "";
-    const sb = makeStub({ exec: (c) => { cmd = c; return Promise.resolve({ stdout: "", stderr: "", exitCode: 0 }); } });
+    const sb = makeStub({
+      exec: (c) => {
+        cmd = c;
+        return Promise.resolve({ stdout: "", stderr: "", exitCode: 0 });
+      },
+    });
     const api = await getApi(sb);
     await api.mkdir("/deep/path", { recursive: true });
     expect(cmd).toContain("mkdir -p");
@@ -289,7 +366,12 @@ describe("mkdir", () => {
 describe("rm", () => {
   it("calls rm with no flags by default", async () => {
     let cmd = "";
-    const sb = makeStub({ exec: (c) => { cmd = c; return Promise.resolve({ stdout: "", stderr: "", exitCode: 0 }); } });
+    const sb = makeStub({
+      exec: (c) => {
+        cmd = c;
+        return Promise.resolve({ stdout: "", stderr: "", exitCode: 0 });
+      },
+    });
     const api = await getApi(sb);
     await api.rm("/tmp/file");
     expect(cmd).toMatch(/^rm '/);
@@ -297,7 +379,12 @@ describe("rm", () => {
 
   it("passes -r for recursive", async () => {
     let cmd = "";
-    const sb = makeStub({ exec: (c) => { cmd = c; return Promise.resolve({ stdout: "", stderr: "", exitCode: 0 }); } });
+    const sb = makeStub({
+      exec: (c) => {
+        cmd = c;
+        return Promise.resolve({ stdout: "", stderr: "", exitCode: 0 });
+      },
+    });
     const api = await getApi(sb);
     await api.rm("/dir", { recursive: true });
     expect(cmd).toContain("-r");
@@ -306,7 +393,12 @@ describe("rm", () => {
 
   it("passes -f for force", async () => {
     let cmd = "";
-    const sb = makeStub({ exec: (c) => { cmd = c; return Promise.resolve({ stdout: "", stderr: "", exitCode: 0 }); } });
+    const sb = makeStub({
+      exec: (c) => {
+        cmd = c;
+        return Promise.resolve({ stdout: "", stderr: "", exitCode: 0 });
+      },
+    });
     const api = await getApi(sb);
     await api.rm("/file", { force: true });
     expect(cmd).toContain("-f");
@@ -315,7 +407,12 @@ describe("rm", () => {
 
   it("passes both -r and -f", async () => {
     let cmd = "";
-    const sb = makeStub({ exec: (c) => { cmd = c; return Promise.resolve({ stdout: "", stderr: "", exitCode: 0 }); } });
+    const sb = makeStub({
+      exec: (c) => {
+        cmd = c;
+        return Promise.resolve({ stdout: "", stderr: "", exitCode: 0 });
+      },
+    });
     const api = await getApi(sb);
     await api.rm("/dir", { recursive: true, force: true });
     expect(cmd).toContain("-r");
@@ -329,14 +426,14 @@ describe("drej factory", () => {
   it("passes cwd '/' by default to createSandboxSessionEnv", async () => {
     const sb = makeStub();
     const factory = drej(sb);
-    const env = await factory.createSessionEnv({ id: "x" }) as any;
+    const env = (await factory.createSessionEnv({ id: "x" })) as any;
     expect(env._cwd).toBe("/");
   });
 
   it("forwards custom cwd option", async () => {
     const sb = makeStub();
     const factory = drej(sb, { cwd: "/workspace" });
-    const env = await factory.createSessionEnv({ id: "x" }) as any;
+    const env = (await factory.createSessionEnv({ id: "x" })) as any;
     expect(env._cwd).toBe("/workspace");
   });
 });

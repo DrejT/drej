@@ -42,7 +42,7 @@ console.log("\n=== Pattern B: strict exec (default) — catch CommandError ===")
 
 try {
   await sbB.exec("echo 'about to fail'").pipe(process.stdout);
-  await sbB.exec("exit 42");  // throws CommandError (strict: true is the default)
+  await sbB.exec("exit 42"); // throws CommandError (strict: true is the default)
   await sbB.exec("echo 'this line never runs'");
 } catch (e) {
   if (e instanceof CommandError) {
@@ -57,4 +57,3 @@ try {
 } finally {
   await sbB.close();
 }
-

@@ -18,14 +18,14 @@ await workflow(client)
 
 ## Core SDK vs Workflow Builder
 
-| | Core SDK (`drej`) | Workflow Builder (`@drej/workflow`) |
-|---|---|---|
-| Style | Imperative — hold objects, call methods | Declarative — describe ops, flush once |
-| Await | Per-operation | Once at the end |
-| Lifecycle | Manual `try/finally sb.close()` | Managed automatically |
-| Multi-sandbox | Multiple variables | `.parallel()`, `.sequence()` |
-| Streaming | `ExecHandle.pipe()` | `.pipe(writable)` on the workflow |
-| Values | `await sb.exec(...)` | `readFile(path, as)` → `vars` |
+|               | Core SDK (`drej`)                       | Workflow Builder (`@drej/workflow`)    |
+| ------------- | --------------------------------------- | -------------------------------------- |
+| Style         | Imperative — hold objects, call methods | Declarative — describe ops, flush once |
+| Await         | Per-operation                           | Once at the end                        |
+| Lifecycle     | Manual `try/finally sb.close()`         | Managed automatically                  |
+| Multi-sandbox | Multiple variables                      | `.parallel()`, `.sequence()`           |
+| Streaming     | `ExecHandle.pipe()`                     | `.pipe(writable)` on the workflow      |
+| Values        | `await sb.exec(...)`                    | `readFile(path, as)` → `vars`          |
 
 ## When to use the Workflow Builder
 

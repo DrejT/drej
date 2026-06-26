@@ -36,7 +36,7 @@ export function PackageSwitcher() {
   }, [open]);
 
   return (
-    <div ref={ref} className="relative px-3 pb-3">
+    <div ref={ref} className="relative pb-3">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}

@@ -27,21 +27,28 @@ const client = new Drej({
   adapter: new SQLiteAdapter("./ledger.db"),
 });
 
-await client.connect();
-
-// ... run workflows ...
-
-await client.close();
+// No connect() or close() needed — the adapter is lazily initialized
+// and closed automatically when the process exits.
+const sb = await client.sandbox({
+  image: "ubuntu:22.04",
+  resources: { cpu: "500m", memory: "256Mi" },
+});
+try {
+  await sb.exec('echo "hello"').pipe(process.stdout);
+} finally {
+  await sb.close();
+}
 ```
 
 ## Options
 
-| Option           | Type              | Description                                         |
-| ---------------- | ----------------- | --------------------------------------------------- |
-| `baseUrl`        | `string`          | OpenSandbox server URL                              |
-| `apiKey`         | `string`          | OpenSandbox API key (empty string for local dev)    |
-| `adapter`        | `IStorageAdapter` | Storage adapter for the run ledger                  |
-| `maxConcurrency` | `number`          | Max simultaneous workflow runs (default: unlimited) |
+| Option           | Type              | Description                                                                                                                      |
+| ---------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `baseUrl`        | `string`          | OpenSandbox server URL                                                                                                           |
+| `apiKey`         | `string`          | OpenSandbox API key (empty string for local dev)                                                                                 |
+| `adapter`        | `IStorageAdapter` | Storage adapter for the run ledger                                                                                               |
+| `maxConcurrency` | `number`          | Max simultaneous active sandboxes (default: unlimited)                                                                           |
+| `useServerProxy` | `boolean`         | Route execd and proxy traffic through the server. Required when the server runs in Docker via `drejx init`. Defaults to `false`. |
 
 ## Local OpenSandbox
 

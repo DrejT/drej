@@ -1,69 +1,39 @@
-import { Drej } from "drej";
-import { SQLiteAdapter } from "@drej/sqlite";
+import { existsSync } from "fs";
+import { mkdir } from "fs/promises";
+import { join } from "path";
 import { readConfig } from "../config.js";
-import { readSandboxes, writeSandboxes } from "../sandboxes.js";
-import { validateRegistryItem, type RegistryItem } from "../schema.js";
+import { validateAgentSpec, type AgentSpec } from "../schema.js";
 
-export async function add(
-  url: string,
-  opts: { name?: string; server?: string } = {},
-): Promise<void> {
+export async function add(url: string, opts: { name?: string } = {}): Promise<void> {
   if (!url) throw new Error("Usage: drejx add <url>");
 
   const config = await readConfig();
-  const serverUrl = opts.server ?? config.serverUrl;
+  const spec = await fetchSpec(url);
 
-  const item = await fetchItem(url);
-  const client = new Drej({
-    baseUrl: serverUrl,
-    apiKey: config.apiKey,
-    adapter: new SQLiteAdapter(config.adapterPath),
-    useServerProxy: config.useServerProxy,
-  });
-
-  for (const depUrl of item.registryDependencies ?? []) {
+  for (const depUrl of spec.registryDependencies ?? []) {
     console.log(`Resolving dependency: ${depUrl}`);
-    await add(depUrl, opts);
+    await add(depUrl);
   }
 
-  const name = opts.name ?? item.name;
-  console.log(`Spawning sandbox '${name}'...`);
+  const name = opts.name ?? spec.name;
+  const agentsDir = config.agentsDir;
 
-  const sb = await client.sandbox({
-    image: item.image,
-    resources: item.resources,
-    env: item.env,
-    metadata: { ...item.metadata, registry: item.name },
-    name,
-  });
+  if (!existsSync(agentsDir)) await mkdir(agentsDir, { recursive: true });
 
-  try {
-    for (const cmd of item.setup ?? []) {
-      console.log(`  $ ${cmd}`);
-      await sb.exec(cmd).pipe(process.stdout);
-    }
-    if ((item.setup ?? []).length > 0) {
-      await sb.checkpoint("registry-setup");
-    }
-  } finally {
-    await sb.close();
-  }
+  const dest = join(agentsDir, `${name}.json`);
+  await Bun.write(dest, JSON.stringify(spec, null, 2) + "\n");
 
-  const entries = await readSandboxes();
-  entries.push({ name, sandboxId: sb.sandboxId, url, createdAt: new Date().toISOString() });
-  await writeSandboxes(entries);
-
-  console.log(`Sandbox ready: ${sb.sandboxId}  (${name})`);
-  console.log(`Resume it with: client.resume("${sb.sandboxId}")`);
+  console.log(`Agent spec saved: ${dest}`);
+  console.log(`Load it with: Agent.load("${dest}") from @drej/agent`);
 }
 
-async function fetchItem(url: string): Promise<RegistryItem> {
+async function fetchSpec(url: string): Promise<AgentSpec> {
   if (url.startsWith("http://") || url.startsWith("https://")) {
     const res = await fetch(url);
-    if (!res.ok) throw new Error(`Failed to fetch registry item: ${res.status} ${res.statusText}`);
-    return validateRegistryItem(await res.json());
+    if (!res.ok) throw new Error(`Failed to fetch spec: ${res.status} ${res.statusText}`);
+    return validateAgentSpec(await res.json());
   }
   const file = Bun.file(url);
   if (!(await file.exists())) throw new Error(`File not found: ${url}`);
-  return validateRegistryItem(await file.json());
+  return validateAgentSpec(await file.json());
 }

@@ -68,6 +68,7 @@ bun add drej @drej/postgres
 |---|---|
 | `drej` | TypeScript SDK — `Drej` client, `Sandbox`, `ExecHandle` |
 | `@drej/workflow` | Workflow builder — lazy pipeline with retry, branching, fan-out |
+| `@drej/agent` | Agent SDK — run Pi coding agents in sandbox containers |
 | `@drej/sqlite` | SQLite storage adapter (local dev, zero infra) |
 | `@drej/postgres` | Postgres storage adapter (production) |
 | `@drej/otel` | OpenTelemetry hooks adapter |
@@ -368,6 +369,47 @@ await workflow(client)
     { image: "alpine:3",     resources: { cpu: "500m", memory: "256Mi" }, run: (sb) => { sb.exec("ls /app/dist"); } },
   ])
   .pipe(process.stdout);
+```
+
+---
+
+## AI Agents
+
+`@drej/agent` runs a [Pi](https://pi.ai) coding agent inside an OpenSandbox container and exposes it through a simple TypeScript API. Pi can read and write files, run shell commands and Python scripts autonomously, and stream its responses back.
+
+```bash
+bun add @drej/agent
+```
+
+Create an agent spec (`agents/hello-agent.json`):
+
+```json
+{
+  "$schema": "https://registry.drej.dev/schema/agent-item.json",
+  "name": "hello-agent",
+  "cli": "pi",
+  "model": "gemini-flash-latest",
+  "packages": ["python3"],
+  "env": { "GEMINI_API_KEY": "${GEMINI_API_KEY}" },
+  "resources": { "cpu": "1000m", "memory": "2Gi" }
+}
+```
+
+```ts
+import { Agent } from "@drej/agent";
+
+const agent = await Agent.load("./agents/hello-agent.json");
+try {
+  // Stream Pi's response
+  for await (const chunk of agent.prompt("Write and run a Python hello world script.")) {
+    process.stdout.write(chunk);
+  }
+
+  // Host can read/write files and run commands directly, bypassing Pi
+  const result = await agent.sandbox.readFile("/workspace/output.txt");
+} finally {
+  await agent.close();
+}
 ```
 
 ---

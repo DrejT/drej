@@ -1,0 +1,58 @@
+import { existsSync } from "fs";
+
+/** Shape of `drej.config.json` in the project root, merged with built-in defaults. */
+export interface DrejAgentConfig {
+  /** OpenSandbox server URL. Default: `http://localhost:8080`. */
+  serverUrl: string;
+  /** OpenSandbox API key. Pass an empty string for local dev with no auth. */
+  apiKey: string;
+  /** Path to the SQLite ledger database. Default: `./.drej/ledger.db`. */
+  adapterPath: string;
+  /**
+   * Route execd and proxy traffic through the OpenSandbox server.
+   * Required when the server runs in Docker (e.g. started via `drejx init`).
+   * Default: `true`.
+   */
+  useServerProxy: boolean;
+  /** Directory containing agent spec files. Default: `./agents`. */
+  agentsDir: string;
+  /** Default values applied when an agent spec omits a field. */
+  defaults: {
+    resources: { cpu: string; memory: string };
+  };
+}
+
+const CONFIG_FILE = "drej.config.json";
+
+const DEFAULT_CONFIG: DrejAgentConfig = {
+  serverUrl: "http://localhost:8080",
+  apiKey: "",
+  adapterPath: "./.drej/ledger.db",
+  useServerProxy: true,
+  agentsDir: "./agents",
+  defaults: {
+    resources: { cpu: "1000m", memory: "1Gi" },
+  },
+};
+
+/**
+ * Read `drej.config.json` from the current working directory and merge it with
+ * built-in defaults. Missing fields fall back to the defaults — the config file
+ * is fully optional.
+ */
+export async function readProjectConfig(): Promise<DrejAgentConfig> {
+  if (!existsSync(CONFIG_FILE)) return DEFAULT_CONFIG;
+  const data = (await Bun.file(CONFIG_FILE).json()) as Partial<DrejAgentConfig>;
+  return {
+    ...DEFAULT_CONFIG,
+    ...data,
+    defaults: {
+      ...DEFAULT_CONFIG.defaults,
+      ...(data.defaults ?? {}),
+      resources: {
+        ...DEFAULT_CONFIG.defaults.resources,
+        ...(data.defaults?.resources ?? {}),
+      },
+    },
+  };
+}

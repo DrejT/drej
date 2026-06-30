@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { validateAgentSpec } from "../src/schema.js";
+import { validateAgentSpec } from "../src/schema";
 
 describe("validateAgentSpec", () => {
   it("accepts a valid minimal spec", () => {
@@ -17,15 +17,16 @@ describe("validateAgentSpec", () => {
       description: "An agent with all fields",
       author: "alice",
       categories: ["dev", "review"],
-      packages: ["nodejs_22", "git"],
+      packages: ["nodejs_22", "git", "ripgrep"],
       env: { ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}" },
-      resources: { cpu: "1000m", memory: "1Gi" },
+      resources: { cpu: "1000m", memory: "2Gi" },
       metadata: { team: "infra" },
       registryDependencies: ["https://example.com/base.json"],
     });
     expect(spec.title).toBe("Full Agent");
-    expect(spec.packages).toEqual(["nodejs_22", "git"]);
+    expect(spec.packages).toEqual(["nodejs_22", "git", "ripgrep"]);
     expect(spec.registryDependencies).toEqual(["https://example.com/base.json"]);
+    expect(spec.env).toEqual({ ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}" });
   });
 
   it("throws when name is missing", () => {
@@ -36,15 +37,17 @@ describe("validateAgentSpec", () => {
     expect(() => validateAgentSpec({ name: "my-agent" })).toThrow(/pi/);
   });
 
-  it("throws for unsupported cli", () => {
-    expect(() => validateAgentSpec({ name: "my-agent", cli: "unknown-cli" })).toThrow(
-      /Unsupported CLI/,
-    );
+  it("throws for unsupported cli value", () => {
+    expect(() => validateAgentSpec({ name: "x", cli: "docker" })).toThrow(/Unsupported CLI/);
   });
 
-  it("throws for non-object input", () => {
+  it("throws for null", () => {
     expect(() => validateAgentSpec(null)).toThrow();
+  });
+
+  it("throws for non-object types", () => {
     expect(() => validateAgentSpec("string")).toThrow();
     expect(() => validateAgentSpec(42)).toThrow();
+    expect(() => validateAgentSpec([])).toThrow();
   });
 });

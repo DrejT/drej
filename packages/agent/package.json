@@ -1,16 +1,16 @@
 {
-  "name": "drejx",
+  "name": "@drej/agent",
   "version": "0.1.0",
-  "bin": {
-    "drejx": "./dist/index.mjs"
-  },
   "files": [
     "dist"
   ],
   "type": "module",
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     ".": {
-      "import": "./dist/index.mjs"
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.mts"
     }
   },
   "publishConfig": {
@@ -21,7 +21,7 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@drej/agent": "workspace:*",
+    "@drej/core": "workspace:*",
     "@drej/sqlite": "workspace:*",
     "drej": "workspace:*"
   },

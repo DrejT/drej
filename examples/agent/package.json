@@ -1,16 +1,13 @@
 {
-  "name": "@drej/integration-tests",
-  "private": true,
+  "name": "drej-example-agent",
   "version": "0.0.1",
+  "private": true,
   "scripts": {
-    "test": "bun test --timeout 120000"
+    "start": "bun index.ts"
   },
   "dependencies": {
     "@drej/agent": "workspace:*",
     "@drej/sqlite": "workspace:*",
     "drej": "workspace:*"
-  },
-  "devDependencies": {
-    "@types/bun": "latest"
   }
 }

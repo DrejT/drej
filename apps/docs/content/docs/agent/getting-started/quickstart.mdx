@@ -1,0 +1,116 @@
+---
+title: Quick start
+description: Load an agent spec, send a prompt, and stream the response in minutes.
+---
+
+`@drej/agent` wraps a [Pi](https://pi.ai) coding agent CLI in an OpenSandbox container and exposes it through a simple TypeScript API. The agent can read and write files inside the sandbox, run shell commands and Python scripts autonomously, and stream its responses back to the host.
+
+## 1. Install
+
+```bash
+bun add @drej/agent
+```
+
+## 2. Start a local sandbox server
+
+Run OpenSandbox locally. See [Core SDK — Installation](/docs/core/getting-started/installation) for the full setup.
+
+The quickest path:
+
+```bash
+bunx drejx init   # starts OpenSandbox in Docker, writes drej.config.json
+```
+
+## 3. Write an agent spec
+
+Create `agents/hello-agent.json`:
+
+```json title="agents/hello-agent.json"
+{
+  "$schema": "https://registry.drej.dev/schema/agent-item.json",
+  "name": "hello-agent",
+  "cli": "pi",
+  "model": "gemini-flash-latest",
+  "packages": ["python3"],
+  "env": {
+    "GEMINI_API_KEY": "${GEMINI_API_KEY}"
+  },
+  "resources": { "cpu": "1000m", "memory": "2Gi" }
+}
+```
+
+`${GEMINI_API_KEY}` is interpolated from `process.env.GEMINI_API_KEY` at load time.
+
+## 4. Load the agent and send a prompt
+
+```ts title="run.ts"
+import { Agent } from "@drej/agent";
+
+process.env.GEMINI_API_KEY = "your-key-here"; // or set in environment
+
+const agent = await Agent.load("./agents/hello-agent.json");
+console.log(`Sandbox: ${agent.sandboxId}`);
+
+try {
+  // Stream Pi's response chunk by chunk
+  for await (const chunk of agent.prompt(
+    "Write a Python script that prints the first 10 Fibonacci numbers. Run it.",
+  )) {
+    process.stdout.write(chunk);
+  }
+} finally {
+  await agent.close();
+}
+```
+
+```bash
+bun run.ts
+```
+
+`Agent.load()` logs timing for each phase:
+
+```
+[agent] starting sandbox (hello-agent)...
+[agent] sandbox ready   12340ms (abc-123...)
+[agent] installing Pi CLI...
+[agent] Pi CLI ready    25s
+[agent] starting bridge...
+[agent] bridge ready    3210ms
+[agent] total           41s
+```
+
+## 5. Read and write files
+
+The `agent.sandbox` property gives direct access to the underlying `Sandbox` — bypassing Pi entirely:
+
+```ts
+// Host writes a file into the container
+await agent.sandbox.writeFile("/workspace/data.csv", csvContent);
+
+// Pi reads and processes it
+for await (const chunk of agent.prompt("Summarize the CSV at /workspace/data.csv.")) {
+  process.stdout.write(chunk);
+}
+
+// Host reads back whatever Pi wrote
+const result = await agent.sandbox.readFile("/workspace/summary.txt");
+console.log(result);
+
+// Host can also run shell commands directly
+const { stdout } = await agent.sandbox.exec("ls /workspace/");
+```
+
+## 6. Session management
+
+```ts
+// Pi has its own conversation context — this clears it
+await agent.newSession();
+
+// Update environment variables and restart Pi with the new values
+await agent.setEnv({ EXTRA_CONTEXT: "project-alpha" });
+```
+
+## Next steps
+
+- [Agent API reference](/docs/agent/api-reference) — full reference for `Agent`, `AgentSpec`, and `PromptStream`
+- [Core SDK](/docs/core) — the underlying `Sandbox`, `exec`, and file operations API

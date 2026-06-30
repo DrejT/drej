@@ -42,6 +42,7 @@ bunx tsc --noEmit --strict --project packages/adapters/postgres/tsconfig.json
 bunx tsc --noEmit --strict --project packages/adapters/sqlite/tsconfig.json
 bunx tsc --noEmit --strict --project packages/adapters/otel/tsconfig.json
 bunx tsc --noEmit --strict --project packages/cli/tsconfig.json
+bunx tsc --noEmit --strict --project packages/agent/tsconfig.json
 
 # Changesets (required on every PR touching publishable packages)
 bunx changeset        # add a changeset
@@ -109,6 +110,14 @@ packages/adapters/sqlite/         — SQLite storage adapter (published as "@dre
 
 packages/adapters/otel/           — OpenTelemetry hooks adapter (published as "@drej/otel")
   src/index.ts                    — otelHooks(tracer, opts?) → SandboxHooks
+
+packages/agent/                   — Agent SDK (published to npm as "@drej/agent")
+  src/agent.ts                    — Agent class: load(), prompt(), steer(), abort(), newSession(), setEnv(), close()
+  src/adapters/pi.ts              — PiAdapter: BRIDGE_SCRIPT (Node.js CJS HTTP→RPC bridge), setup(), startBridge(), waitReady()
+  src/schema.ts                   — AgentSpec interface + validateAgentSpec()
+  src/config.ts                   — DrejAgentConfig, readProjectConfig() (reads drej.config.json)
+  src/types.ts                    — PromptStream (AsyncIterable<string>)
+  src/index.ts                    — barrel exports
 
 packages/cli/                     — drejx CLI (published to npm as "drejx", not part of changeset versioning)
   src/index.ts                    — CLI entry point (shebang, command dispatch)

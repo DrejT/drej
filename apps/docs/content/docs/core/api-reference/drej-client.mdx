@@ -15,12 +15,13 @@ new Drej(options: DrejOptions)
 
 ### DrejOptions
 
-| Option           | Type              | Required | Description                                                   |
-| ---------------- | ----------------- | -------- | ------------------------------------------------------------- |
-| `baseUrl`        | `string`          | Yes      | OpenSandbox server URL, e.g. `"http://localhost:8080"`        |
-| `apiKey`         | `string`          | No       | OpenSandbox API key. Empty string for local dev with no auth. |
-| `adapter`        | `IStorageAdapter` | Yes      | Storage adapter for the run ledger                            |
-| `maxConcurrency` | `number`          | No       | Max simultaneous active sandboxes. Omit for no limit.         |
+| Option           | Type              | Required | Description                                                                                                                      |
+| ---------------- | ----------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `baseUrl`        | `string`          | Yes      | OpenSandbox server URL, e.g. `"http://localhost:8080"`                                                                           |
+| `apiKey`         | `string`          | No       | OpenSandbox API key. Empty string for local dev with no auth.                                                                    |
+| `adapter`        | `IStorageAdapter` | Yes      | Storage adapter for the run ledger                                                                                               |
+| `maxConcurrency` | `number`          | No       | Max simultaneous active sandboxes. Omit for no limit.                                                                            |
+| `useServerProxy` | `boolean`         | No       | Route execd and proxy traffic through the server. Required when the server runs in Docker via `drejx init`. Defaults to `false`. |
 
 ```ts
 const client = new Drej({
@@ -32,22 +33,6 @@ const client = new Drej({
 ```
 
 ## Methods
-
-### connect()
-
-```ts
-await client.connect(): Promise<void>
-```
-
-Initializes the storage adapter — runs migrations and opens connection pools. Call once before first use.
-
-### close()
-
-```ts
-await client.close(): Promise<void>
-```
-
-Releases storage adapter resources. Call on graceful shutdown.
 
 ### sandbox()
 
@@ -131,11 +116,11 @@ await client.sandboxes.delete("my-job", sandboxId);
 
 ### ListSandboxOptions
 
-| Option   | Type            | Description                                                             |
-| -------- | --------------- | ----------------------------------------------------------------------- |
-| `status` | `SandboxStatus` | Filter by status: `"running"`, `"completed"`, `"failed"`, `"cancelled"` |
-| `limit`  | `number`        | Max results to return                                                   |
-| `before` | `number`        | Return only sessions started before this Unix timestamp (ms)            |
+| Option   | Type            | Description                                                  |
+| -------- | --------------- | ------------------------------------------------------------ |
+| `status` | `SandboxStatus` | Filter by status: `"running"` or `"completed"`               |
+| `limit`  | `number`        | Max results to return                                        |
+| `before` | `number`        | Return only sessions started before this Unix timestamp (ms) |
 
 ## Sandbox class
 

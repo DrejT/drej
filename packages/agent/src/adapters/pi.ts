@@ -234,10 +234,7 @@ export function toShellExports(env: Record<string, string>): string {
 export function resolveEnv(env: Record<string, string>): Record<string, string> {
   const result: Record<string, string> = {};
   for (const [key, value] of Object.entries(env)) {
-    result[key] = value.replace(
-      /\$\{([^}]+)\}/g,
-      (_, name: string) => process.env[name] ?? "",
-    );
+    result[key] = value.replace(/\$\{([^}]+)\}/g, (_, name: string) => process.env[name] ?? "");
   }
   return result;
 }
@@ -255,7 +252,9 @@ export class PiAdapter {
       (p) => p !== "nodejs_22" && p !== "nodejs",
     );
     if (pkgs.length > 0) {
-      await sb.exec(`apt-get update -qq && apt-get install -y --no-install-recommends ${pkgs.join(" ")}`);
+      await sb.exec(
+        `apt-get update -qq && apt-get install -y --no-install-recommends ${pkgs.join(" ")}`,
+      );
     }
     await sb.exec("npm install -g --ignore-scripts @earendil-works/pi-coding-agent");
 

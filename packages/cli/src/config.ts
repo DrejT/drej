@@ -23,8 +23,7 @@ export function configPath(): string {
 
 export async function readConfig(): Promise<DrejxConfig> {
   const file = Bun.file(configPath());
-  if (!(await file.exists()))
-    throw new Error("No drej.config.json found — run 'drejx init' first");
+  if (!(await file.exists())) throw new Error("No drej.config.json found — run 'drejx init' first");
   const data = (await file.json()) as Partial<DrejxConfig>;
   return {
     serverUrl: data.serverUrl ?? "http://localhost:8080",

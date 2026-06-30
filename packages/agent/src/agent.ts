@@ -10,11 +10,41 @@ function elapsed(t: number) {
   return `${Date.now() - t}ms`;
 }
 
+/**
+ * A live AI coding agent running inside an OpenSandbox container.
+ *
+ * Wraps a Pi CLI process (`pi --mode rpc --approve`) in an HTTP bridge so the
+ * host can send prompts and receive streamed responses over a stable API,
+ * while Pi manages its own tool use, file writes, and code execution inside the
+ * sandbox.
+ *
+ * Create an agent with `Agent.load(specPath)`. Always call `close()` when done
+ * to release the underlying sandbox container.
+ *
+ * @example
+ * ```ts
+ * import { Agent } from "@drej/agent";
+ *
+ * const agent = await Agent.load("./agents/my-agent.json");
+ * try {
+ *   // Pi reads and writes files; the host observes via sandbox.readFile / exec
+ *   for await (const chunk of agent.prompt("Explain this codebase")) {
+ *     process.stdout.write(chunk);
+ *   }
+ * } finally {
+ *   await agent.close();
+ * }
+ * ```
+ */
 export class Agent {
   /** OpenSandbox container ID for this agent's sandbox. */
   readonly sandboxId: string;
   readonly name: string;
-  /** Direct access to the underlying Sandbox — full drej Sandbox API, bypasses Pi. */
+  /**
+   * Direct access to the underlying `Sandbox` — full drej Sandbox API, bypasses Pi.
+   * Use this to read or write files, run shell commands, or inspect container state
+   * independently of the Pi conversation.
+   */
   readonly sandbox: Sandbox;
 
   private readonly _adapter: PiAdapter;
@@ -34,8 +64,18 @@ export class Agent {
   }
 
   /**
-   * Load an agent spec from disk, spin up a sandbox, install the CLI,
-   * start the RPC bridge, and return a ready Agent.
+   * Load an agent spec from disk and return a fully initialised `Agent`.
+   *
+   * This method:
+   * 1. Reads and validates the JSON spec at `specPath`.
+   * 2. Reads `drej.config.json` in the current working directory (falls back to
+   *    defaults: `http://localhost:8080`, SQLite adapter at `./.drej/ledger.db`,
+   *    `useServerProxy: true`).
+   * 3. Spawns a `node:22` sandbox container.
+   * 4. Installs the Pi CLI and any packages listed in the spec.
+   * 5. Starts the RPC bridge inside the container and waits until Pi is ready.
+   *
+   * Logs timing for each phase to stdout via `[agent]` prefixed lines.
    */
   static async load(specPath: string): Promise<Agent> {
     const t0 = Date.now();
@@ -54,7 +94,12 @@ export class Agent {
 
     console.log(`[agent] starting sandbox (${spec.name})...`);
     const t1 = Date.now();
-    const sb = await client.sandbox({ image: "node:22", resources, name: spec.name, env: resolvedEnv });
+    const sb = await client.sandbox({
+      image: "node:22",
+      resources,
+      name: spec.name,
+      env: resolvedEnv,
+    });
     console.log(`[agent] sandbox ready   ${elapsed(t1)} (${sb.sandboxId})`);
 
     const adapter = new PiAdapter();
@@ -110,6 +155,7 @@ export class Agent {
     return this._adapter.getLogs();
   }
 
+  /** Delete the sandbox container and release all resources. Always call in a `finally` block. */
   async close(): Promise<void> {
     await this.sandbox.close();
   }

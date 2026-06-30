@@ -23,7 +23,6 @@ const client = new Drej({
   baseUrl: "http://localhost:8080",
   adapter: new SQLiteAdapter("./ledger.db"),
 });
-await client.connect();
 
 const sb = await client.sandbox({
   image: "ubuntu:22.04",
@@ -36,8 +35,6 @@ try {
 } finally {
   await sb.close();
 }
-
-await client.close();
 ```
 
 ```bash

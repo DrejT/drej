@@ -1,0 +1,229 @@
+---
+title: Agent
+description: Complete reference for the Agent class, AgentSpec, and PromptStream.
+---
+
+```ts
+import { Agent, type AgentSpec, type PromptStream } from "@drej/agent";
+```
+
+## Agent
+
+A live AI coding agent running inside an OpenSandbox container. Wraps a Pi CLI process (`pi --mode rpc --approve`) in an HTTP bridge so the host can send prompts and receive streamed responses.
+
+### Agent.load()
+
+```ts
+static async load(specPath: string): Promise<Agent>
+```
+
+Loads and validates the JSON spec at `specPath`, then:
+
+1. Reads `drej.config.json` in the current working directory (or falls back to defaults)
+2. Spawns a `node:22` container
+3. Installs the Pi CLI and any packages listed in the spec
+4. Starts the RPC bridge and waits until Pi is ready
+
+Logs timing for each phase to stdout via `[agent]` prefixed lines. The total setup time is typically 30–60 seconds on the first run.
+
+```ts
+const agent = await Agent.load("./agents/hello-agent.json");
+```
+
+### agent.prompt()
+
+```ts
+prompt(message: string): PromptStream
+```
+
+Send a prompt to Pi and receive a streaming response. Pi maintains its own conversation context across calls within a session.
+
+```ts
+for await (const chunk of agent.prompt("Explain this repo")) {
+  process.stdout.write(chunk);
+}
+```
+
+Returns a `PromptStream` (`AsyncIterable<string>`). Each yielded string is a text chunk as Pi generates it.
+
+### agent.steer()
+
+```ts
+async steer(message: string): Promise<void>
+```
+
+Send a mid-flight steering message to Pi while it is generating a response. Maps to the Pi RPC `steer` command.
+
+### agent.abort()
+
+```ts
+async abort(): Promise<void>
+```
+
+Cancel Pi's current operation. The in-flight `prompt()` will resolve with whatever text was generated before the abort. Maps to the Pi RPC `abort` command.
+
+### agent.newSession()
+
+```ts
+async newSession(): Promise<void>
+```
+
+Reset Pi's conversation context. Pi forgets all prior messages. The sandbox filesystem is unchanged — files written in previous turns remain.
+
+### agent.setEnv()
+
+```ts
+async setEnv(vars: Record<string, string>): Promise<void>
+```
+
+Merge `vars` into the sandbox environment. Writes to `/etc/drej-env` inside the container and restarts the Pi subprocess so it picks up the new values. Awaits Pi's readiness probe before returning.
+
+```ts
+await agent.setEnv({ PROJECT_NAME: "my-app", DEBUG: "1" });
+```
+
+### agent.getLogs()
+
+```ts
+async getLogs(): Promise<string>
+```
+
+Retrieve the last 200 bridge log entries as a plain text string. Useful for debugging Pi startup or RPC issues.
+
+### agent.close()
+
+```ts
+async close(): Promise<void>
+```
+
+Delete the sandbox container and release all resources. Always call in a `finally` block.
+
+```ts
+try {
+  // ...
+} finally {
+  await agent.close();
+}
+```
+
+### agent.sandbox
+
+```ts
+readonly sandbox: Sandbox
+```
+
+Direct access to the underlying `Sandbox` object — the full [Core SDK Sandbox API](/docs/core/concepts/sandboxes), bypassing Pi. Use this to read or write files, run shell commands, or inspect the container independently of the Pi conversation.
+
+```ts
+await agent.sandbox.writeFile("/workspace/input.csv", data);
+const { stdout } = await agent.sandbox.exec("ls /workspace/");
+const content = await agent.sandbox.readFile("/workspace/output.txt");
+```
+
+### agent.sandboxId
+
+```ts
+readonly sandboxId: string
+```
+
+OpenSandbox container ID for this agent's sandbox.
+
+### agent.name
+
+```ts
+readonly name: string
+```
+
+Name from the agent spec, used as the ledger session name.
+
+---
+
+## AgentSpec
+
+The JSON shape of an agent spec file. Pass the path to `Agent.load(specPath)`.
+
+```ts
+import type { AgentSpec } from "@drej/agent";
+```
+
+| Field                  | Type                                    | Description                                                                                                                                              |
+| ---------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`                 | `string`                                | Unique identifier. Used as the sandbox session name.                                                                                                     |
+| `cli`                  | `"pi"`                                  | CLI to run inside the sandbox. Only `"pi"` is supported.                                                                                                 |
+| `model`                | `string`                                | Model ID passed to the CLI via `--model`. For Pi 0.80.x with a free Google AI Studio key, use `"gemini-flash-latest"` (Pi's alias for gemini-3.5-flash). |
+| `provider`             | `string`                                | AI provider passed to the CLI via `--provider`. Omit when using a direct Google Generative AI API key.                                                   |
+| `packages`             | `string[]`                              | APT packages to install before starting the CLI (e.g. `["python3", "git"]`).                                                                             |
+| `env`                  | `Record<string, string>`                | Environment variables for the sandbox. Values may reference host env: `"${MY_VAR}"`.                                                                     |
+| `resources`            | `{ cpu: string; memory: string; gpu? }` | Container resource limits. Falls back to `drej.config.json` defaults.                                                                                    |
+| `title`                | `string`                                | Human-readable display name.                                                                                                                             |
+| `description`          | `string`                                | Short description of the agent.                                                                                                                          |
+| `author`               | `string`                                | Author name or URL.                                                                                                                                      |
+| `categories`           | `string[]`                              | Arbitrary category tags.                                                                                                                                 |
+| `metadata`             | `Record<string, string>`                | Arbitrary labels attached to the sandbox.                                                                                                                |
+| `registryDependencies` | `string[]`                              | Other agent spec URLs to load as dependencies.                                                                                                           |
+
+### Example
+
+```json
+{
+  "$schema": "https://registry.drej.dev/schema/agent-item.json",
+  "name": "my-agent",
+  "title": "My Agent",
+  "cli": "pi",
+  "model": "gemini-flash-latest",
+  "packages": ["python3", "git"],
+  "env": {
+    "GEMINI_API_KEY": "${GEMINI_API_KEY}"
+  },
+  "resources": { "cpu": "1000m", "memory": "2Gi" }
+}
+```
+
+---
+
+## PromptStream
+
+```ts
+type PromptStream = AsyncIterable<string>;
+```
+
+Returned by `agent.prompt()`. Each yielded string is a text chunk from Pi's response as it streams. Consume with `for await`:
+
+```ts
+const chunks: string[] = [];
+for await (const chunk of agent.prompt("Hello")) {
+  chunks.push(chunk);
+  process.stdout.write(chunk);
+}
+const full = chunks.join("");
+```
+
+---
+
+## drej.config.json
+
+`@drej/agent` reads `drej.config.json` from the current working directory to configure the client. All fields are optional and fall back to the listed defaults.
+
+```json title="drej.config.json"
+{
+  "serverUrl": "http://localhost:8080",
+  "apiKey": "",
+  "adapterPath": "./.drej/ledger.db",
+  "useServerProxy": true,
+  "agentsDir": "./agents",
+  "defaults": {
+    "resources": { "cpu": "1000m", "memory": "1Gi" }
+  }
+}
+```
+
+| Field                | Default                           | Description                                                                     |
+| -------------------- | --------------------------------- | ------------------------------------------------------------------------------- |
+| `serverUrl`          | `http://localhost:8080`           | OpenSandbox server URL                                                          |
+| `apiKey`             | `""`                              | OpenSandbox API key (empty for local dev)                                       |
+| `adapterPath`        | `./.drej/ledger.db`               | Path to the SQLite ledger database                                              |
+| `useServerProxy`     | `true`                            | Route execd/proxy traffic through the server. Required when using `drejx init`. |
+| `agentsDir`          | `./agents`                        | Directory containing agent spec files                                           |
+| `defaults.resources` | `{ cpu: "1000m", memory: "1Gi" }` | Default resource limits when the spec omits `resources`                         |
+
+`drejx init` writes this file automatically.

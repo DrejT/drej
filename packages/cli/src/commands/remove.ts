@@ -10,7 +10,9 @@ export async function remove(name: string): Promise<void> {
   const dest = join(config.agentsDir, `${name}.json`);
 
   if (!existsSync(dest)) {
-    throw new Error(`No agent spec named '${name}' in '${config.agentsDir}'. Run 'drejx list' to see available specs.`);
+    throw new Error(
+      `No agent spec named '${name}' in '${config.agentsDir}'. Run 'drejx list' to see available specs.`,
+    );
   }
 
   await unlink(dest);

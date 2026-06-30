@@ -1,5 +1,73 @@
 # drej
 
+## 0.8.0
+
+### Minor Changes
+
+- 5a63143: Add named checkpoints: `sb.listCheckpoints()` returns all checkpoints in creation order with `snapshotId`, `tag`, and `createdAt`. `client.resume(id, { tag })` resumes from a specific named checkpoint instead of the most recent. New exported types: `CheckpointInfo`, `ResumeOptions`. Storage adapters gain `listCheckpoints()`.
+- f83ccf2: Remove `client.connect()` and `client.close()` from the public API. The adapter is now initialised lazily on first use and closed automatically via `process.on("beforeExit")`. Existing calls to these methods should simply be removed.
+- 0398728: Rename `DrejClient` → `Drej` and `DrejClientOptions` → `DrejOptions`. Add `WorkflowRun.stdout()`, `WorkflowRun.result()`, and `WorkflowRun.pipe()` for ergonomic output consumption without manual event filtering.
+- 4f79c8e: Make `resources` required in `SandboxOptions` (`cpu` and `memory` are now required fields). The OpenSandbox server rejects requests without resource limits — this makes the constraint explicit at the type level.
+- 2ed4de7: Add sandbox environments: define a named environment with a setup recipe, build it once into a snapshot, and spawn cheap isolated sandboxes from it on demand. New API: `client.environment(name, opts)` returns an `Environment` with `.sandbox()`, `.rebuild()`, and `.info()`. `client.environments.list/delete` manage cached records. Storage adapters gain `getEnvironment`, `saveEnvironment`, `deleteEnvironment`, `listEnvironments`.
+- 02bcb01: Add `sb.fork(tag?)`: snapshot a live sandbox and return a new independent `Sandbox` from that state without closing the original. The forked sandbox gets its own ledger session and concurrency slot. The fork checkpoint is visible in `sb.listCheckpoints()` and usable with `client.resume()`.
+- 2bbd8dc: refactor: pivot drej to sandbox execution substrate
+
+  **`drej`**
+
+  - Remove `client.run()`, `WorkflowRun`, builder API
+  - Add `client.sandbox()` returning a live `Sandbox` object; `sandboxId` is the OpenSandbox container ID and ledger key
+  - Add `client.resume(sandboxId)` for checkpoint-based replay
+  - Add `client.sandboxes.*` for listing and managing sandbox history
+
+  **`@drej/core`**
+
+  - Remove `steps/`, `workflow.ts`, `validate.ts`
+  - Add `Sandbox` class with `exec()`, `execCode()`, `writeFile()`, `readFile()`, `checkpoint()`, `close()`, and more
+  - Add `ExecHandle` — `PromiseLike<ExecResult>` with `pipe()`, `stdout()`, `result()`; supports streaming and ledger-replay modes
+  - Add `SandboxHooks` for observability (`onSandboxCreated`, `onExecStart`, `onExecComplete`, `onCheckpoint`, `onSandboxClosed`, `onSandboxFailed`)
+  - New `LedgerEvent` variants: `sandbox_created`, `exec_start`, `exec_event`, `exec_complete`, `checkpoint_created`, `sandbox_closed`
+  - Rename `RunStatus` → `SandboxStatus`, `RunDetails` → `SandboxDetails`, `ListRunsOptions` → `ListSandboxOptions`
+  - `LedgerEntry` fields: `workflowName` → `name`, `runId` → `sandboxId`
+
+  **`@drej/sqlite` / `@drej/postgres`**
+
+  - Schema: columns `run_id` → `sandbox_id`, `wf_name` → `name`
+  - AGG query now derives status from `sandbox_created` / `sandbox_closed` events and counts `exec_complete` for `execCount`
+  - `lastCheckpoint()` now queries `checkpoint_created` (was querying the old `checkpoint` event)
+  - Adapter methods renamed: `listRunDetails` → `listSandboxDetails`, `listAllRunDetails` → `listAllSandboxDetails`, `getRunDetails` → `getSandboxDetails`, `deleteRun` → `deleteSandbox`
+
+  **`@drej/workflow`**
+
+  - New package: lazy `WorkflowBuilder` with `sandbox()`, `parallel()`, `sequence()`
+  - Synchronous `SandboxBuilder` queues `exec`, `checkpoint`, `retry`, `when`, `forEach` ops; flushed at `.pipe()` time
+
+  **`@drej/otel`**
+
+  - Rewrite hooks from workflow-step model to sandbox/exec model (`SandboxHooks`)
+  - OTel span attribute `drej.run.id` → `drej.sandbox.id`
+
+- 599d707: Surface OpenSandbox exec and file-system capabilities on the public `Sandbox` API:
+
+  - `sb.exec(cmd, { timeoutMs })` — abort commands after N milliseconds
+  - `sb.proxy(port)` — get a proxied URL and auth headers for an in-sandbox port
+  - `sb.metrics()` — return current CPU and memory usage
+  - `sb.createDirectory(path)` / `sb.deleteDirectory(path)` — direct directory operations
+  - `sb.getFileInfo(path)` — file metadata (size, type, mode, timestamps)
+  - `sb.replaceInFiles(replacements)` — targeted in-place multi-file string replacement
+  - `sb.transfer(path, target)` — copy a file between two `Sandbox` instances
+  - `client.sandbox({ metadata })` — attach arbitrary key-value labels at sandbox creation
+  - `FileInfo` is now exported from `drej`
+
+### Patch Changes
+
+- 10417e3: feat: add drejx CLI with Docker-based OpenSandbox init and registry support; add useServerProxy option to Drej client
+- 416bc72: Remove `SandboxStatus.Failed` and `SandboxStatus.Cancelled` enum values and `SandboxDetails.error` field — these were never derivable from ledger events and could not be produced by any code path.
+- Updated dependencies [10417e3]
+- Updated dependencies [416bc72]
+- Updated dependencies [2bbd8dc]
+  - @drej/core@0.4.0
+  - @drej/opensandbox@0.1.4
+
 ## 0.7.0
 
 ### Minor Changes
@@ -25,7 +93,7 @@
       .exec("git rev-parse HEAD", { capture: sha })
       .searchFiles("**/*.ts", { as: tsFiles })
       .forEach(tsFiles, (s, file) => s.exec(`tsc ${file}`))
-      .exec("deploy.sh", { envs: { GIT_SHA: sha } }),
+      .exec("deploy.sh", { envs: { GIT_SHA: sha } })
   );
   ```
 
@@ -103,7 +171,9 @@
 
   ```ts
   workflow("deploy").sandbox({ image: { uri: "node:20-slim" } }, (s) =>
-    s.exec("git rev-parse HEAD", { capture: "sha" }).exec("echo deploying commit {{sha}}"),
+    s
+      .exec("git rev-parse HEAD", { capture: "sha" })
+      .exec("echo deploying commit {{sha}}")
   );
   ```
 
@@ -131,7 +201,7 @@
     s
       .exec('node -e "process.version" > /tmp/version.txt')
       .readFile("/tmp/version.txt", { as: "version" })
-      .exec("echo Node version: {{version}}"),
+      .exec("echo Node version: {{version}}")
   );
   ```
 
@@ -176,7 +246,7 @@
     s
       .exec("npm ci")
       .snapshot() // checkpoint: deps installed
-      .exec("npm test"),
+      .exec("npm test")
   );
   ```
 

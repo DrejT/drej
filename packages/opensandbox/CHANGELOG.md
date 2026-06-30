@@ -1,5 +1,11 @@
 # @drej/opensandbox
 
+## 0.1.4
+
+### Patch Changes
+
+- 10417e3: feat: add drejx CLI with Docker-based OpenSandbox init and registry support; add useServerProxy option to Drej client
+
 ## 0.1.3
 
 ### Patch Changes

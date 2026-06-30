@@ -12,18 +12,21 @@ export const metadata: Metadata = {
     default: "drej docs",
     template: "%s — drej docs",
   },
-  description: "Sandboxes as objects. Spawn live containers, run code, checkpoint state — from TypeScript.",
+  description:
+    "Sandboxes as objects. Spawn live containers, run code, checkpoint state — from TypeScript.",
   openGraph: {
     type: "website",
     siteName: "drej docs",
     title: "drej docs",
-    description: "Sandboxes as objects. Spawn live containers, run code, checkpoint state — from TypeScript.",
+    description:
+      "Sandboxes as objects. Spawn live containers, run code, checkpoint state — from TypeScript.",
     images: [{ url: "/og.png" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "drej docs",
-    description: "Sandboxes as objects. Spawn live containers, run code, checkpoint state — from TypeScript.",
+    description:
+      "Sandboxes as objects. Spawn live containers, run code, checkpoint state — from TypeScript.",
     images: ["/og.png"],
   },
 };

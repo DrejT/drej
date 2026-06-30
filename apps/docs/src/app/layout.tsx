@@ -7,8 +7,25 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "drej — docs",
-  description: "Workflow orchestration built on OpenSandbox.",
+  metadataBase: new URL("https://docs.drej.dev"),
+  title: {
+    default: "drej docs",
+    template: "%s — drej docs",
+  },
+  description: "Sandboxes as objects. Spawn live containers, run code, checkpoint state — from TypeScript.",
+  openGraph: {
+    type: "website",
+    siteName: "drej docs",
+    title: "drej docs",
+    description: "Sandboxes as objects. Spawn live containers, run code, checkpoint state — from TypeScript.",
+    images: [{ url: "/og.png" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "drej docs",
+    description: "Sandboxes as objects. Spawn live containers, run code, checkpoint state — from TypeScript.",
+    images: ["/og.png"],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

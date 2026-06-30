@@ -1,6 +1,8 @@
 import type { MetadataRoute } from "next";
 import { coreSource, workflowSource, drejxSource, agentSource } from "@/lib/source";
 
+export const dynamic = "force-static";
+
 const BASE_URL = "https://docs.drej.dev";
 
 export default function sitemap(): MetadataRoute.Sitemap {

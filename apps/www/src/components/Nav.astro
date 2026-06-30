@@ -1,0 +1,52 @@
+---
+---
+
+<nav>
+  <a href="/" class="logo">drej</a>
+  <div class="links">
+    <a href="https://docs.drej.dev">Docs</a>
+    <a href="https://github.com/DrejT/drej">GitHub</a>
+  </div>
+</nav>
+
+<style>
+  nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2rem;
+    height: 56px;
+    background: oklch(0.985 0 0 / 0.88);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .logo {
+    font-family: var(--font-mono);
+    font-size: 0.95rem;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+  }
+
+  .links {
+    display: flex;
+    gap: 1.75rem;
+    align-items: center;
+  }
+
+  .links a {
+    font-size: 0.875rem;
+    color: var(--color-muted);
+    transition: color 0.15s;
+  }
+
+  .links a:hover {
+    color: var(--color-fg);
+  }
+</style>

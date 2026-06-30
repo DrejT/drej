@@ -1,0 +1,240 @@
+---
+---
+
+<section class="hero">
+  <div class="inner">
+    <h1 class="heading">Sandboxes as objects.</h1>
+    <p class="subhead">
+      Spawn live containers, run code, checkpoint state —&nbsp;from TypeScript.
+    </p>
+
+    <div class="code-wrapper">
+      <div class="code-header">
+        <div class="dots">
+          <span class="dot red"></span>
+          <span class="dot yellow"></span>
+          <span class="dot green"></span>
+        </div>
+        <span class="filename">index.ts</span>
+        <div class="dots-spacer"></div>
+      </div>
+      <pre
+        class="code-block"
+      ><code><span class="line"><span class="kw">const</span> <span class="var">sb</span> <span class="op">=</span> <span class="kw">await</span> <span class="var">client</span><span class="p">.</span><span class="fn">sandbox</span><span class="p">(&#123;</span></span>
+<span class="line">  <span class="prop">image</span><span class="p">:</span> <span class="str">"node:22"</span><span class="p">,</span></span>
+<span class="line">  <span class="prop">resources</span><span class="p">: &#123;</span> <span class="prop">cpu</span><span class="p">:</span> <span class="str">"500m"</span><span class="p">,</span> <span class="prop">memory</span><span class="p">:</span> <span class="str">"256Mi"</span> <span class="p">&#125;,</span></span>
+<span class="line"><span class="p">&#125;);</span></span>
+<span class="line empty"> </span>
+<span class="line"><span class="kw">await</span> <span class="var">sb</span><span class="p">.</span><span class="fn">exec</span><span class="p">(</span><span class="str">"node index.js"</span><span class="p">);</span></span>
+<span class="line"><span class="kw">await</span> <span class="var">sb</span><span class="p">.</span><span class="fn">checkpoint</span><span class="p">();</span></span>
+<span class="line"><span class="kw">await</span> <span class="var">sb</span><span class="p">.</span><span class="fn">close</span><span class="p">();</span></span>
+</code></pre>
+    </div>
+
+    <div class="ctas">
+      <a href="https://docs.drej.dev" class="btn-primary">Read the docs</a>
+      <a href="https://github.com/DrejT/drej" class="btn-secondary">GitHub →</a>
+    </div>
+  </div>
+</section>
+
+<style>
+  .hero {
+    padding-top: 56px;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+  }
+
+  .inner {
+    width: 100%;
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 2.5rem 2rem;
+  }
+
+  .heading {
+    font-size: clamp(2.5rem, 6vw, 4.5rem);
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    margin-bottom: 0.6rem;
+  }
+
+  .subhead {
+    font-size: clamp(1rem, 2vw, 1.15rem);
+    color: var(--color-muted);
+    max-width: 500px;
+    line-height: 1.65;
+    margin-bottom: 1.75rem;
+  }
+
+  /* Code wrapper */
+  .code-wrapper {
+    border: 1px solid oklch(0.24 0.05 270);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 1.75rem;
+    max-width: 580px;
+    box-shadow:
+      0 0 0 1px oklch(0.17 0.04 266),
+      0 16px 48px oklch(0.17 0.04 266 / 0.32),
+      0 2px 8px oklch(0 0 0 / 0.12);
+  }
+
+  /* Header chrome */
+  .code-header {
+    background: oklch(0.13 0.03 270);
+    padding: 0 1rem;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    border-bottom: 1px solid oklch(0.24 0.05 270);
+  }
+
+  .dots {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex: 1;
+  }
+
+  .dots-spacer {
+    flex: 1;
+  }
+
+  .dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+  }
+
+  .dot.red    { background: oklch(0.63 0.22 25); }
+  .dot.yellow { background: oklch(0.84 0.17 84); }
+  .dot.green  { background: oklch(0.73 0.22 142); }
+
+  .filename {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: oklch(0.41 0 0);
+    letter-spacing: 0.01em;
+  }
+
+  /* Code body */
+  .code-block {
+    background: oklch(0.17 0.04 266);
+    margin: 0;
+    padding: 1.25rem 0;
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    line-height: 1.6;
+    overflow-x: auto;
+    counter-reset: line;
+  }
+
+  code {
+    font-family: inherit;
+  }
+
+  .line {
+    display: block;
+    padding: 0 1.5rem 0 0;
+    counter-increment: line;
+    opacity: 0;
+  }
+
+  .line::before {
+    content: counter(line);
+    display: inline-block;
+    width: 1.75rem;
+    margin-right: 1.5rem;
+    padding-left: 1rem;
+    text-align: right;
+    color: oklch(0.32 0.07 260);
+    font-size: 0.78rem;
+    user-select: none;
+  }
+
+  .line.empty {
+    min-height: 1.6em;
+  }
+
+  /* Syntax tokens — Tokyo Night */
+  .kw   { color: oklch(0.73 0.18 294); }
+  .var  { color: oklch(0.78 0.07 278); }
+  .fn   { color: oklch(0.67 0.16 255); }
+  .str  { color: oklch(0.79 0.17 135); }
+  .prop { color: oklch(0.83 0.12 186); }
+  .op   { color: oklch(0.78 0.07 278); }
+  .p    { color: oklch(0.68 0.07 262); }
+
+  /* CTAs */
+  .ctas {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    opacity: 0;
+  }
+
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.65rem 1.35rem;
+    background: var(--color-accent);
+    color: oklch(1 0 0);
+    font-size: 0.875rem;
+    font-weight: 500;
+    border-radius: var(--radius-btn);
+    transition: background 0.15s;
+  }
+
+  .btn-primary:hover {
+    background: var(--color-accent-hover);
+  }
+
+  .btn-secondary {
+    font-size: 0.875rem;
+    color: var(--color-muted);
+    border-bottom: 1px solid transparent;
+    padding-bottom: 1px;
+    transition: color 0.15s, border-color 0.15s;
+  }
+
+  .btn-secondary:hover {
+    color: var(--color-accent);
+    border-color: var(--color-accent);
+  }
+</style>
+
+<script>
+  import anime from "animejs";
+
+  const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  if (prefersReduced) {
+    document.querySelectorAll<HTMLElement>(".code-block .line").forEach((el) => {
+      el.style.opacity = "1";
+    });
+    const ctas = document.querySelector<HTMLElement>(".ctas");
+    if (ctas) ctas.style.opacity = "1";
+  } else {
+    anime({
+      targets: ".code-block .line",
+      opacity: [0, 1],
+      translateY: [6, 0],
+      delay: anime.stagger(45),
+      duration: 300,
+      easing: "easeOutQuad",
+      complete() {
+        anime({
+          targets: ".ctas",
+          opacity: [0, 1],
+          translateY: [6, 0],
+          duration: 240,
+          easing: "easeOutQuad",
+        });
+      },
+    });
+  }
+</script>

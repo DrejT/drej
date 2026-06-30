@@ -8,6 +8,7 @@
     "deploy": "astro build && wrangler pages deploy"
   },
   "dependencies": {
+    "@astrojs/sitemap": "^3.7.3",
     "@fontsource-variable/geist": "^5.1.1",
     "@fontsource-variable/geist-mono": "^5.2.2",
     "animejs": "^3.2.2",

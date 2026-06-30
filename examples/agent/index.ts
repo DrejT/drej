@@ -12,7 +12,6 @@
  */
 import { Agent } from "@drej/agent";
 
-process.env.GEMINI_API_KEY = "AIzaSyBNyRoeeX_gsuL1Dqj9ElcjBGtw1cAdKhc";
 
 const agent = await Agent.load("./agents/hello-agent.json");
 console.log(`\nSandbox: ${agent.sandboxId}\n${"─".repeat(60)}\n`);

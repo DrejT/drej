@@ -84,7 +84,30 @@ try {
     console.log("(analyze.py not found — Pi may have used a different path)\n");
   }
 
-  // ── 6. New session — Pi forgets the conversation; filesystem is unchanged ────
+  // ── 6. Steer Pi mid-task (new: steer now waits for Pi's RPC acknowledgment) ──
+  // Kick off a prompt that would produce a long response, then redirect Pi
+  // after a short delay. agent.steer() throws if Pi rejects — unlike before
+  // where it was fire-and-forget.
+  console.log("── Pi: long task (steered mid-flight) ───────────────────────────\n");
+  const longStream = agent.prompt(
+    "Write a comprehensive overview of every sorting algorithm ever invented, " +
+      "covering pseudocode and time complexity for each one.",
+  );
+  const steerTimer = setTimeout(async () => {
+    try {
+      await agent.steer("Stop — summarise in 3 bullet points only.");
+      console.log("\n[host] steer acknowledged by Pi\n");
+    } catch {
+      // Pi may have already finished before the steer arrived
+    }
+  }, 1500);
+  for await (const chunk of longStream) {
+    process.stdout.write(chunk);
+  }
+  clearTimeout(steerTimer);
+  console.log("\n");
+
+  // ── 8. New session — Pi forgets the conversation; filesystem is unchanged ────
   await agent.newSession();
 
   await agent.sandbox.writeFile(
@@ -102,7 +125,7 @@ try {
   );
   console.log("Host wrote /workspace/task.md\n");
 
-  // ── 7. Pi reads the task file and completes it ───────────────────────────────
+  // ── 9. Pi reads the task file and completes it ───────────────────────────────
   // Pi's session was reset — it has no memory of the CSV or previous work.
   // But the files are still in the container.
   console.log("── Pi: complete task from task.md ───────────────────────────\n");
@@ -113,7 +136,7 @@ try {
   }
   console.log("\n");
 
-  // ── 8. Host reads the output Pi produced ─────────────────────────────────────
+  // ── 10. Host reads the output Pi produced ────────────────────────────────────
   try {
     const primes = await agent.sandbox.readFile("/workspace/primes.txt");
     console.log("── Host read /workspace/primes.txt ──────────────────────────\n");

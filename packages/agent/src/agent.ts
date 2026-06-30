@@ -4,7 +4,7 @@ import type { Sandbox } from "@drej/core";
 import { readProjectConfig } from "./config";
 import { validateAgentSpec, type AgentSpec } from "./schema";
 import { PiAdapter, resolveEnv, toShellExports } from "./adapters/pi";
-import type { PromptStream } from "./types";
+import type { CompactResult, PiMessage, PiModel, PromptStream, ThinkingLevel } from "./types";
 
 function elapsed(t: number) {
   return `${Date.now() - t}ms`;
@@ -27,7 +27,6 @@ function elapsed(t: number) {
  *
  * const agent = await Agent.load("./agents/my-agent.json");
  * try {
- *   // Pi reads and writes files; the host observes via sandbox.readFile / exec
  *   for await (const chunk of agent.prompt("Explain this codebase")) {
  *     process.stdout.write(chunk);
  *   }
@@ -120,25 +119,105 @@ export class Agent {
     return new Agent(sb, spec, resolvedEnv, adapter);
   }
 
+  // --- streaming ---
+
   /** Send a prompt to Pi and stream the response. Pi manages its own session context. */
   prompt(message: string, opts?: { streamingBehavior?: "steer" | "followUp" }): PromptStream {
     return this._adapter.prompt(message, opts);
   }
 
-  /** Steer Pi's current response mid-flight. Maps to Pi RPC "steer" command. */
+  /** Run a shell command inside Pi's working context and stream stdout. */
+  bash(command: string): PromptStream {
+    return this._adapter.bash(command);
+  }
+
+  // --- ack-only commands ---
+
+  /** Steer Pi's current response mid-flight. Waits for Pi's RPC acknowledgment. */
   async steer(message: string): Promise<void> {
     return this._adapter.steer(message);
   }
 
-  /** Abort Pi's current operation. Maps to Pi RPC "abort" command. */
+  /** Abort Pi's current operation. */
   async abort(): Promise<void> {
     return this._adapter.abort();
   }
 
-  /** Start a fresh Pi session, clearing all prior context. Maps to Pi RPC "new_session". */
+  /** Queue a message to be sent to Pi after it finishes its current task. */
+  async followUp(message: string): Promise<void> {
+    return this._adapter.followUp(message);
+  }
+
+  /** Start a fresh Pi session, clearing all prior context. */
   async newSession(): Promise<void> {
     return this._adapter.newSession();
   }
+
+  /** Set Pi's reasoning level (for models that support extended thinking). */
+  async setThinkingLevel(level: ThinkingLevel): Promise<void> {
+    return this._adapter.setThinkingLevel(level);
+  }
+
+  /** Enable or disable Pi's automatic context compaction. */
+  async setAutoCompaction(enabled: boolean): Promise<void> {
+    return this._adapter.setAutoCompaction(enabled);
+  }
+
+  // --- commands that return data ---
+
+  /**
+   * Fork Pi's session at the given entry ID, creating a new branch.
+   * Returns the text of the forked message and whether the fork was cancelled.
+   */
+  async fork(entryId: string): Promise<{ text: string; cancelled: boolean }> {
+    return this._adapter.fork(entryId);
+  }
+
+  /** Clone the current Pi session into a new branch at the current position. */
+  async clone(): Promise<{ cancelled: boolean }> {
+    return this._adapter.clone();
+  }
+
+  /** Switch Pi to a different session file on disk. */
+  async switchSession(sessionPath: string): Promise<{ cancelled: boolean }> {
+    return this._adapter.switchSession(sessionPath);
+  }
+
+  /** Switch Pi to a specific model. Returns the activated model. */
+  async setModel(provider: string, modelId: string): Promise<PiModel> {
+    return this._adapter.setModel(provider, modelId);
+  }
+
+  /** Cycle Pi to the next available model. Returns null if only one model is configured. */
+  async cycleModel(): Promise<{
+    model: PiModel;
+    thinkingLevel: ThinkingLevel;
+    isScoped: boolean;
+  } | null> {
+    return this._adapter.cycleModel();
+  }
+
+  /** Cycle Pi's thinking level. Returns null if the current model doesn't support thinking. */
+  async cycleThinkingLevel(): Promise<{ level: ThinkingLevel } | null> {
+    return this._adapter.cycleThinkingLevel();
+  }
+
+  /** Manually trigger Pi's context compaction. */
+  async compact(customInstructions?: string): Promise<CompactResult> {
+    return this._adapter.compact(customInstructions);
+  }
+
+  /** Retrieve Pi's full conversation history for the current session. */
+  async getMessages(): Promise<PiMessage[]> {
+    return this._adapter.getMessages();
+  }
+
+  /** List all models available to Pi under the current provider configuration. */
+  async getAvailableModels(): Promise<PiModel[]> {
+    return this._adapter.getAvailableModels();
+  }
+
+  // --- env & lifecycle ---
 
   /**
    * Set or update env vars in the running container. Writes to /etc/drej-env and restarts

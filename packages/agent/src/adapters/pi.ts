@@ -1,6 +1,6 @@
 import type { Sandbox } from "@drej/core";
 import type { AgentSpec } from "../schema";
-import type { PromptStream } from "../types";
+import type { CompactResult, PiMessage, PiModel, PromptStream, ThinkingLevel } from "../types";
 
 // Node.js CJS bridge script — written into the sandbox at /drej-bridge.js and run with `node`.
 // Wraps `pi --mode rpc` in an HTTP server so the host can communicate bidirectionally
@@ -58,8 +58,8 @@ var state = {
   proc: null,        // current ChildProcess
   rl: null,          // readline interface on proc.stdout
   ready: false,      // true once Pi responds to the get_state probe
-  active: null,      // { message, res, text, t0 } — the in-flight prompt, if any
-  queue: [],         // pending prompts: { message, streamingBehavior, res, text, t0 }
+  active: null,      // { message/command, bash, res, text, t0 } — the in-flight prompt/bash, if any
+  queue: [],         // pending items: { message?, command?, bash, streamingBehavior?, res, text, t0 }
   gen: 0,            // incremented on every (re)start; guards against stale async callbacks
   pendingCmds: {},   // id → { res, timer } — commands waiting for Pi's response ack
 };
@@ -163,7 +163,7 @@ function handleLine(line) {
     return;
   }
 
-  // Resolve a pending rpcWithAck (steer, abort, new_session, etc.)
+  // Resolve a pending rpcWithAck (steer, abort, new_session, follow_up, set_model, etc.)
   if (ev.type === "response" && ev.id && state.pendingCmds[ev.id]) {
     var pending = state.pendingCmds[ev.id];
     clearTimeout(pending.timer);
@@ -179,22 +179,40 @@ function handleLine(line) {
   var item = state.active;
   if (!item) return;
 
-  if (ev.type === "message_update") {
-    var aev = ev.assistantMessageEvent || {};
-    if (aev.type === "text_delta" && aev.delta) {
-      item.text += aev.delta;
-      item.res.write("data: " + JSON.stringify({ text: aev.delta }) + "\\n\\n");
+  if (item.bash) {
+    // bash: forward tool_execution_update stdout chunks
+    if (ev.type === "tool_execution_update") {
+      var chunk = ev.output || ev.stdout || "";
+      if (chunk) {
+        item.text += chunk;
+        item.res.write("data: " + JSON.stringify({ text: chunk }) + "\\n\\n");
+      }
+    } else if (ev.type === "agent_end") {
+      log("bash agent_end: " + item.text.length + " chars in " + (Date.now() - item.t0) + "ms");
+      item.res.write("data: [DONE]\\n\\n");
+      item.res.end();
+      state.active = null;
+      flush();
     }
-  } else if (ev.type === "agent_end") {
-    log("agent_end: " + item.text.length + " chars in " + (Date.now() - item.t0) + "ms");
-    item.res.write("data: [DONE]\\n\\n");
-    item.res.end();
-    state.active = null;
-    flush();
+  } else {
+    // prompt: forward text_delta chunks
+    if (ev.type === "message_update") {
+      var aev = ev.assistantMessageEvent || {};
+      if (aev.type === "text_delta" && aev.delta) {
+        item.text += aev.delta;
+        item.res.write("data: " + JSON.stringify({ text: aev.delta }) + "\\n\\n");
+      }
+    } else if (ev.type === "agent_end") {
+      log("agent_end: " + item.text.length + " chars in " + (Date.now() - item.t0) + "ms");
+      item.res.write("data: [DONE]\\n\\n");
+      item.res.end();
+      state.active = null;
+      flush();
+    }
   }
 }
 
-// Send the next queued prompt to Pi, if Pi is ready and idle.
+// Send the next queued item to Pi, if Pi is ready and idle.
 // streamingBehavior items ("steer"/"followUp") bypass the active-slot gate and complete immediately.
 function flush() {
   if (!state.ready || !state.queue.length || !state.proc) return;
@@ -203,8 +221,13 @@ function flush() {
   state.queue.shift();
   if (!item.streamingBehavior) state.active = item;
   item.t0 = Date.now();
-  var rpcMsg = { id: "p" + item.t0, type: "prompt", message: item.message };
-  if (item.streamingBehavior) rpcMsg.streamingBehavior = item.streamingBehavior;
+  var rpcMsg;
+  if (item.bash) {
+    rpcMsg = { id: "b" + item.t0, type: "bash", command: item.command };
+  } else {
+    rpcMsg = { id: "p" + item.t0, type: "prompt", message: item.message };
+    if (item.streamingBehavior) rpcMsg.streamingBehavior = item.streamingBehavior;
+  }
   rpc(rpcMsg);
   item.res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "Connection": "keep-alive" });
   // Injections don't produce their own SSE body — their output arrives via the active prompt's stream.
@@ -231,6 +254,8 @@ http.createServer(function(req, res) {
   if (req.method === "GET") {
     if (req.url === "/health") { respond(res, 200, { ok: state.ready }); return; }
     if (req.url === "/logs")   { res.writeHead(200, { "Content-Type": "text/plain" }); res.end(logBuf.join("\\n")); return; }
+    if (req.url === "/messages") { rpcWithAck({ id: "gm" + Date.now(), type: "get_messages" }, res); return; }
+    if (req.url === "/available-models") { rpcWithAck({ id: "gam" + Date.now(), type: "get_available_models" }, res); return; }
     res.writeHead(404); res.end();
     return;
   }
@@ -245,7 +270,12 @@ http.createServer(function(req, res) {
 
     switch (req.url) {
       case "/prompt":
-        state.queue.push({ message: data.message || "", streamingBehavior: data.streamingBehavior, res: res, text: "", t0: 0 });
+        state.queue.push({ message: data.message || "", streamingBehavior: data.streamingBehavior, bash: false, res: res, text: "", t0: 0 });
+        flush();
+        return;
+
+      case "/bash":
+        state.queue.push({ command: data.command || "", bash: true, res: res, text: "", t0: 0 });
         flush();
         return;
 
@@ -264,8 +294,51 @@ http.createServer(function(req, res) {
         rpcWithAck({ id: "s" + Date.now(), type: "steer", message: data.message || "" }, res);
         return;
 
+      case "/follow-up":
+        rpcWithAck({ id: "fu" + Date.now(), type: "follow_up", message: data.message || "" }, res);
+        return;
+
       case "/new-session":
         rpcWithAck({ id: "n" + Date.now(), type: "new_session" }, res);
+        return;
+
+      case "/fork":
+        rpcWithAck({ id: "fk" + Date.now(), type: "fork", entryId: data.entryId || "" }, res);
+        return;
+
+      case "/clone":
+        rpcWithAck({ id: "cl" + Date.now(), type: "clone" }, res);
+        return;
+
+      case "/switch-session":
+        rpcWithAck({ id: "ss" + Date.now(), type: "switch_session", sessionPath: data.sessionPath || "" }, res);
+        return;
+
+      case "/set-model":
+        rpcWithAck({ id: "sm" + Date.now(), type: "set_model", provider: data.provider || "", modelId: data.modelId || "" }, res);
+        return;
+
+      case "/cycle-model":
+        rpcWithAck({ id: "cm" + Date.now(), type: "cycle_model" }, res);
+        return;
+
+      case "/set-thinking-level":
+        rpcWithAck({ id: "stl" + Date.now(), type: "set_thinking_level", level: data.level || "medium" }, res);
+        return;
+
+      case "/cycle-thinking-level":
+        rpcWithAck({ id: "ctl" + Date.now(), type: "cycle_thinking_level" }, res);
+        return;
+
+      case "/compact": {
+        var compactMsg = { id: "co" + Date.now(), type: "compact" };
+        if (data.customInstructions) compactMsg.customInstructions = data.customInstructions;
+        rpcWithAck(compactMsg, res);
+        return;
+      }
+
+      case "/set-auto-compaction":
+        rpcWithAck({ id: "sac" + Date.now(), type: "set_auto_compaction", enabled: !!data.enabled }, res);
         return;
 
       case "/reload-env":
@@ -352,9 +425,20 @@ export class PiAdapter {
     throw new Error(`drej-bridge did not become ready within ${timeoutMs / 1_000}s`);
   }
 
+  // --- streaming ---
+
   prompt(message: string, opts?: { streamingBehavior?: "steer" | "followUp" }): PromptStream {
-    return promptStream(this.bridgeUrl, message, opts?.streamingBehavior);
+    return sseStream(this.bridgeUrl, "/prompt", {
+      message,
+      streamingBehavior: opts?.streamingBehavior,
+    });
   }
+
+  bash(command: string): PromptStream {
+    return sseStream(this.bridgeUrl, "/bash", { command });
+  }
+
+  // --- ack-only commands ---
 
   async steer(message: string): Promise<void> {
     const res = await fetch(`${this.bridgeUrl}/steer`, {
@@ -369,15 +453,73 @@ export class PiAdapter {
   }
 
   async abort(): Promise<void> {
-    await post(this.bridgeUrl, "/abort", {});
+    await rpcPost(this.bridgeUrl, "/abort");
+  }
+
+  async followUp(message: string): Promise<void> {
+    await rpcPost(this.bridgeUrl, "/follow-up", { message });
   }
 
   async newSession(): Promise<void> {
-    await post(this.bridgeUrl, "/new-session", {});
+    await rpcPost(this.bridgeUrl, "/new-session");
   }
 
+  async setThinkingLevel(level: ThinkingLevel): Promise<void> {
+    await rpcPost(this.bridgeUrl, "/set-thinking-level", { level });
+  }
+
+  async setAutoCompaction(enabled: boolean): Promise<void> {
+    await rpcPost(this.bridgeUrl, "/set-auto-compaction", { enabled });
+  }
+
+  // --- commands that return data ---
+
+  async fork(entryId: string): Promise<{ text: string; cancelled: boolean }> {
+    return rpcPost(this.bridgeUrl, "/fork", { entryId });
+  }
+
+  async clone(): Promise<{ cancelled: boolean }> {
+    return rpcPost(this.bridgeUrl, "/clone");
+  }
+
+  async switchSession(sessionPath: string): Promise<{ cancelled: boolean }> {
+    return rpcPost(this.bridgeUrl, "/switch-session", { sessionPath });
+  }
+
+  async setModel(provider: string, modelId: string): Promise<PiModel> {
+    return rpcPost<PiModel>(this.bridgeUrl, "/set-model", { provider, modelId });
+  }
+
+  async cycleModel(): Promise<{
+    model: PiModel;
+    thinkingLevel: ThinkingLevel;
+    isScoped: boolean;
+  } | null> {
+    return rpcPost(this.bridgeUrl, "/cycle-model");
+  }
+
+  async cycleThinkingLevel(): Promise<{ level: ThinkingLevel } | null> {
+    return rpcPost(this.bridgeUrl, "/cycle-thinking-level");
+  }
+
+  async compact(customInstructions?: string): Promise<CompactResult> {
+    return rpcPost<CompactResult>(this.bridgeUrl, "/compact", { customInstructions });
+  }
+
+  async getMessages(): Promise<PiMessage[]> {
+    const data = await rpcGet<{ messages: PiMessage[] }>(this.bridgeUrl, "/messages");
+    return data.messages;
+  }
+
+  async getAvailableModels(): Promise<PiModel[]> {
+    const data = await rpcGet<{ models: PiModel[] }>(this.bridgeUrl, "/available-models");
+    return data.models;
+  }
+
+  // --- misc ---
+
   async reloadEnv(env: Record<string, string>): Promise<void> {
-    await post(this.bridgeUrl, "/reload-env", { env });
+    await rpcPost(this.bridgeUrl, "/reload-env", { env });
     await this.waitReady();
   }
 
@@ -387,25 +529,36 @@ export class PiAdapter {
   }
 }
 
-async function post(bridgeUrl: string, path: string, body: unknown): Promise<void> {
-  await fetch(`${bridgeUrl}${path}`, {
+// --- HTTP helpers ---
+
+async function rpcPost<T = null>(bridgeUrl: string, path: string, body: unknown = {}): Promise<T> {
+  const res = await fetch(`${bridgeUrl}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(`${path} failed: ${err.error ?? res.status}`);
+  }
+  const payload = (await res.json()) as { ok: boolean; data?: T };
+  return payload.data as T;
 }
 
-async function* promptStream(
-  bridgeUrl: string,
-  message: string,
-  streamingBehavior?: string,
-): PromptStream {
-  const res = await fetch(`${bridgeUrl}/prompt`, {
+async function rpcGet<T>(bridgeUrl: string, path: string): Promise<T> {
+  const res = await fetch(`${bridgeUrl}${path}`);
+  if (!res.ok) throw new Error(`${path} failed: ${res.status}`);
+  const payload = (await res.json()) as { ok: boolean; data?: T };
+  return payload.data as T;
+}
+
+async function* sseStream(bridgeUrl: string, path: string, body: unknown): PromptStream {
+  const res = await fetch(`${bridgeUrl}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, streamingBehavior }),
+    body: JSON.stringify(body),
   });
-  if (!res.ok || !res.body) throw new Error(`Bridge /prompt error: ${res.status}`);
+  if (!res.ok || !res.body) throw new Error(`Bridge ${path} error: ${res.status}`);
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();

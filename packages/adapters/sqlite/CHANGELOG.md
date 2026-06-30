@@ -1,5 +1,54 @@
 # @drej/sqlite
 
+## 0.3.0
+
+### Minor Changes
+
+- 5a63143: Add named checkpoints: `sb.listCheckpoints()` returns all checkpoints in creation order with `snapshotId`, `tag`, and `createdAt`. `client.resume(id, { tag })` resumes from a specific named checkpoint instead of the most recent. New exported types: `CheckpointInfo`, `ResumeOptions`. Storage adapters gain `listCheckpoints()`.
+- 2ed4de7: Add sandbox environments: define a named environment with a setup recipe, build it once into a snapshot, and spawn cheap isolated sandboxes from it on demand. New API: `client.environment(name, opts)` returns an `Environment` with `.sandbox()`, `.rebuild()`, and `.info()`. `client.environments.list/delete` manage cached records. Storage adapters gain `getEnvironment`, `saveEnvironment`, `deleteEnvironment`, `listEnvironments`.
+- 2bbd8dc: refactor: pivot drej to sandbox execution substrate
+
+  **`drej`**
+
+  - Remove `client.run()`, `WorkflowRun`, builder API
+  - Add `client.sandbox()` returning a live `Sandbox` object; `sandboxId` is the OpenSandbox container ID and ledger key
+  - Add `client.resume(sandboxId)` for checkpoint-based replay
+  - Add `client.sandboxes.*` for listing and managing sandbox history
+
+  **`@drej/core`**
+
+  - Remove `steps/`, `workflow.ts`, `validate.ts`
+  - Add `Sandbox` class with `exec()`, `execCode()`, `writeFile()`, `readFile()`, `checkpoint()`, `close()`, and more
+  - Add `ExecHandle` — `PromiseLike<ExecResult>` with `pipe()`, `stdout()`, `result()`; supports streaming and ledger-replay modes
+  - Add `SandboxHooks` for observability (`onSandboxCreated`, `onExecStart`, `onExecComplete`, `onCheckpoint`, `onSandboxClosed`, `onSandboxFailed`)
+  - New `LedgerEvent` variants: `sandbox_created`, `exec_start`, `exec_event`, `exec_complete`, `checkpoint_created`, `sandbox_closed`
+  - Rename `RunStatus` → `SandboxStatus`, `RunDetails` → `SandboxDetails`, `ListRunsOptions` → `ListSandboxOptions`
+  - `LedgerEntry` fields: `workflowName` → `name`, `runId` → `sandboxId`
+
+  **`@drej/sqlite` / `@drej/postgres`**
+
+  - Schema: columns `run_id` → `sandbox_id`, `wf_name` → `name`
+  - AGG query now derives status from `sandbox_created` / `sandbox_closed` events and counts `exec_complete` for `execCount`
+  - `lastCheckpoint()` now queries `checkpoint_created` (was querying the old `checkpoint` event)
+  - Adapter methods renamed: `listRunDetails` → `listSandboxDetails`, `listAllRunDetails` → `listAllSandboxDetails`, `getRunDetails` → `getSandboxDetails`, `deleteRun` → `deleteSandbox`
+
+  **`@drej/workflow`**
+
+  - New package: lazy `WorkflowBuilder` with `sandbox()`, `parallel()`, `sequence()`
+  - Synchronous `SandboxBuilder` queues `exec`, `checkpoint`, `retry`, `when`, `forEach` ops; flushed at `.pipe()` time
+
+  **`@drej/otel`**
+
+  - Rewrite hooks from workflow-step model to sandbox/exec model (`SandboxHooks`)
+  - OTel span attribute `drej.run.id` → `drej.sandbox.id`
+
+### Patch Changes
+
+- Updated dependencies [10417e3]
+- Updated dependencies [416bc72]
+- Updated dependencies [2bbd8dc]
+  - @drej/core@0.4.0
+
 ## 0.2.0
 
 ### Minor Changes

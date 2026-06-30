@@ -1,5 +1,52 @@
 # @drej/core
 
+## 0.4.0
+
+### Minor Changes
+
+- 2bbd8dc: refactor: pivot drej to sandbox execution substrate
+
+  **`drej`**
+
+  - Remove `client.run()`, `WorkflowRun`, builder API
+  - Add `client.sandbox()` returning a live `Sandbox` object; `sandboxId` is the OpenSandbox container ID and ledger key
+  - Add `client.resume(sandboxId)` for checkpoint-based replay
+  - Add `client.sandboxes.*` for listing and managing sandbox history
+
+  **`@drej/core`**
+
+  - Remove `steps/`, `workflow.ts`, `validate.ts`
+  - Add `Sandbox` class with `exec()`, `execCode()`, `writeFile()`, `readFile()`, `checkpoint()`, `close()`, and more
+  - Add `ExecHandle` — `PromiseLike<ExecResult>` with `pipe()`, `stdout()`, `result()`; supports streaming and ledger-replay modes
+  - Add `SandboxHooks` for observability (`onSandboxCreated`, `onExecStart`, `onExecComplete`, `onCheckpoint`, `onSandboxClosed`, `onSandboxFailed`)
+  - New `LedgerEvent` variants: `sandbox_created`, `exec_start`, `exec_event`, `exec_complete`, `checkpoint_created`, `sandbox_closed`
+  - Rename `RunStatus` → `SandboxStatus`, `RunDetails` → `SandboxDetails`, `ListRunsOptions` → `ListSandboxOptions`
+  - `LedgerEntry` fields: `workflowName` → `name`, `runId` → `sandboxId`
+
+  **`@drej/sqlite` / `@drej/postgres`**
+
+  - Schema: columns `run_id` → `sandbox_id`, `wf_name` → `name`
+  - AGG query now derives status from `sandbox_created` / `sandbox_closed` events and counts `exec_complete` for `execCount`
+  - `lastCheckpoint()` now queries `checkpoint_created` (was querying the old `checkpoint` event)
+  - Adapter methods renamed: `listRunDetails` → `listSandboxDetails`, `listAllRunDetails` → `listAllSandboxDetails`, `getRunDetails` → `getSandboxDetails`, `deleteRun` → `deleteSandbox`
+
+  **`@drej/workflow`**
+
+  - New package: lazy `WorkflowBuilder` with `sandbox()`, `parallel()`, `sequence()`
+  - Synchronous `SandboxBuilder` queues `exec`, `checkpoint`, `retry`, `when`, `forEach` ops; flushed at `.pipe()` time
+
+  **`@drej/otel`**
+
+  - Rewrite hooks from workflow-step model to sandbox/exec model (`SandboxHooks`)
+  - OTel span attribute `drej.run.id` → `drej.sandbox.id`
+
+### Patch Changes
+
+- 10417e3: feat: add drejx CLI with Docker-based OpenSandbox init and registry support; add useServerProxy option to Drej client
+- 416bc72: Remove `SandboxStatus.Failed` and `SandboxStatus.Cancelled` enum values and `SandboxDetails.error` field — these were never derivable from ledger events and could not be produced by any code path.
+- Updated dependencies [10417e3]
+  - @drej/opensandbox@0.1.4
+
 ## 0.3.0
 
 ### Minor Changes
@@ -25,7 +72,7 @@
       .exec("git rev-parse HEAD", { capture: sha })
       .searchFiles("**/*.ts", { as: tsFiles })
       .forEach(tsFiles, (s, file) => s.exec(`tsc ${file}`))
-      .exec("deploy.sh", { envs: { GIT_SHA: sha } }),
+      .exec("deploy.sh", { envs: { GIT_SHA: sha } })
   );
   ```
 
@@ -77,7 +124,9 @@
 
   ```ts
   workflow("deploy").sandbox({ image: { uri: "node:20-slim" } }, (s) =>
-    s.exec("git rev-parse HEAD", { capture: "sha" }).exec("echo deploying commit {{sha}}"),
+    s
+      .exec("git rev-parse HEAD", { capture: "sha" })
+      .exec("echo deploying commit {{sha}}")
   );
   ```
 
@@ -92,7 +141,7 @@
     s
       .exec('node -e "process.version" > /tmp/version.txt')
       .readFile("/tmp/version.txt", { as: "version" })
-      .exec("echo Node version: {{version}}"),
+      .exec("echo Node version: {{version}}")
   );
   ```
 
@@ -137,7 +186,7 @@
     s
       .exec("npm ci")
       .snapshot() // checkpoint: deps installed
-      .exec("npm test"),
+      .exec("npm test")
   );
   ```
 

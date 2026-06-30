@@ -8,3 +8,4 @@ plans/
 *.db-shm
 *.db-wal
 .drej
+apps/www/.astro/

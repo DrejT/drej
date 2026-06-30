@@ -4,7 +4,8 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
-    "preview": "astro preview"
+    "preview": "astro preview",
+    "deploy": "astro build && wrangler pages deploy"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.1.1",

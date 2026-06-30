@@ -121,8 +121,8 @@ export class Agent {
   }
 
   /** Send a prompt to Pi and stream the response. Pi manages its own session context. */
-  prompt(message: string): PromptStream {
-    return this._adapter.prompt(message);
+  prompt(message: string, opts?: { streamingBehavior?: "steer" | "followUp" }): PromptStream {
+    return this._adapter.prompt(message, opts);
   }
 
   /** Steer Pi's current response mid-flight. Maps to Pi RPC "steer" command. */

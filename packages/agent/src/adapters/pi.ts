@@ -55,22 +55,35 @@ function log(msg) {
 // --- Pi process state ---
 // All mutable state lives in one object so it's easy to see what changes on restart.
 var state = {
-  proc: null,   // current ChildProcess
-  rl: null,     // readline interface on proc.stdout
-  ready: false, // true once Pi responds to the get_state probe
-  active: null, // { message, res, text, t0 } — the in-flight prompt, if any
-  queue: [],    // pending prompts: { message, res, text, t0 }
-  gen: 0,       // incremented on every (re)start; guards against stale async callbacks
+  proc: null,        // current ChildProcess
+  rl: null,          // readline interface on proc.stdout
+  ready: false,      // true once Pi responds to the get_state probe
+  active: null,      // { message, res, text, t0 } — the in-flight prompt, if any
+  queue: [],         // pending prompts: { message, streamingBehavior, res, text, t0 }
+  gen: 0,            // incremented on every (re)start; guards against stale async callbacks
+  pendingCmds: {},   // id → { res, timer } — commands waiting for Pi's response ack
 };
 
 function startPi() {
-  // Tear down the previous instance before spawning a new one.
+  // End any in-flight SSE stream so the client isn't left hanging.
+  if (state.active) {
+    state.active.res.write("data: " + JSON.stringify({ error: "pi restarted" }) + "\\n\\n");
+    state.active.res.end();
+    state.active = null;
+  }
+  // Fail any commands waiting for a Pi ack.
+  Object.keys(state.pendingCmds).forEach(function(id) {
+    var p = state.pendingCmds[id];
+    clearTimeout(p.timer);
+    respond(p.res, 500, { ok: false, error: "pi restarted" });
+  });
+  state.pendingCmds = {};
+
   if (state.rl) { try { state.rl.close(); } catch (e) {} }
   if (state.proc) { try { state.proc.kill("SIGTERM"); } catch (e) {} }
   state.proc = null;
   state.rl   = null;
   state.ready  = false;
-  state.active = null;
   // NB: state.queue is intentionally preserved — queued prompts are re-sent to the new Pi.
 
   loadEnv();
@@ -98,8 +111,15 @@ function startPi() {
     log("pi exit gen=" + gen + " code=" + code);
     state.proc  = null;
     state.ready = false;
+    Object.keys(state.pendingCmds).forEach(function(id) {
+      var p = state.pendingCmds[id];
+      clearTimeout(p.timer);
+      respond(p.res, 500, { ok: false, error: "pi exited" });
+    });
+    state.pendingCmds = {};
     if (state.active) {
-      respond(state.active.res, 500, { error: "pi exited" });
+      state.active.res.write("data: " + JSON.stringify({ error: "pi exited" }) + "\\n\\n");
+      state.active.res.end();
       state.active = null;
     }
   });
@@ -117,6 +137,18 @@ function rpc(msg) {
   if (state.proc) state.proc.stdin.write(JSON.stringify(msg) + "\\n");
 }
 
+// Send an RPC command and hold the HTTP response open until Pi acks it.
+function rpcWithAck(msg, res) {
+  state.pendingCmds[msg.id] = { res: res };
+  rpc(msg);
+  state.pendingCmds[msg.id].timer = setTimeout(function() {
+    if (state.pendingCmds[msg.id]) {
+      respond(state.pendingCmds[msg.id].res, 504, { error: "timeout" });
+      delete state.pendingCmds[msg.id];
+    }
+  }, 5000);
+}
+
 // Dispatch a single line of output from Pi's stdout.
 function handleLine(line) {
   if (!line.trim()) return;
@@ -131,26 +163,56 @@ function handleLine(line) {
     return;
   }
 
+  // Resolve a pending rpcWithAck (steer, abort, new_session, etc.)
+  if (ev.type === "response" && ev.id && state.pendingCmds[ev.id]) {
+    var pending = state.pendingCmds[ev.id];
+    clearTimeout(pending.timer);
+    delete state.pendingCmds[ev.id];
+    if (ev.success) {
+      respond(pending.res, 200, { ok: true, data: ev.data || null });
+    } else {
+      respond(pending.res, 400, { ok: false, error: ev.error || "unknown" });
+    }
+    return;
+  }
+
   var item = state.active;
   if (!item) return;
 
   if (ev.type === "message_update") {
     var aev = ev.assistantMessageEvent || {};
-    if (aev.type === "text_delta" && aev.delta) item.text += aev.delta;
+    if (aev.type === "text_delta" && aev.delta) {
+      item.text += aev.delta;
+      item.res.write("data: " + JSON.stringify({ text: aev.delta }) + "\\n\\n");
+    }
   } else if (ev.type === "agent_end") {
     log("agent_end: " + item.text.length + " chars in " + (Date.now() - item.t0) + "ms");
-    respond(item.res, 200, { text: item.text, aborted: false });
+    item.res.write("data: [DONE]\\n\\n");
+    item.res.end();
     state.active = null;
     flush();
   }
 }
 
 // Send the next queued prompt to Pi, if Pi is ready and idle.
+// streamingBehavior items ("steer"/"followUp") bypass the active-slot gate and complete immediately.
 function flush() {
-  if (!state.ready || state.active || !state.queue.length || !state.proc) return;
-  var item = state.active = state.queue.shift();
+  if (!state.ready || !state.queue.length || !state.proc) return;
+  var item = state.queue[0];
+  if (state.active && !item.streamingBehavior) return;
+  state.queue.shift();
+  if (!item.streamingBehavior) state.active = item;
   item.t0 = Date.now();
-  rpc({ id: "p" + item.t0, type: "prompt", message: item.message });
+  var rpcMsg = { id: "p" + item.t0, type: "prompt", message: item.message };
+  if (item.streamingBehavior) rpcMsg.streamingBehavior = item.streamingBehavior;
+  rpc(rpcMsg);
+  item.res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "Connection": "keep-alive" });
+  // Injections don't produce their own SSE body — their output arrives via the active prompt's stream.
+  if (item.streamingBehavior) {
+    item.res.write("data: [DONE]\\n\\n");
+    item.res.end();
+    flush();
+  }
 }
 
 // HTTP response helpers.
@@ -183,28 +245,27 @@ http.createServer(function(req, res) {
 
     switch (req.url) {
       case "/prompt":
-        state.queue.push({ message: data.message || "", res: res, text: "", t0: 0 });
+        state.queue.push({ message: data.message || "", streamingBehavior: data.streamingBehavior, res: res, text: "", t0: 0 });
         flush();
         return;
 
       case "/abort":
-        rpc({ id: "a" + Date.now(), type: "abort" });
+        // End the active SSE stream immediately, drain the queue, then wait for Pi's ack.
         state.queue.length = 0;
         if (state.active) {
-          respond(state.active.res, 200, { text: state.active.text, aborted: true });
+          state.active.res.write("data: [DONE]\\n\\n");
+          state.active.res.end();
           state.active = null;
         }
-        respond(res, 200, { ok: true });
+        rpcWithAck({ id: "a" + Date.now(), type: "abort" }, res);
         return;
 
       case "/steer":
-        rpc({ id: "s" + Date.now(), type: "steer", message: data.message || "" });
-        respond(res, 200, { ok: true });
+        rpcWithAck({ id: "s" + Date.now(), type: "steer", message: data.message || "" }, res);
         return;
 
       case "/new-session":
-        rpc({ id: "n" + Date.now(), type: "new_session" });
-        respond(res, 200, { ok: true });
+        rpcWithAck({ id: "n" + Date.now(), type: "new_session" }, res);
         return;
 
       case "/reload-env":
@@ -291,12 +352,20 @@ export class PiAdapter {
     throw new Error(`drej-bridge did not become ready within ${timeoutMs / 1_000}s`);
   }
 
-  prompt(message: string): PromptStream {
-    return promptStream(this.bridgeUrl, message);
+  prompt(message: string, opts?: { streamingBehavior?: "steer" | "followUp" }): PromptStream {
+    return promptStream(this.bridgeUrl, message, opts?.streamingBehavior);
   }
 
   async steer(message: string): Promise<void> {
-    await post(this.bridgeUrl, "/steer", { message });
+    const res = await fetch(`${this.bridgeUrl}/steer`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message }),
+    });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(`steer failed: ${body.error ?? res.status}`);
+    }
   }
 
   async abort(): Promise<void> {
@@ -326,13 +395,35 @@ async function post(bridgeUrl: string, path: string, body: unknown): Promise<voi
   });
 }
 
-async function* promptStream(bridgeUrl: string, message: string): PromptStream {
+async function* promptStream(
+  bridgeUrl: string,
+  message: string,
+  streamingBehavior?: string,
+): PromptStream {
   const res = await fetch(`${bridgeUrl}/prompt`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, streamingBehavior }),
   });
-  if (!res.ok) throw new Error(`Bridge /prompt error: ${res.status}`);
-  const body = (await res.json()) as { text?: string; aborted?: boolean };
-  if (body.text) yield body.text;
+  if (!res.ok || !res.body) throw new Error(`Bridge /prompt error: ${res.status}`);
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split("\n");
+    buf = lines.pop()!;
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const payload = line.slice(6).trim();
+      if (payload === "[DONE]") return;
+      const ev = JSON.parse(payload) as { text?: string; error?: string };
+      if (ev.error) throw new Error(`Bridge error: ${ev.error}`);
+      if (ev.text) yield ev.text;
+    }
+  }
 }

@@ -74,6 +74,11 @@ async function ensureProjectConfig(): Promise<void> {
       useServerProxy: true,
       apiKey: "",
       adapterPath: "./.drej/ledger.db",
+      agentsDir: "./agents",
+      defaults: {
+        resources: { cpu: "1000m", memory: "1Gi" },
+      },
     });
+    console.log("Created drej.config.json");
   }
 }

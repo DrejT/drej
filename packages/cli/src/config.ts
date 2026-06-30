@@ -8,19 +8,37 @@ export interface DrejxConfig {
   useServerProxy: boolean;
   apiKey: string;
   adapterPath: string;
+  agentsDir: string;
+  defaults: {
+    resources: { cpu: string; memory: string };
+  };
 }
 
 const CONFIG_DIR = ".drej";
+const CONFIG_FILE = "drej.config.json";
 
 export function configPath(): string {
-  return join(CONFIG_DIR, "config.json");
+  return CONFIG_FILE;
 }
 
 export async function readConfig(): Promise<DrejxConfig> {
   const file = Bun.file(configPath());
   if (!(await file.exists()))
-    throw new Error("No .drej/config.json found — run 'drejx init' first");
-  return file.json() as Promise<DrejxConfig>;
+    throw new Error("No drej.config.json found — run 'drejx init' first");
+  const data = (await file.json()) as Partial<DrejxConfig>;
+  return {
+    serverUrl: data.serverUrl ?? "http://localhost:8080",
+    useServerProxy: data.useServerProxy ?? true,
+    apiKey: data.apiKey ?? "",
+    adapterPath: data.adapterPath ?? "./.drej/ledger.db",
+    agentsDir: data.agentsDir ?? "./agents",
+    defaults: {
+      resources: {
+        cpu: data.defaults?.resources?.cpu ?? "1000m",
+        memory: data.defaults?.resources?.memory ?? "1Gi",
+      },
+    },
+  };
 }
 
 export async function writeConfig(config: DrejxConfig): Promise<void> {

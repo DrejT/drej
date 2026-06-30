@@ -38,7 +38,7 @@ describe("serverConfigPath", () => {
 });
 
 describe("configPath", () => {
-  it("equals .drej/config.json", () => {
-    expect(configPath()).toBe(".drej/config.json");
+  it("equals drej.config.json", () => {
+    expect(configPath()).toBe("drej.config.json");
   });
 });

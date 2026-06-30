@@ -1,27 +1,38 @@
-import { readSandboxes } from "../sandboxes.js";
+import { readdirSync, existsSync } from "fs";
+import { join } from "path";
+import { readConfig } from "../config.js";
+import type { AgentSpec } from "../schema.js";
 
 export async function list(): Promise<void> {
-  const entries = await readSandboxes();
-  if (entries.length === 0) {
-    console.log("No sandboxes found. Run 'drejx add <url>' to provision one.");
+  const config = await readConfig();
+  const dir = config.agentsDir;
+
+  if (!existsSync(dir)) {
+    console.log(`No agents dir found at '${dir}'. Run 'drejx add <url>' to add an agent spec.`);
     return;
   }
 
-  const now = Date.now();
-  const cols = [20, 18, 6, 0] as const;
-  const header = ["NAME", "SANDBOX ID", "AGE", "URL"];
-  console.log(header.map((h, i) => (cols[i] ? h.padEnd(cols[i]) : h)).join("  "));
-  console.log("-".repeat(70));
+  const files = readdirSync(dir).filter((f) => f.endsWith(".json"));
 
-  for (const e of entries) {
-    const ageSec = Math.floor((now - new Date(e.createdAt).getTime()) / 1_000);
-    const age =
-      ageSec < 60
-        ? `${ageSec}s`
-        : ageSec < 3_600
-          ? `${Math.floor(ageSec / 60)}m`
-          : `${Math.floor(ageSec / 3_600)}h`;
-    const row = [e.name, e.sandboxId.slice(0, 16), age, e.url];
-    console.log(row.map((v, i) => (cols[i] ? v.padEnd(cols[i]) : v)).join("  "));
+  if (files.length === 0) {
+    console.log("No agent specs found. Run 'drejx add <url>' to add one.");
+    return;
+  }
+
+  const cols = [20, 8, 0] as const;
+  const header = ["NAME", "CLI", "DESCRIPTION"];
+  console.log(header.map((h, i) => (cols[i] ? h.padEnd(cols[i]) : h)).join("  "));
+  console.log("-".repeat(60));
+
+  for (const file of files) {
+    try {
+      const spec = (await Bun.file(join(dir, file)).json()) as Partial<AgentSpec>;
+      const name = (spec.name ?? file.replace(/\.json$/, "")).slice(0, 19);
+      const cli = (spec.cli ?? "?").slice(0, 7);
+      const desc = spec.description ?? spec.title ?? "";
+      console.log([name.padEnd(cols[0]), cli.padEnd(cols[1]), desc].join("  "));
+    } catch {
+      console.log(`${file.replace(/\.json$/, "").padEnd(cols[0])}  (unreadable)`);
+    }
   }
 }

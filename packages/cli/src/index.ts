@@ -15,7 +15,7 @@ async function main(): Promise<void> {
         const i = argv.indexOf(name);
         return i !== -1 ? argv[i + 1] : undefined;
       };
-      await add(url, { name: flag("--name"), server: flag("--server") });
+      await add(url, { name: flag("--name") });
       break;
     }
     case "list": {
@@ -29,14 +29,13 @@ async function main(): Promise<void> {
       break;
     }
     default: {
-      console.log(`drejx — drej registry CLI
+      console.log(`drejx — drej agent registry CLI
 
 Usage:
-  drejx init                           Start OpenSandbox locally via Docker
-  drejx add <url> [--name <n>]         Fetch and provision a registry sandbox
-  drejx add <url> [--server <url>]     Use a custom OpenSandbox server
-  drejx list                           List provisioned sandboxes
-  drejx remove <name>                  Remove a sandbox entry
+  drejx init                        Start OpenSandbox locally via Docker
+  drejx add <url> [--name <n>]      Fetch and save an agent spec locally
+  drejx list                        List saved agent specs
+  drejx remove <name>               Remove a saved agent spec
 `);
       if (cmd) process.exit(1);
     }

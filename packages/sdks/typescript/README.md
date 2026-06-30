@@ -81,7 +81,10 @@ await sb.transfer("/app/output.json", anotherSb);
 ## Checkpoint and resume
 
 ```ts
-const sb = await client.sandbox({ image: "ubuntu:22.04", resources: { cpu: "500m", memory: "512Mi" } });
+const sb = await client.sandbox({
+  image: "ubuntu:22.04",
+  resources: { cpu: "500m", memory: "512Mi" },
+});
 
 await sb.exec("apt-get install -y curl");
 await sb.checkpoint("after-setup");
@@ -148,11 +151,11 @@ const { exitCode } = await sb.exec("exit 1", { strict: false });
 
 ```ts
 const client = new Drej({
-  baseUrl: "http://localhost:8080",   // OpenSandbox server URL
-  apiKey: "",                          // API key (empty for local dev)
+  baseUrl: "http://localhost:8080", // OpenSandbox server URL
+  apiKey: "", // API key (empty for local dev)
   adapter: new SQLiteAdapter("./drej.db"),
-  maxConcurrency: 4,                   // cap simultaneous active sandboxes
-  useServerProxy: true,                // required when server runs in Docker via drejx init
+  maxConcurrency: 4, // cap simultaneous active sandboxes
+  useServerProxy: true, // required when server runs in Docker via drejx init
 });
 ```
 

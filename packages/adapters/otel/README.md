@@ -22,10 +22,10 @@ const sb = await client.sandbox({
 
 ### Emitted spans
 
-| Span | Emitted on |
-|---|---|
-| `sandbox.run` | Sandbox created → closed |
-| `sandbox.exec` | Each `sb.exec()` call |
+| Span                 | Emitted on                  |
+| -------------------- | --------------------------- |
+| `sandbox.run`        | Sandbox created → closed    |
+| `sandbox.exec`       | Each `sb.exec()` call       |
 | `sandbox.checkpoint` | Each `sb.checkpoint()` call |
 
 ### Custom span options
@@ -33,7 +33,7 @@ const sb = await client.sandbox({
 ```ts
 otelHooks(tracer, {
   attributes: { "deployment.env": "production" },
-})
+});
 ```
 
 ---

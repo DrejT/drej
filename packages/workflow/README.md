@@ -18,14 +18,11 @@ bun add @drej/workflow
 import { workflow } from "@drej/workflow";
 
 await workflow(client)
-  .sandbox(
-    { image: "node:20-slim", resources: { cpu: "1", memory: "512Mi" } },
-    (sb) => {
-      sb.exec("npm ci");
-      sb.exec("npm run build");
-      sb.exec("npm test");
-    },
-  )
+  .sandbox({ image: "node:20-slim", resources: { cpu: "1", memory: "512Mi" } }, (sb) => {
+    sb.exec("npm ci");
+    sb.exec("npm run build");
+    sb.exec("npm test");
+  })
   .pipe(process.stdout);
 ```
 
@@ -34,9 +31,13 @@ await workflow(client)
 ## Retry
 
 ```ts
-sb.retry(3, (r) => {
-  r.exec("flaky-network-call");
-}, { delayMs: 500, backoff: "exponential" });
+sb.retry(
+  3,
+  (r) => {
+    r.exec("flaky-network-call");
+  },
+  { delayMs: 500, backoff: "exponential" },
+);
 ```
 
 ## Conditional branching
@@ -55,9 +56,13 @@ sb.when(
 ## Fan-out
 
 ```ts
-sb.forEach(["a.ts", "b.ts", "c.ts"], (s, file) => {
-  s.exec(`tsc --noEmit ${file}`);
-}, { concurrency: 4 });
+sb.forEach(
+  ["a.ts", "b.ts", "c.ts"],
+  (s, file) => {
+    s.exec(`tsc --noEmit ${file}`);
+  },
+  { concurrency: 4 },
+);
 ```
 
 ## Capture a value
@@ -105,12 +110,17 @@ await workflow(client)
     {
       image: "node:20-slim",
       resources: { cpu: "1", memory: "512Mi" },
-      run: (sb) => { sb.exec("npm ci"); sb.exec("npm run build"); },
+      run: (sb) => {
+        sb.exec("npm ci");
+        sb.exec("npm run build");
+      },
     },
     {
       image: "alpine:3",
       resources: { cpu: "500m", memory: "256Mi" },
-      run: (sb) => { sb.exec("ls /app/dist"); },
+      run: (sb) => {
+        sb.exec("ls /app/dist");
+      },
     },
   ])
   .pipe(process.stdout);

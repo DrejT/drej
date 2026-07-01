@@ -15,7 +15,9 @@ import { Agent, textOnly, type AgentEvent } from "@drej/agent";
 const SPEC = "./agents/hello-agent.json";
 
 const agent = await Agent.load(SPEC);
-console.log(`\nSandbox: ${agent.sandboxId}  fromSnapshot=${agent.fromSnapshot}\n${"─".repeat(60)}\n`);
+console.log(
+  `\nSandbox: ${agent.sandboxId}  fromSnapshot=${agent.fromSnapshot}\n${"─".repeat(60)}\n`,
+);
 
 // Write a small Python script for Pi to discover and run.
 await agent.sandbox.writeFile(
@@ -75,7 +77,9 @@ console.log(`tool_end    events: ${ends.length}`);
 console.log(`text output length: ${textOutput.length} chars`);
 
 // Tool names seen
-const toolNames = [...new Set(starts.map((e) => (e as Extract<AgentEvent, { type: "tool_start" }>).toolName))];
+const toolNames = [
+  ...new Set(starts.map((e) => (e as Extract<AgentEvent, { type: "tool_start" }>).toolName)),
+];
 console.log(`tools used: ${toolNames.join(", ") || "(none)"}`);
 
 if (starts.length > 0 && ends.length > 0 && textOutput.length > 0) {

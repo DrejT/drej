@@ -30,9 +30,11 @@ try {
     "/workspace/data.csv",
     ["date,temp_c", "2024-01-15,22.3", "2024-01-16,19.8", "2024-01-17,25.1"].join("\n") + "\n",
   );
-  for await (const chunk of textOnly(agent.prompt(
-    "Here is some CSV data:\ndate,temp_c\n2024-01-15,22.3\n2024-01-16,19.8\n2024-01-17,25.1\nTell me the min and max temp_c in one sentence.",
-  ))) {
+  for await (const chunk of textOnly(
+    agent.prompt(
+      "Here is some CSV data:\ndate,temp_c\n2024-01-15,22.3\n2024-01-16,19.8\n2024-01-17,25.1\nTell me the min and max temp_c in one sentence.",
+    ),
+  )) {
     process.stdout.write(chunk);
   }
   console.log("\n");
@@ -40,7 +42,9 @@ try {
   // ── 2. bash ───────────────────────────────────────────────────────────────────
   // Runs a shell command inside Pi's working context and streams stdout.
   section("2. bash — run shell command via Pi");
-  for await (const chunk of textOnly(agent.bash("ls -1 /workspace && echo '---' && python3 --version"))) {
+  for await (const chunk of textOnly(
+    agent.bash("ls -1 /workspace && echo '---' && python3 --version"),
+  )) {
     process.stdout.write(chunk);
   }
   console.log("\n");
@@ -101,9 +105,11 @@ try {
 
   // ── 8. steer mid-flight ───────────────────────────────────────────────────────
   section("8. steer — redirect Pi mid-response");
-  const longStream = textOnly(agent.prompt(
-    "Write a detailed essay on every sorting algorithm ever invented with pseudocode.",
-  ));
+  const longStream = textOnly(
+    agent.prompt(
+      "Write a detailed essay on every sorting algorithm ever invented with pseudocode.",
+    ),
+  );
   const steerTimer = setTimeout(async () => {
     try {
       await agent.steer("Stop — give me just 3 bullet points instead.");
@@ -176,9 +182,9 @@ try {
   console.log("Session reset.\n");
 
   await agent.sandbox.writeFile("/workspace/hello.py", 'print("hello from Pi sandbox")\n');
-  for await (const chunk of textOnly(agent.prompt(
-    "Run /workspace/hello.py with python3 and tell me what it prints.",
-  ))) {
+  for await (const chunk of textOnly(
+    agent.prompt("Run /workspace/hello.py with python3 and tell me what it prints."),
+  )) {
     process.stdout.write(chunk);
   }
   console.log("\n");

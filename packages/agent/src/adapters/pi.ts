@@ -1,6 +1,13 @@
 import type { Sandbox } from "@drej/core";
 import type { AgentSpec } from "../schema";
-import type { AgentEvent, AgentStream, CompactResult, PiMessage, PiModel, ThinkingLevel } from "../types";
+import type {
+  AgentEvent,
+  AgentStream,
+  CompactResult,
+  PiMessage,
+  PiModel,
+  ThinkingLevel,
+} from "../types";
 
 // Node.js CJS bridge script — written into the sandbox at /drej-bridge.js and run with `node`.
 // Wraps `pi --mode rpc` in an HTTP server so the host can communicate bidirectionally

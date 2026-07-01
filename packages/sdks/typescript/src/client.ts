@@ -19,7 +19,7 @@ import {
   type EnvironmentSandboxOptions,
 } from "./environment";
 
-export { Sandbox } from "@drej/core";
+export { Sandbox, BashSession } from "@drej/core";
 export type { ExecHandle, ExecResult, ExecOptions, ExecCodeOptions } from "@drej/core";
 export {
   LedgerEvent,
@@ -36,6 +36,9 @@ export type {
   LedgerEntry,
   EnvironmentRecord,
   FileInfo,
+  DiagnosticLog,
+  DiagnosticEvent,
+  Metrics,
 } from "@drej/core";
 export { DrejError, type DrejOptions, type SandboxOptions, type ResumeOptions } from "./types";
 export type { CheckpointInfo } from "@drej/core";
@@ -292,6 +295,41 @@ export class Drej {
       this._releaseSlot();
       throw err;
     }
+  }
+
+  /**
+   * Attach to an already-running sandbox container without creating or restoring anything.
+   *
+   * Use this to reconnect to a sandbox whose host process has exited but whose container
+   * is still running. Unlike `resume()`, no snapshot is involved — the container keeps
+   * its current state. The execd endpoint is resolved lazily on first use.
+   *
+   * @throws `DrejError` (409) if the sandbox is not in Running state.
+   *
+   * @example
+   * ```ts
+   * // In a new process, reconnect to a sandbox started earlier:
+   * const sb = await client.connect(savedSandboxId, "my-sandbox");
+   * const { stdout } = await sb.exec("cat /results.txt");
+   * await sb.close();
+   * ```
+   */
+  async connect(sandboxId: string, name: string): Promise<Sandbox> {
+    await this._ensureConnected();
+    const info = await this._control.getSandbox(sandboxId);
+    if (info.status.state !== SandboxState.Running) {
+      throw new DrejError(
+        `Sandbox ${sandboxId} is ${info.status.state} — can only connect to Running sandboxes`,
+        409,
+      );
+    }
+    await this._acquireSlot();
+    return new Sandbox(sandboxId, name, {
+      control: this._control,
+      adapter: this._adapter,
+      onClose: () => this._releaseSlot(),
+      useServerProxy: this._useServerProxy,
+    });
   }
 
   /**

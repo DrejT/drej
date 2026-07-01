@@ -31,6 +31,7 @@ function loadEnv() {
 }
 
 // Build the pi CLI args from /etc/drej-pi.json (model/provider config, written by the host).
+// Supports: provider, model, resume (--continue to resume the most recent session).
 function buildPiArgs() {
   var args = ["--mode", "rpc", "--approve"];
   try {
@@ -38,6 +39,7 @@ function buildPiArgs() {
       var cfg = JSON.parse(fs.readFileSync(PI_CONFIG_FILE, "utf8"));
       if (cfg.provider) args.push("--provider", cfg.provider);
       if (cfg.model) args.push("--model", cfg.model);
+      if (cfg.resume) args.push("--continue");
     }
   } catch (e) {}
   return args;

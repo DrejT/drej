@@ -1,5 +1,12 @@
-import { ExecClient, SnapshotState } from "@drej/opensandbox";
-import type { ControlClient, SSEEvent } from "@drej/opensandbox";
+import { ExecClient, SnapshotState, SandboxState } from "@drej/opensandbox";
+import type {
+  ControlClient,
+  SSEEvent,
+  DiagnosticLog,
+  DiagnosticEvent,
+  Metrics,
+  RunInSessionRequest,
+} from "@drej/opensandbox";
 import { SandboxError, ExecConnectionError, CommandError } from "./errors";
 import type { IStorageAdapter, CheckpointInfo } from "./ledger";
 import { LedgerEvent } from "./ledger";
@@ -38,6 +45,8 @@ export interface SandboxHooks {
   onCheckpoint?(sandboxId: string, snapshotId: string, name?: string): void;
   onSandboxClosed?(sandboxId: string): void;
   onSandboxFailed?(sandboxId: string, error: Error): void;
+  onSandboxPaused?(sandboxId: string): void;
+  onSandboxResumed?(sandboxId: string): void;
 }
 
 /** Internal dependencies injected by `DrejClient`. */
@@ -111,6 +120,8 @@ export class Sandbox {
   private _execClient: ExecClient | null = null;
   private _seq = 0;
   private _closed = false;
+  private _paused = false;
+  private readonly _openSessionClosers = new Set<() => Promise<void>>();
 
   constructor(
     sandboxId: string,
@@ -125,6 +136,8 @@ export class Sandbox {
   }
 
   private async _getExecClient(): Promise<ExecClient> {
+    if (this._paused)
+      throw new SandboxError("sandbox is paused — call resume() first", this.sandboxId);
     if (!this._execClient) {
       this._execClient = await resolveExecClient(
         this._deps.control,
@@ -133,6 +146,22 @@ export class Sandbox {
       );
     }
     return this._execClient;
+  }
+
+  private async _waitForRunning(timeoutMs = 120_000): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const s = await this._deps.control.getSandbox(this.sandboxId);
+      if (s.status.state === SandboxState.Running) return;
+      if (s.status.state === SandboxState.Failed || s.status.state === SandboxState.Terminated) {
+        throw new SandboxError(
+          `Sandbox entered ${s.status.state}: ${s.status.message ?? ""}`,
+          this.sandboxId,
+        );
+      }
+      await new Promise<void>((r) => setTimeout(r, 1_000));
+    }
+    throw new SandboxError(`Sandbox did not reach Running within ${timeoutMs}ms`, this.sandboxId);
   }
 
   private async _emit(event: LedgerEvent, stepIndex: number, payload?: unknown): Promise<void> {
@@ -379,9 +408,135 @@ export class Sandbox {
   }
 
   /** Return current CPU and memory usage for this sandbox. */
-  async metrics(): Promise<{ cpu: number; memory: number; timestamp: string }> {
+  async metrics(): Promise<Metrics> {
     const ec = await this._getExecClient();
     return ec.getMetrics();
+  }
+
+  /**
+   * Stream real-time CPU and memory metrics from execd via SSE.
+   *
+   * Holds a long-lived connection — break out of the loop or pass an AbortSignal
+   * when done to avoid leaking the connection.
+   *
+   * @example
+   * ```ts
+   * for await (const m of sb.watchMetrics()) {
+   *   console.log(m.cpu, m.memory);
+   *   if (m.cpu > 0.9) break;
+   * }
+   * ```
+   */
+  async *watchMetrics(): AsyncGenerator<Metrics> {
+    const ec = await this._getExecClient();
+    for await (const ev of ec.watchMetrics()) {
+      const m = ev as unknown as Metrics;
+      if (typeof m.cpu === "number" && typeof m.memory === "number") yield m;
+    }
+  }
+
+  /** Return sandbox diagnostic logs (names, sizes, and optional inline content). */
+  async diagnosticLogs(): Promise<DiagnosticLog[]> {
+    return this._deps.control.getDiagnosticLogs(this.sandboxId);
+  }
+
+  /** Return sandbox diagnostic events (timestamps, types, and messages). */
+  async diagnosticEvents(): Promise<DiagnosticEvent[]> {
+    return this._deps.control.getDiagnosticEvents(this.sandboxId);
+  }
+
+  /**
+   * Freeze the sandbox container. Releases compute on Kubernetes; on Docker it
+   * is a cgroup freeze that preserves in-memory state.
+   *
+   * All pending exec calls will throw `SandboxError` until `resume()` is called.
+   * `close()` remains valid on a paused sandbox.
+   */
+  async pause(): Promise<void> {
+    await this._deps.control.pauseSandbox(this.sandboxId);
+    this._paused = true;
+    this._execClient = null;
+    await this._emit(LedgerEvent.SandboxPaused, -1);
+    this._deps.hooks?.onSandboxPaused?.(this.sandboxId);
+  }
+
+  /**
+   * Restore a paused sandbox to Running state and re-resolve the execd endpoint.
+   *
+   * On Docker, this unfreezes the container instantly. On Kubernetes, a new pod
+   * is created from the OCI snapshot — in-memory process state is not preserved.
+   * Polls until the sandbox reports Running before returning.
+   */
+  async resume(): Promise<void> {
+    await this._deps.control.resumeSandbox(this.sandboxId);
+    this._paused = false;
+    await this._waitForRunning();
+    await this._emit(LedgerEvent.SandboxResumed, -1);
+    this._deps.hooks?.onSandboxResumed?.(this.sandboxId);
+  }
+
+  /**
+   * Create a persistent bash session that preserves CWD and env vars across
+   * multiple `exec()` calls.
+   *
+   * Always call `session.close()` when done, or the shell process leaks inside
+   * the container. `sandbox.close()` also closes all open sessions automatically.
+   *
+   * @example
+   * ```ts
+   * const session = await sb.createSession({ cwd: "/app" });
+   * try {
+   *   await session.exec("export DB_URL=postgres://localhost/mydb");
+   *   await session.exec("npm run migrate").pipe(process.stdout);
+   *   await session.exec("npm test").pipe(process.stdout);
+   * } finally {
+   *   await session.close();
+   * }
+   * ```
+   */
+  async createSession(opts?: { cwd?: string }): Promise<BashSession> {
+    const ec = await this._getExecClient();
+    const resp = await ec.createSession(opts);
+    const sessionId = resp.session_id;
+
+    const self = this;
+
+    const execInSession = (
+      command: string,
+      cmdOpts?: { cwd?: string; timeoutMs?: number },
+    ): ExecHandle => {
+      const seq = ++self._seq;
+      async function* stream(): AsyncGenerator<SSEEvent> {
+        await self._emit(LedgerEvent.ExecStart, seq, { cmd: command, seq, sessionId });
+        self._deps.hooks?.onExecStart?.(self.sandboxId, seq, command);
+        for await (const ev of ec.runInSession(sessionId, {
+          command,
+          cwd: cmdOpts?.cwd,
+          timeout: cmdOpts?.timeoutMs,
+        } as RunInSessionRequest)) {
+          await self._emit(LedgerEvent.ExecEvent, seq, { seq, ...ev });
+          yield ev;
+        }
+      }
+      return new ExecHandle({
+        type: "stream",
+        gen: stream(),
+        onDone: async (result) => {
+          await self._emit(LedgerEvent.ExecComplete, seq, { exitCode: result.exitCode, seq });
+          self._deps.hooks?.onExecComplete?.(self.sandboxId, seq, result);
+          if (result.exitCode !== 0)
+            throw new CommandError(result.exitCode, command, self.sandboxId);
+        },
+      });
+    };
+
+    const closeSession = async (): Promise<void> => {
+      self._openSessionClosers.delete(closeSession);
+      await ec.deleteSession(sessionId);
+    };
+
+    this._openSessionClosers.add(closeSession);
+    return new BashSession(sessionId, execInSession, closeSession);
   }
 
   /** Return all checkpoints for this sandbox in creation order. */
@@ -453,6 +608,9 @@ export class Sandbox {
   async close(): Promise<void> {
     if (this._closed) return;
     this._closed = true;
+    // Close open bash sessions (best-effort — container is being deleted anyway).
+    await Promise.allSettled([...this._openSessionClosers].map((fn) => fn()));
+    this._openSessionClosers.clear();
     try {
       await this._deps.control.deleteSandbox(this.sandboxId);
     } finally {
@@ -460,5 +618,54 @@ export class Sandbox {
       this._deps.hooks?.onSandboxClosed?.(this.sandboxId);
       this._deps.onClose?.();
     }
+  }
+}
+
+/**
+ * A persistent bash session inside a sandbox. CWD and env vars are preserved
+ * across `exec()` calls, unlike the stateless `sandbox.exec()`.
+ *
+ * Create with `sandbox.createSession()`. Always call `close()` when done.
+ */
+export class BashSession {
+  /** execd session ID. */
+  readonly sessionId: string;
+  private readonly _execFn: (
+    command: string,
+    opts?: { cwd?: string; timeoutMs?: number },
+  ) => ExecHandle;
+  private readonly _closeFn: () => Promise<void>;
+  private _closed = false;
+
+  constructor(
+    sessionId: string,
+    execFn: (command: string, opts?: { cwd?: string; timeoutMs?: number }) => ExecHandle,
+    closeFn: () => Promise<void>,
+  ) {
+    this.sessionId = sessionId;
+    this._execFn = execFn;
+    this._closeFn = closeFn;
+  }
+
+  /**
+   * Run a command in this session. Shell state (CWD, exported env vars) persists
+   * between calls.
+   *
+   * @example
+   * ```ts
+   * await session.exec("cd /app && export NODE_ENV=test");
+   * const { stdout } = await session.exec("node -e 'console.log(process.env.NODE_ENV)'");
+   * // stdout === "test\n"
+   * ```
+   */
+  exec(command: string, opts?: { cwd?: string; timeoutMs?: number }): ExecHandle {
+    return this._execFn(command, opts);
+  }
+
+  /** Terminate the shell process and release resources. */
+  async close(): Promise<void> {
+    if (this._closed) return;
+    this._closed = true;
+    await this._closeFn();
   }
 }

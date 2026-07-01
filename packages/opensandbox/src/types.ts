@@ -187,3 +187,17 @@ export interface Metrics {
   memory: number;
   timestamp: string;
 }
+
+export interface CreateSessionRequest {
+  cwd?: string;
+}
+
+export interface RunInSessionRequest {
+  command: string;
+  cwd?: string;
+  timeout?: number;
+}
+
+export interface CreateSessionResponse {
+  session_id: string;
+}

@@ -119,6 +119,89 @@ export class Agent {
     return new Agent(sb, spec, resolvedEnv, adapter);
   }
 
+  /**
+   * Reconnect to a previously-created agent whose host process has exited.
+   *
+   * The sandbox container must still be running. Pi and any installed packages
+   * are already present — only the bridge process needs to be restarted.
+   * Pi is started with `--continue` so it resumes the most recent session.
+   *
+   * @param sandboxId  The sandbox ID returned by the original `Agent.load()`.
+   * @param opts.specPath  Path to the agent spec JSON. If omitted, the ledger
+   *   is queried for the sandbox name and the spec is loaded from
+   *   `./agents/<name>.json`.
+   *
+   * @example
+   * ```ts
+   * // Original process:
+   * const agent = await Agent.load("./agents/hello-agent.json");
+   * console.log(agent.sandboxId); // save this
+   * // ... process exits ...
+   *
+   * // New process:
+   * const agent = await Agent.resume(savedSandboxId);
+   * for await (const chunk of agent.prompt("What did we discuss earlier?")) {
+   *   process.stdout.write(chunk);
+   * }
+   * await agent.close();
+   * ```
+   */
+  static async resume(sandboxId: string, opts?: { specPath?: string }): Promise<Agent> {
+    const t0 = Date.now();
+    const config = await readProjectConfig();
+
+    const client = new Drej({
+      baseUrl: config.serverUrl,
+      apiKey: config.apiKey,
+      adapter: new SQLiteAdapter(config.adapterPath),
+      useServerProxy: config.useServerProxy,
+    });
+
+    // Resolve the agent spec.
+    let spec: import("./schema").AgentSpec;
+    if (opts?.specPath) {
+      spec = validateAgentSpec(await Bun.file(opts.specPath).json());
+    } else {
+      const sessions = await client.sandboxes.list();
+      const session = sessions.find((s) => s.sandboxId === sandboxId);
+      if (!session)
+        throw new Error(
+          `No ledger record for sandbox ${sandboxId} — pass opts.specPath explicitly`,
+        );
+      spec = validateAgentSpec(await Bun.file(`./agents/${session.name}.json`).json());
+    }
+
+    const resolvedEnv = resolveEnv(spec.env ?? {});
+
+    console.log(`[agent] reconnecting to ${sandboxId}...`);
+    const t1 = Date.now();
+    const sb = await client.connect(sandboxId, spec.name);
+    console.log(`[agent] connected       ${elapsed(t1)}`);
+
+    // Write /etc/drej-pi.json with resume: true so the bridge starts Pi with --continue.
+    const piConfig: Record<string, unknown> = { resume: true };
+    if (spec.provider) piConfig.provider = spec.provider;
+    if (spec.model) piConfig.model = spec.model;
+    await sb.writeFile("/etc/drej-pi.json", JSON.stringify(piConfig));
+    await sb.writeFile("/etc/drej-env", toShellExports(resolvedEnv));
+
+    // Kill any stale bridge process before starting a fresh one.
+    await sb.exec("pkill -f 'node /drej-bridge.js' 2>/dev/null; sleep 0.1; true", {
+      strict: false,
+    });
+
+    const adapter = new PiAdapter();
+
+    console.log(`[agent] starting bridge...`);
+    const t2 = Date.now();
+    await adapter.startBridge(sb);
+    await adapter.waitReady();
+    console.log(`[agent] bridge ready    ${elapsed(t2)}`);
+    console.log(`[agent] total           ${elapsed(t0)}`);
+
+    return new Agent(sb, spec, resolvedEnv, adapter);
+  }
+
   // --- streaming ---
 
   /** Send a prompt to Pi and stream the response. Pi manages its own session context. */

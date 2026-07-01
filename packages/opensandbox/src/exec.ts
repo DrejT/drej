@@ -8,6 +8,9 @@ import type {
   FileInfo,
   FileReplacement,
   Metrics,
+  CreateSessionRequest,
+  RunInSessionRequest,
+  CreateSessionResponse,
 } from "./types";
 
 async function* parseSSE(stream: ReadableStream<Uint8Array>): AsyncGenerator<SSEEvent> {
@@ -243,5 +246,17 @@ export class ExecClient {
 
   async *watchMetrics(): AsyncGenerator<SSEEvent> {
     yield* this.streamRequest("GET", "/metrics/watch");
+  }
+
+  createSession(opts?: CreateSessionRequest): Promise<CreateSessionResponse> {
+    return this.request("POST", "/session", opts ?? {});
+  }
+
+  async *runInSession(sessionId: string, opts: RunInSessionRequest): AsyncGenerator<SSEEvent> {
+    yield* this.streamRequest("POST", `/session/${sessionId}/run`, opts);
+  }
+
+  deleteSession(sessionId: string): Promise<void> {
+    return this.request("DELETE", `/session/${sessionId}`);
   }
 }

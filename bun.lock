@@ -44,15 +44,6 @@
         "astro": "^5.7.0",
       },
     },
-    "examples/agent": {
-      "name": "drej-example-agent",
-      "version": "0.0.2",
-      "dependencies": {
-        "@drej/agent": "workspace:*",
-        "@drej/sqlite": "workspace:*",
-        "drej": "workspace:*",
-      },
-    },
     "examples/cancellation": {
       "name": "drej-example-cancellation",
       "version": "0.0.2",
@@ -118,6 +109,15 @@
         "drej": "workspace:*",
       },
     },
+    "examples/pi-agent": {
+      "name": "drej-example-pi-agent",
+      "version": "0.0.2",
+      "dependencies": {
+        "@drej/agent": "workspace:*",
+        "@drej/sqlite": "workspace:*",
+        "drej": "workspace:*",
+      },
+    },
     "examples/ports": {
       "name": "drej-example-ports",
       "version": "0.0.2",
@@ -138,6 +138,15 @@
       "name": "drej-example-run-bash-script",
       "version": "0.0.2",
       "dependencies": {
+        "@drej/sqlite": "workspace:*",
+        "drej": "workspace:*",
+      },
+    },
+    "examples/sandbox-extensions": {
+      "name": "drej-example-sandbox-extensions",
+      "version": "0.0.1",
+      "dependencies": {
+        "@drej/agent": "workspace:*",
         "@drej/sqlite": "workspace:*",
         "drej": "workspace:*",
       },
@@ -1433,8 +1442,6 @@
 
     "drej": ["drej@workspace:packages/sdks/typescript"],
 
-    "drej-example-agent": ["drej-example-agent@workspace:examples/agent"],
-
     "drej-example-cancellation": ["drej-example-cancellation@workspace:examples/cancellation"],
 
     "drej-example-capture": ["drej-example-capture@workspace:examples/capture"],
@@ -1451,11 +1458,15 @@
 
     "drej-example-hello-world": ["drej-example-hello-world@workspace:examples/hello-world"],
 
+    "drej-example-pi-agent": ["drej-example-pi-agent@workspace:examples/pi-agent"],
+
     "drej-example-ports": ["drej-example-ports@workspace:examples/ports"],
 
     "drej-example-read-file": ["drej-example-read-file@workspace:examples/read-file"],
 
     "drej-example-run-bash-script": ["drej-example-run-bash-script@workspace:examples/run-bash-script"],
+
+    "drej-example-sandbox-extensions": ["drej-example-sandbox-extensions@workspace:examples/sandbox-extensions"],
 
     "drej-example-sandbox-fork": ["drej-example-sandbox-fork@workspace:examples/sandbox-fork"],
 

@@ -24,13 +24,14 @@ await agent.sandbox.exec("mkdir -p /workspace");
 
 try {
   // ── 1. prompt (SSE streaming) ─────────────────────────────────────────────────
+  // Provide data inline so Pi answers directly without a tool call.
   section("1. prompt — SSE streaming");
   await agent.sandbox.writeFile(
     "/workspace/data.csv",
     ["date,temp_c", "2024-01-15,22.3", "2024-01-16,19.8", "2024-01-17,25.1"].join("\n") + "\n",
   );
   for await (const chunk of agent.prompt(
-    "Read /workspace/data.csv and tell me the min and max temp_c in one sentence.",
+    "Here is some CSV data:\ndate,temp_c\n2024-01-15,22.3\n2024-01-16,19.8\n2024-01-17,25.1\nTell me the min and max temp_c in one sentence.",
   )) {
     process.stdout.write(chunk);
   }
@@ -59,10 +60,15 @@ try {
   console.log();
 
   // ── 5. setModel / cycleModel ──────────────────────────────────────────────────
+  // setModel only works with models in Pi's config (not just the full provider list).
   section("5. setModel + cycleModel — switch models at runtime");
   if (models.length > 0) {
-    const set = await agent.setModel(models[0].api as string, models[0].id);
-    console.log(`setModel → ${set.api}/${set.id}`);
+    try {
+      const set = await agent.setModel(models[0].api as string, models[0].id);
+      console.log(`setModel → ${set.api}/${set.id}`);
+    } catch (e) {
+      console.log(`setModel(${models[0].id}) → not in Pi config: ${(e as Error).message}`);
+    }
   }
   const cycled = await agent.cycleModel();
   if (cycled) {
@@ -86,14 +92,10 @@ try {
   }
   console.log();
 
-  // ── 7. setAutoCompaction + compact ────────────────────────────────────────────
-  section("7. setAutoCompaction + compact");
+  // ── 7. setAutoCompaction ─────────────────────────────────────────────────────
+  section("7. setAutoCompaction");
   await agent.setAutoCompaction(false);
   console.log("setAutoCompaction(false) → ok");
-  const compacted = await agent.compact();
-  console.log(
-    `compact → ${compacted.tokensBefore} tokens before, ~${compacted.estimatedTokensAfter} after`,
-  );
   await agent.setAutoCompaction(true);
   console.log("setAutoCompaction(true) → ok\n");
 
@@ -157,8 +159,19 @@ try {
   }
   console.log();
 
-  // ── 12. newSession + final task ───────────────────────────────────────────────
-  section("12. newSession — clear context, filesystem unchanged");
+  // ── 12. compact + newSession + final task ────────────────────────────────────
+  section("12. compact — session now has many messages, should succeed");
+  try {
+    const compacted = await agent.compact();
+    console.log(
+      `compact → ${compacted.tokensBefore} tokens before, ~${compacted.estimatedTokensAfter} after`,
+    );
+  } catch (e) {
+    console.log(`compact → skipped: ${(e as Error).message}`);
+  }
+  console.log();
+
+  section("12b. newSession — clear context, filesystem unchanged");
   await agent.newSession();
   console.log("Session reset.\n");
 

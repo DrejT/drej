@@ -58,11 +58,25 @@ var state = {
   proc: null,        // current ChildProcess
   rl: null,          // readline interface on proc.stdout
   ready: false,      // true once Pi responds to the get_state probe
-  active: null,      // { message/command, bash, res, text, t0 } — the in-flight prompt/bash, if any
-  queue: [],         // pending items: { message?, command?, bash, streamingBehavior?, res, text, t0 }
+  active: null,      // { message, res, text, t0 } — the in-flight prompt, if any
+  queue: [],         // pending items: { message, streamingBehavior?, res, text, t0 }
   gen: 0,            // incremented on every (re)start; guards against stale async callbacks
-  pendingCmds: {},   // id → { res, timer } — commands waiting for Pi's response ack
+  pendingCmds: {},   // id → { res, timer, bash? } — commands waiting for Pi's response ack
 };
+
+// Fail all in-flight pendingCmds cleanly, handling bash (SSE) vs regular (JSON) responses.
+function cleanupPendingCmds(reason) {
+  Object.keys(state.pendingCmds).forEach(function(id) {
+    var p = state.pendingCmds[id];
+    clearTimeout(p.timer);
+    if (p.bash) {
+      try { p.res.write("data: " + JSON.stringify({ error: reason }) + "\\n\\n"); p.res.end(); } catch (e) {}
+    } else {
+      respond(p.res, 500, { ok: false, error: reason });
+    }
+  });
+  state.pendingCmds = {};
+}
 
 function startPi() {
   // End any in-flight SSE stream so the client isn't left hanging.
@@ -71,13 +85,7 @@ function startPi() {
     state.active.res.end();
     state.active = null;
   }
-  // Fail any commands waiting for a Pi ack.
-  Object.keys(state.pendingCmds).forEach(function(id) {
-    var p = state.pendingCmds[id];
-    clearTimeout(p.timer);
-    respond(p.res, 500, { ok: false, error: "pi restarted" });
-  });
-  state.pendingCmds = {};
+  cleanupPendingCmds("pi restarted");
 
   if (state.rl) { try { state.rl.close(); } catch (e) {} }
   if (state.proc) { try { state.proc.kill("SIGTERM"); } catch (e) {} }
@@ -111,12 +119,7 @@ function startPi() {
     log("pi exit gen=" + gen + " code=" + code);
     state.proc  = null;
     state.ready = false;
-    Object.keys(state.pendingCmds).forEach(function(id) {
-      var p = state.pendingCmds[id];
-      clearTimeout(p.timer);
-      respond(p.res, 500, { ok: false, error: "pi exited" });
-    });
-    state.pendingCmds = {};
+    cleanupPendingCmds("pi exited");
     if (state.active) {
       state.active.res.write("data: " + JSON.stringify({ error: "pi exited" }) + "\\n\\n");
       state.active.res.end();
@@ -163,12 +166,18 @@ function handleLine(line) {
     return;
   }
 
-  // Resolve a pending rpcWithAck (steer, abort, new_session, follow_up, set_model, etc.)
+  // Resolve a pending command ack.
+  // Bash returns output synchronously in ev.data — stream it as SSE then send [DONE].
+  // All other commands use JSON response.
   if (ev.type === "response" && ev.id && state.pendingCmds[ev.id]) {
     var pending = state.pendingCmds[ev.id];
     clearTimeout(pending.timer);
     delete state.pendingCmds[ev.id];
-    if (ev.success) {
+    if (pending.bash) {
+      var output = (ev.data && ev.data.output) || "";
+      if (output) try { pending.res.write("data: " + JSON.stringify({ text: output }) + "\\n\\n"); } catch (e) {}
+      try { pending.res.write("data: [DONE]\\n\\n"); pending.res.end(); } catch (e) {}
+    } else if (ev.success) {
       respond(pending.res, 200, { ok: true, data: ev.data || null });
     } else {
       respond(pending.res, 400, { ok: false, error: ev.error || "unknown" });
@@ -179,36 +188,19 @@ function handleLine(line) {
   var item = state.active;
   if (!item) return;
 
-  if (item.bash) {
-    // bash: forward tool_execution_update stdout chunks
-    if (ev.type === "tool_execution_update") {
-      var chunk = ev.output || ev.stdout || "";
-      if (chunk) {
-        item.text += chunk;
-        item.res.write("data: " + JSON.stringify({ text: chunk }) + "\\n\\n");
-      }
-    } else if (ev.type === "agent_end") {
-      log("bash agent_end: " + item.text.length + " chars in " + (Date.now() - item.t0) + "ms");
-      item.res.write("data: [DONE]\\n\\n");
-      item.res.end();
-      state.active = null;
-      flush();
+  // prompt: forward text_delta chunks
+  if (ev.type === "message_update") {
+    var aev = ev.assistantMessageEvent || {};
+    if (aev.type === "text_delta" && aev.delta) {
+      item.text += aev.delta;
+      item.res.write("data: " + JSON.stringify({ text: aev.delta }) + "\\n\\n");
     }
-  } else {
-    // prompt: forward text_delta chunks
-    if (ev.type === "message_update") {
-      var aev = ev.assistantMessageEvent || {};
-      if (aev.type === "text_delta" && aev.delta) {
-        item.text += aev.delta;
-        item.res.write("data: " + JSON.stringify({ text: aev.delta }) + "\\n\\n");
-      }
-    } else if (ev.type === "agent_end") {
-      log("agent_end: " + item.text.length + " chars in " + (Date.now() - item.t0) + "ms");
-      item.res.write("data: [DONE]\\n\\n");
-      item.res.end();
-      state.active = null;
-      flush();
-    }
+  } else if (ev.type === "agent_end") {
+    log("agent_end: " + item.text.length + " chars in " + (Date.now() - item.t0) + "ms");
+    item.res.write("data: [DONE]\\n\\n");
+    item.res.end();
+    state.active = null;
+    flush();
   }
 }
 
@@ -221,13 +213,8 @@ function flush() {
   state.queue.shift();
   if (!item.streamingBehavior) state.active = item;
   item.t0 = Date.now();
-  var rpcMsg;
-  if (item.bash) {
-    rpcMsg = { id: "b" + item.t0, type: "bash", command: item.command };
-  } else {
-    rpcMsg = { id: "p" + item.t0, type: "prompt", message: item.message };
-    if (item.streamingBehavior) rpcMsg.streamingBehavior = item.streamingBehavior;
-  }
+  var rpcMsg = { id: "p" + item.t0, type: "prompt", message: item.message };
+  if (item.streamingBehavior) rpcMsg.streamingBehavior = item.streamingBehavior;
   rpc(rpcMsg);
   item.res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "Connection": "keep-alive" });
   // Injections don't produce their own SSE body — their output arrives via the active prompt's stream.
@@ -270,14 +257,25 @@ http.createServer(function(req, res) {
 
     switch (req.url) {
       case "/prompt":
-        state.queue.push({ message: data.message || "", streamingBehavior: data.streamingBehavior, bash: false, res: res, text: "", t0: 0 });
+        state.queue.push({ message: data.message || "", streamingBehavior: data.streamingBehavior, res: res, text: "", t0: 0 });
         flush();
         return;
 
-      case "/bash":
-        state.queue.push({ command: data.command || "", bash: true, res: res, text: "", t0: 0 });
-        flush();
+      case "/bash": {
+        // Pi returns bash output synchronously in the ack's data.output — no streaming events.
+        if (!state.ready || !state.proc) { respond(res, 503, { error: "pi not ready" }); return; }
+        var bashId = "b" + Date.now();
+        var bashTimer = setTimeout(function() {
+          if (state.pendingCmds[bashId]) {
+            delete state.pendingCmds[bashId];
+            try { res.write("data: " + JSON.stringify({ error: "bash timeout" }) + "\\n\\n"); res.end(); } catch (e) {}
+          }
+        }, 30000);
+        state.pendingCmds[bashId] = { res: res, timer: bashTimer, bash: true };
+        res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "Connection": "keep-alive" });
+        rpc({ id: bashId, type: "bash", command: data.command || "" });
         return;
+      }
 
       case "/abort":
         // End the active SSE stream immediately, drain the queue, then wait for Pi's ack.

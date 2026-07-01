@@ -1,5 +1,20 @@
 # drej
 
+## 0.9.0
+
+### Minor Changes
+
+- f803858: Agent snapshotting: `Agent.load()` checkpoints the sandbox after Pi install and restores from the snapshot on subsequent loads, reducing startup from ~90s to ~8s. `checkpoint()` now returns the snapshot ID. New `Drej.restoreSnapshot(snapshotId, name, resources)` creates a sandbox from a snapshot without exec replay. `Agent.load()` accepts `{ rebuild: true }` to force reinstall.
+- c81c77d: Sandbox API extensions: `pause()` / `resume()`, `createSession()` / `BashSession` persistent shell sessions, `diagnosticLogs()` / `diagnosticEvents()`, `watchMetrics()` streaming, and `Drej.connect()` for attaching to an already-running container. Agent: `Agent.resume(sandboxId)` to reconnect a new host process to a live agent sandbox (restarts the bridge with `--continue`).
+
+### Patch Changes
+
+- a0c1eee: Add README to each published package so npm shows documentation on the package page.
+- Updated dependencies [f803858]
+- Updated dependencies [c81c77d]
+  - @drej/core@0.5.0
+  - @drej/opensandbox@0.2.0
+
 ## 0.8.0
 
 ### Minor Changes
@@ -93,7 +108,7 @@
       .exec("git rev-parse HEAD", { capture: sha })
       .searchFiles("**/*.ts", { as: tsFiles })
       .forEach(tsFiles, (s, file) => s.exec(`tsc ${file}`))
-      .exec("deploy.sh", { envs: { GIT_SHA: sha } }),
+      .exec("deploy.sh", { envs: { GIT_SHA: sha } })
   );
   ```
 
@@ -171,7 +186,9 @@
 
   ```ts
   workflow("deploy").sandbox({ image: { uri: "node:20-slim" } }, (s) =>
-    s.exec("git rev-parse HEAD", { capture: "sha" }).exec("echo deploying commit {{sha}}"),
+    s
+      .exec("git rev-parse HEAD", { capture: "sha" })
+      .exec("echo deploying commit {{sha}}")
   );
   ```
 
@@ -199,7 +216,7 @@
     s
       .exec('node -e "process.version" > /tmp/version.txt')
       .readFile("/tmp/version.txt", { as: "version" })
-      .exec("echo Node version: {{version}}"),
+      .exec("echo Node version: {{version}}")
   );
   ```
 
@@ -244,7 +261,7 @@
     s
       .exec("npm ci")
       .snapshot() // checkpoint: deps installed
-      .exec("npm test"),
+      .exec("npm test")
   );
   ```
 

@@ -1,5 +1,15 @@
 # @drej/workflow
 
+## 1.1.1
+
+### Patch Changes
+
+- a0c1eee: Add README to each published package so npm shows documentation on the package page.
+- Updated dependencies [a0c1eee]
+- Updated dependencies [f803858]
+- Updated dependencies [c81c77d]
+  - drej@0.9.0
+
 ## 1.1.0
 
 ### Minor Changes

@@ -1,5 +1,16 @@
 # drej-example-control-flow
 
+## 0.0.3
+
+### Patch Changes
+
+- Updated dependencies [a0c1eee]
+- Updated dependencies [f803858]
+- Updated dependencies [c81c77d]
+  - drej@0.9.0
+  - @drej/workflow@1.1.1
+  - @drej/sqlite@0.3.1
+
 ## 0.0.2
 
 ### Patch Changes

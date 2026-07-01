@@ -1,5 +1,14 @@
 # @drej/postgres
 
+## 0.3.1
+
+### Patch Changes
+
+- a0c1eee: Add README to each published package so npm shows documentation on the package page.
+- Updated dependencies [f803858]
+- Updated dependencies [c81c77d]
+  - @drej/core@0.5.0
+
 ## 0.3.0
 
 ### Minor Changes

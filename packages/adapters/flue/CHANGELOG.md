@@ -1,5 +1,14 @@
 # @drej/flue
 
+## 2.0.0
+
+### Patch Changes
+
+- Updated dependencies [a0c1eee]
+- Updated dependencies [f803858]
+- Updated dependencies [c81c77d]
+  - drej@0.9.0
+
 ## 1.0.0
 
 ### Minor Changes

@@ -35,9 +35,9 @@ if (!nodeOut.includes("workspace ready")) {
 // Ask Pi to list the workspace — it should see the files setup baked in.
 console.log("\nAsking Pi to inspect /workspace...\n");
 let response1 = "";
-for await (const chunk of textOnly(agent1.prompt(
-  "List the files in /workspace using bash and tell me what you find.",
-))) {
+for await (const chunk of textOnly(
+  agent1.prompt("List the files in /workspace using bash and tell me what you find."),
+)) {
   process.stdout.write(chunk);
   response1 += chunk;
 }
@@ -74,4 +74,6 @@ console.log(`Load 2 fromSnapshot: ${agent2.fromSnapshot}  (expected: true)`);
 console.log(`Workspace survived snapshot: ${nodeOut2.includes("workspace ready")}`);
 
 const pass = !agent1.fromSnapshot && agent2.fromSnapshot && nodeOut2.includes("workspace ready");
-console.log(pass ? "\n✓ Workspace setup working correctly" : "\n✗ Test failed — check output above");
+console.log(
+  pass ? "\n✓ Workspace setup working correctly" : "\n✗ Test failed — check output above",
+);

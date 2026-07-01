@@ -45,17 +45,17 @@ try {
 
 The spec JSON controls the agent's environment, model, and workspace setup.
 
-| Field | Type | Description |
-|---|---|---|
-| `name` | `string` | Unique identifier, used as the sandbox session name |
-| `cli` | `"pi"` | CLI to run (currently only `"pi"`) |
-| `cliVersion` | `string?` | Pin to a specific Pi version, e.g. `"0.80.2"`. Defaults to latest. |
-| `model` | `string?` | Model ID passed to Pi via `--model` |
-| `provider` | `string?` | AI provider passed via `--provider`. Omit for direct Google API key. |
-| `packages` | `string[]?` | APT packages to install before Pi. e.g. `["git", "python3"]` |
-| `env` | `Record<string,string>?` | Env vars in the sandbox. Values may reference host env: `"${MY_KEY}"` |
-| `resources` | `object?` | CPU/memory limits: `{ cpu: "1000m", memory: "2Gi" }` |
-| `setup` | `SetupStep[]?` | Workspace setup steps (see below) |
+| Field        | Type                     | Description                                                           |
+| ------------ | ------------------------ | --------------------------------------------------------------------- |
+| `name`       | `string`                 | Unique identifier, used as the sandbox session name                   |
+| `cli`        | `"pi"`                   | CLI to run (currently only `"pi"`)                                    |
+| `cliVersion` | `string?`                | Pin to a specific Pi version, e.g. `"0.80.2"`. Defaults to latest.    |
+| `model`      | `string?`                | Model ID passed to Pi via `--model`                                   |
+| `provider`   | `string?`                | AI provider passed via `--provider`. Omit for direct Google API key.  |
+| `packages`   | `string[]?`              | APT packages to install before Pi. e.g. `["git", "python3"]`          |
+| `env`        | `Record<string,string>?` | Env vars in the sandbox. Values may reference host env: `"${MY_KEY}"` |
+| `resources`  | `object?`                | CPU/memory limits: `{ cpu: "1000m", memory: "2Gi" }`                  |
+| `setup`      | `SetupStep[]?`           | Workspace setup steps (see below)                                     |
 
 ### Setup steps
 
@@ -67,19 +67,19 @@ The spec JSON controls the agent's environment, model, and workspace setup.
   "cli": "pi",
   "setup": [
     { "name": "Create workspace", "run": "mkdir -p /workspace" },
-    { "name": "Install deps",     "run": "npm install", "cwd": "/workspace" },
-    { "name": "Seed data",        "run": "node scripts/seed.js", "cwd": "/workspace" }
+    { "name": "Install deps", "run": "npm install", "cwd": "/workspace" },
+    { "name": "Seed data", "run": "node scripts/seed.js", "cwd": "/workspace" }
   ]
 }
 ```
 
 Each step:
 
-| Field | Type | Description |
-|---|---|---|
-| `name` | `string` | Human-readable label shown in logs and included in the setup hash |
-| `run` | `string` | Bash command to execute |
-| `cwd` | `string?` | Working directory. Runs as `cd <cwd> && <run>` |
+| Field  | Type      | Description                                                       |
+| ------ | --------- | ----------------------------------------------------------------- |
+| `name` | `string`  | Human-readable label shown in logs and included in the setup hash |
+| `run`  | `string`  | Bash command to execute                                           |
+| `cwd`  | `string?` | Working directory. Runs as `cd <cwd> && <run>`                    |
 
 ---
 
@@ -110,10 +110,10 @@ const agent = await Agent.load("./agents/my-agent.json", { rebuild: true });
 
 ```ts
 type AgentEvent =
-  | { type: "text";        text: string }
-  | { type: "tool_start";  toolCallId: string; toolName: string; args: unknown }
+  | { type: "text"; text: string }
+  | { type: "tool_start"; toolCallId: string; toolName: string; args: unknown }
   | { type: "tool_update"; toolCallId: string; toolName: string; partialResult: unknown }
-  | { type: "tool_end";    toolCallId: string; toolName: string; result: unknown; isError: boolean };
+  | { type: "tool_end"; toolCallId: string; toolName: string; result: unknown; isError: boolean };
 ```
 
 Use `textOnly()` to filter to just the text chunks (equivalent to the old `PromptStream` behavior):
@@ -317,11 +317,11 @@ const result = await agent.sandbox.readFile("/workspace/output.txt");
 
 ## Properties
 
-| Property | Type | Description |
-|---|---|---|
-| `agent.sandboxId` | `string` | OpenSandbox container ID |
-| `agent.name` | `string` | Agent name from the spec |
-| `agent.sandbox` | `Sandbox` | Underlying drej `Sandbox` object |
+| Property             | Type      | Description                                    |
+| -------------------- | --------- | ---------------------------------------------- |
+| `agent.sandboxId`    | `string`  | OpenSandbox container ID                       |
+| `agent.name`         | `string`  | Agent name from the spec                       |
+| `agent.sandbox`      | `Sandbox` | Underlying drej `Sandbox` object               |
 | `agent.fromSnapshot` | `boolean` | `true` when restored from snapshot (fast path) |
 
 ---

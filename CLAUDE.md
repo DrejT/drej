@@ -114,11 +114,17 @@ packages/adapters/otel/           — OpenTelemetry hooks adapter (published as 
   src/index.ts                    — otelHooks(tracer, opts?) → SandboxHooks
 
 packages/agent/                   — Agent SDK (published to npm as "@drej/agent")
-  src/agent.ts                    — Agent class: load(), prompt(), steer(), abort(), newSession(), setEnv(), close()
-  src/adapters/pi.ts              — PiAdapter: BRIDGE_SCRIPT (Node.js CJS HTTP→RPC bridge), setup(), startBridge(), waitReady()
-  src/schema.ts                   — AgentSpec interface + validateAgentSpec()
+  src/agent.ts                    — Agent class: load(), resume(), prompt(), bash(), steer(), followUp(), abort(),
+                                    newSession(), clone(), fork(), switchSession(), setModel(), cycleModel(),
+                                    getMessages(), getAvailableModels(), setThinkingLevel(), cycleThinkingLevel(),
+                                    setAutoCompaction(), compact(), setEnv(), getLogs(), close()
+  src/adapters/pi.ts              — PiAdapter: BRIDGE_SCRIPT (Node.js CJS HTTP→RPC bridge), install(), configure(),
+                                    startBridge(), waitReady(); bridges all Pi RPC commands; emits AgentEvent SSE
+  src/schema.ts                   — AgentSpec interface + SetupStep interface + validateAgentSpec()
+  src/snapshots.ts                — AgentSnapshotStore, computeSetupHash() (hashes cli+cliVersion+packages+setup)
   src/config.ts                   — DrejAgentConfig, readProjectConfig() (reads drej.config.json)
-  src/types.ts                    — PromptStream (AsyncIterable<string>)
+  src/types.ts                    — AgentEvent (text|tool_start|tool_update|tool_end), AgentStream, textOnly(),
+                                    PromptStream (deprecated alias), PiModel, ThinkingLevel, PiMessage, CompactResult
   src/index.ts                    — barrel exports
 
 packages/cli/                     — drejx CLI (published to npm as "drejx", not part of changeset versioning)

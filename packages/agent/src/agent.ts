@@ -10,7 +10,7 @@ import {
   snapshotsPath,
   type AgentSnapshotRecord,
 } from "./snapshots";
-import type { CompactResult, PiMessage, PiModel, PromptStream, ThinkingLevel } from "./types";
+import type { AgentStream, CompactResult, PiMessage, PiModel, ThinkingLevel } from "./types";
 
 function elapsed(t: number) {
   return `${Date.now() - t}ms`;
@@ -247,12 +247,12 @@ export class Agent {
   // --- streaming ---
 
   /** Send a prompt to Pi and stream the response. Pi manages its own session context. */
-  prompt(message: string, opts?: { streamingBehavior?: "steer" | "followUp" }): PromptStream {
+  prompt(message: string, opts?: { streamingBehavior?: "steer" | "followUp" }): AgentStream {
     return this._adapter.prompt(message, opts);
   }
 
   /** Run a shell command inside Pi's working context and stream stdout. */
-  bash(command: string): PromptStream {
+  bash(command: string): AgentStream {
     return this._adapter.bash(command);
   }
 

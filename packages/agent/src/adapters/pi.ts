@@ -1,6 +1,6 @@
 import type { Sandbox } from "@drej/core";
 import type { AgentSpec } from "../schema";
-import type { CompactResult, PiMessage, PiModel, PromptStream, ThinkingLevel } from "../types";
+import type { AgentEvent, AgentStream, CompactResult, PiMessage, PiModel, ThinkingLevel } from "../types";
 
 // Node.js CJS bridge script — written into the sandbox at /drej-bridge.js and run with `node`.
 // Wraps `pi --mode rpc` in an HTTP server so the host can communicate bidirectionally
@@ -177,7 +177,7 @@ function handleLine(line) {
     delete state.pendingCmds[ev.id];
     if (pending.bash) {
       var output = (ev.data && ev.data.output) || "";
-      if (output) try { pending.res.write("data: " + JSON.stringify({ text: output }) + "\\n\\n"); } catch (e) {}
+      if (output) try { pending.res.write("data: " + JSON.stringify({ type: "text", text: output }) + "\\n\\n"); } catch (e) {}
       try { pending.res.write("data: [DONE]\\n\\n"); pending.res.end(); } catch (e) {}
     } else if (ev.success) {
       respond(pending.res, 200, { ok: true, data: ev.data || null });
@@ -187,15 +187,32 @@ function handleLine(line) {
     return;
   }
 
+  // Tool execution events: forward into the active prompt stream.
+  if (ev.type === "tool_execution_start") {
+    if (!state.active) return;
+    state.active.res.write("data: " + JSON.stringify({ type: "tool_start", toolCallId: ev.toolCallId, toolName: ev.toolName, args: ev.args }) + "\\n\\n");
+    return;
+  }
+  if (ev.type === "tool_execution_update") {
+    if (!state.active) return;
+    state.active.res.write("data: " + JSON.stringify({ type: "tool_update", toolCallId: ev.toolCallId, toolName: ev.toolName, partialResult: ev.partialResult }) + "\\n\\n");
+    return;
+  }
+  if (ev.type === "tool_execution_end") {
+    if (!state.active) return;
+    state.active.res.write("data: " + JSON.stringify({ type: "tool_end", toolCallId: ev.toolCallId, toolName: ev.toolName, result: ev.result, isError: !!ev.isError }) + "\\n\\n");
+    return;
+  }
+
   var item = state.active;
   if (!item) return;
 
-  // prompt: forward text_delta chunks
+  // prompt: forward text_delta chunks and agent lifecycle
   if (ev.type === "message_update") {
     var aev = ev.assistantMessageEvent || {};
     if (aev.type === "text_delta" && aev.delta) {
       item.text += aev.delta;
-      item.res.write("data: " + JSON.stringify({ text: aev.delta }) + "\\n\\n");
+      item.res.write("data: " + JSON.stringify({ type: "text", text: aev.delta }) + "\\n\\n");
     }
   } else if (ev.type === "agent_end") {
     log("agent_end: " + item.text.length + " chars in " + (Date.now() - item.t0) + "ms");
@@ -438,14 +455,14 @@ export class PiAdapter {
 
   // --- streaming ---
 
-  prompt(message: string, opts?: { streamingBehavior?: "steer" | "followUp" }): PromptStream {
+  prompt(message: string, opts?: { streamingBehavior?: "steer" | "followUp" }): AgentStream {
     return sseStream(this.bridgeUrl, "/prompt", {
       message,
       streamingBehavior: opts?.streamingBehavior,
     });
   }
 
-  bash(command: string): PromptStream {
+  bash(command: string): AgentStream {
     return sseStream(this.bridgeUrl, "/bash", { command });
   }
 
@@ -563,7 +580,7 @@ async function rpcGet<T>(bridgeUrl: string, path: string): Promise<T> {
   return payload.data as T;
 }
 
-async function* sseStream(bridgeUrl: string, path: string, body: unknown): PromptStream {
+async function* sseStream(bridgeUrl: string, path: string, body: unknown): AgentStream {
   const res = await fetch(`${bridgeUrl}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -585,9 +602,9 @@ async function* sseStream(bridgeUrl: string, path: string, body: unknown): Promp
       if (!line.startsWith("data: ")) continue;
       const payload = line.slice(6).trim();
       if (payload === "[DONE]") return;
-      const ev = JSON.parse(payload) as { text?: string; error?: string };
-      if (ev.error) throw new Error(`Bridge error: ${ev.error}`);
-      if (ev.text) yield ev.text;
+      const raw = JSON.parse(payload) as AgentEvent & { error?: string };
+      if (raw.error) throw new Error(`Bridge error: ${raw.error}`);
+      yield raw as AgentEvent;
     }
   }
 }

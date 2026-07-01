@@ -23,6 +23,7 @@ export function computeSetupHash(spec: AgentSpec): string {
         cli: spec.cli,
         cliVersion: spec.cliVersion ?? "latest",
         packages: [...(spec.packages ?? [])].sort(),
+        setup: spec.setup ?? [],
       }),
     )
     .digest("hex")

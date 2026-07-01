@@ -1,5 +1,5 @@
 export { Agent } from "./agent";
-export type { AgentSpec } from "./schema";
+export type { AgentSpec, SetupStep } from "./schema";
 export { validateAgentSpec } from "./schema";
 export type {
   AgentEvent,

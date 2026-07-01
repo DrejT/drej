@@ -143,6 +143,14 @@ export class Agent {
       await adapter.install(sb!, spec);
       console.log(`[agent] Pi CLI ready    ${elapsed(t2)}`);
 
+      for (const step of spec.setup ?? []) {
+        console.log(`[agent] setup: ${step.name}...`);
+        const ts = Date.now();
+        const cmd = step.cwd ? `cd ${step.cwd} && ${step.run}` : step.run;
+        await sb!.exec(cmd);
+        console.log(`[agent] setup done      ${elapsed(ts)} (${step.name})`);
+      }
+
       console.log(`[agent] checkpointing...`);
       const t3 = Date.now();
       const snapshotId = await sb!.checkpoint();

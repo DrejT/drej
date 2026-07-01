@@ -4,6 +4,12 @@ import type { Sandbox } from "@drej/core";
 import { readProjectConfig } from "./config";
 import { validateAgentSpec, type AgentSpec } from "./schema";
 import { PiAdapter, resolveEnv, toShellExports } from "./adapters/pi";
+import {
+  AgentSnapshotStore,
+  computeSetupHash,
+  snapshotsPath,
+  type AgentSnapshotRecord,
+} from "./snapshots";
 import type { CompactResult, PiMessage, PiModel, PromptStream, ThinkingLevel } from "./types";
 
 function elapsed(t: number) {
@@ -45,6 +51,11 @@ export class Agent {
    * independently of the Pi conversation.
    */
   readonly sandbox: Sandbox;
+  /**
+   * `true` when this agent was loaded from a cached snapshot (fast path).
+   * `false` on the first load for a given spec, or after `{ rebuild: true }`.
+   */
+  readonly fromSnapshot: boolean;
 
   private readonly _adapter: PiAdapter;
   private _env: Record<string, string>;
@@ -54,33 +65,35 @@ export class Agent {
     spec: AgentSpec,
     env: Record<string, string>,
     adapter: PiAdapter,
+    fromSnapshot: boolean,
   ) {
     this.sandbox = sandbox;
     this.sandboxId = sandbox.sandboxId;
     this.name = spec.name;
     this._adapter = adapter;
     this._env = env;
+    this.fromSnapshot = fromSnapshot;
   }
 
   /**
    * Load an agent spec from disk and return a fully initialised `Agent`.
    *
-   * This method:
-   * 1. Reads and validates the JSON spec at `specPath`.
-   * 2. Reads `drej.config.json` in the current working directory (falls back to
-   *    defaults: `http://localhost:8080`, SQLite adapter at `./.drej/ledger.db`,
-   *    `useServerProxy: true`).
-   * 3. Spawns a `node:22` sandbox container.
-   * 4. Installs the Pi CLI and any packages listed in the spec.
-   * 5. Starts the RPC bridge inside the container and waits until Pi is ready.
+   * On first load the Pi CLI is installed inside a `node:22` sandbox, then
+   * the sandbox is checkpointed. Subsequent `load()` calls for the same spec
+   * restore from that snapshot — skipping the install and starting in ~3s instead
+   * of ~90s.
+   *
+   * Pass `{ rebuild: true }` to force a full reinstall (e.g. after changing
+   * the spec's `packages` or `cliVersion`).
    *
    * Logs timing for each phase to stdout via `[agent]` prefixed lines.
    */
-  static async load(specPath: string): Promise<Agent> {
+  static async load(specPath: string, opts?: { rebuild?: boolean }): Promise<Agent> {
     const t0 = Date.now();
     const spec = validateAgentSpec(await Bun.file(specPath).json());
     const config = await readProjectConfig();
     const resolvedEnv = resolveEnv(spec.env ?? {});
+    const resources = { ...config.defaults.resources, ...(spec.resources ?? {}) };
 
     const client = new Drej({
       baseUrl: config.serverUrl,
@@ -89,34 +102,70 @@ export class Agent {
       useServerProxy: config.useServerProxy,
     });
 
-    const resources = { ...config.defaults.resources, ...(spec.resources ?? {}) };
-
-    console.log(`[agent] starting sandbox (${spec.name})...`);
-    const t1 = Date.now();
-    const sb = await client.sandbox({
-      image: "node:22",
-      resources,
-      name: spec.name,
-      env: resolvedEnv,
-    });
-    console.log(`[agent] sandbox ready   ${elapsed(t1)} (${sb.sandboxId})`);
+    const store = new AgentSnapshotStore(snapshotsPath(config.adapterPath));
+    const setupHash = computeSetupHash(spec);
 
     const adapter = new PiAdapter();
+    let sb: Sandbox;
+    let fromSnapshot = false;
 
-    console.log(`[agent] installing Pi CLI...`);
-    const t2 = Date.now();
-    await adapter.setup(sb, spec, resolvedEnv);
-    console.log(`[agent] Pi CLI ready    ${elapsed(t2)}`);
+    // ── Snapshot fast path ────────────────────────────────────────────────────
+    if (!opts?.rebuild) {
+      const record = await store.get(spec.name, setupHash);
+      if (record) {
+        try {
+          console.log(`[agent] restoring from snapshot...`);
+          const t1 = Date.now();
+          sb = await client.restoreSnapshot(record.snapshotId, spec.name, resources);
+          console.log(`[agent] snapshot ready  ${elapsed(t1)} (${sb.sandboxId})`);
+          fromSnapshot = true;
+        } catch {
+          console.log(`[agent] snapshot stale, rebuilding...`);
+          await store.delete(spec.name);
+        }
+      }
+    }
+
+    // ── Full install path ─────────────────────────────────────────────────────
+    if (!fromSnapshot) {
+      console.log(`[agent] starting sandbox (${spec.name})...`);
+      const t1 = Date.now();
+      sb = await client.sandbox({
+        image: "node:22",
+        resources,
+        name: spec.name,
+        env: resolvedEnv,
+      });
+      console.log(`[agent] sandbox ready   ${elapsed(t1)} (${sb.sandboxId})`);
+
+      console.log(`[agent] installing Pi CLI...`);
+      const t2 = Date.now();
+      await adapter.install(sb!, spec);
+      console.log(`[agent] Pi CLI ready    ${elapsed(t2)}`);
+
+      console.log(`[agent] checkpointing...`);
+      const t3 = Date.now();
+      const snapshotId = await sb!.checkpoint();
+      await store.save({
+        specName: spec.name,
+        setupHash,
+        snapshotId,
+        createdAt: Date.now(),
+      });
+      console.log(`[agent] checkpoint done ${elapsed(t3)}`);
+    }
+
+    // ── Always: write fresh config + start bridge ─────────────────────────────
+    await adapter.configure(sb!, spec, resolvedEnv);
 
     console.log(`[agent] starting bridge...`);
-    const t3 = Date.now();
-    await adapter.startBridge(sb);
+    const t4 = Date.now();
+    await adapter.startBridge(sb!);
     await adapter.waitReady();
-    console.log(`[agent] bridge ready    ${elapsed(t3)}`);
+    console.log(`[agent] bridge ready    ${elapsed(t4)}`);
+    console.log(`[agent] total           ${elapsed(t0)}${fromSnapshot ? " (from snapshot)" : ""}`);
 
-    console.log(`[agent] total           ${elapsed(t0)}`);
-
-    return new Agent(sb, spec, resolvedEnv, adapter);
+    return new Agent(sb!, spec, resolvedEnv, adapter, fromSnapshot);
   }
 
   /**
@@ -157,8 +206,7 @@ export class Agent {
       useServerProxy: config.useServerProxy,
     });
 
-    // Resolve the agent spec.
-    let spec: import("./schema").AgentSpec;
+    let spec: AgentSpec;
     if (opts?.specPath) {
       spec = validateAgentSpec(await Bun.file(opts.specPath).json());
     } else {
@@ -178,19 +226,13 @@ export class Agent {
     const sb = await client.connect(sandboxId, spec.name);
     console.log(`[agent] connected       ${elapsed(t1)}`);
 
-    // Write /etc/drej-pi.json with resume: true so the bridge starts Pi with --continue.
-    const piConfig: Record<string, unknown> = { resume: true };
-    if (spec.provider) piConfig.provider = spec.provider;
-    if (spec.model) piConfig.model = spec.model;
-    await sb.writeFile("/etc/drej-pi.json", JSON.stringify(piConfig));
-    await sb.writeFile("/etc/drej-env", toShellExports(resolvedEnv));
-
     // Kill any stale bridge process before starting a fresh one.
     await sb.exec("pkill -f 'node /drej-bridge.js' 2>/dev/null; sleep 0.1; true", {
       strict: false,
     });
 
     const adapter = new PiAdapter();
+    await adapter.configure(sb, spec, resolvedEnv, { resume: true });
 
     console.log(`[agent] starting bridge...`);
     const t2 = Date.now();
@@ -199,7 +241,7 @@ export class Agent {
     console.log(`[agent] bridge ready    ${elapsed(t2)}`);
     console.log(`[agent] total           ${elapsed(t0)}`);
 
-    return new Agent(sb, spec, resolvedEnv, adapter);
+    return new Agent(sb, spec, resolvedEnv, adapter, false);
   }
 
   // --- streaming ---
@@ -322,3 +364,5 @@ export class Agent {
     await this.sandbox.close();
   }
 }
+
+export type { AgentSnapshotRecord };

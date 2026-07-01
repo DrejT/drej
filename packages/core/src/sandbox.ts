@@ -573,14 +573,16 @@ export class Sandbox {
   /**
    * Capture a snapshot of the sandbox's current filesystem state.
    *
-   * Writes a `checkpoint_created` event to the ledger with the snapshot ID.
-   * Use `DrejClient.resume(sandboxId)` to restore from the latest checkpoint.
+   * Writes a `checkpoint_created` event to the ledger with the snapshot ID and
+   * returns the snapshot ID. Use `DrejClient.resume(sandboxId)` to restore from
+   * the latest checkpoint, or pass the returned ID to `DrejClient.restoreSnapshot()`.
    */
-  async checkpoint(name?: string): Promise<void> {
+  async checkpoint(name?: string): Promise<string> {
     const snap = await this._deps.control.createSnapshot(this.sandboxId);
     await this._waitForSnapshot(snap.id);
     await this._emit(LedgerEvent.CheckpointCreated, -1, { snapshotId: snap.id, name });
     this._deps.hooks?.onCheckpoint?.(this.sandboxId, snap.id, name);
+    return snap.id;
   }
 
   private async _waitForSnapshot(snapshotId: string, timeoutMs = 120_000): Promise<void> {

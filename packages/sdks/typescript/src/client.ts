@@ -333,6 +333,59 @@ export class Drej {
   }
 
   /**
+   * Create a fresh sandbox from a snapshot ID without exec replay.
+   *
+   * Unlike `resume()`, this does not replay prior exec results — the new sandbox
+   * starts with a clean exec history. Use this when you want to restore a
+   * checkpointed environment and run new commands from scratch.
+   *
+   * @param snapshotId  The snapshot ID returned by `sb.checkpoint()`.
+   * @param name        A name for the new sandbox session in the ledger.
+   * @param resources   CPU and memory for the restored container.
+   *
+   * @example
+   * ```ts
+   * const snapshotId = await sb.checkpoint();
+   * await sb.close();
+   *
+   * // Later — restore and run fresh commands:
+   * const sb2 = await client.restoreSnapshot(snapshotId, "my-sandbox", { cpu: "500m", memory: "256Mi" });
+   * await sb2.exec("npm test");
+   * await sb2.close();
+   * ```
+   */
+  async restoreSnapshot(
+    snapshotId: string,
+    name: string,
+    resources: { cpu: string; memory: string; gpu?: string },
+  ): Promise<Sandbox> {
+    await this._ensureConnected();
+    await this._acquireSlot();
+    try {
+      const rawSb = await this._control.createSandbox({ snapshotId, resourceLimits: resources });
+      const newId = rawSb.id;
+      await this._waitForRunning(newId);
+      await this._adapter.append({
+        ts: Date.now(),
+        name,
+        sandboxId: newId,
+        stepIndex: -1,
+        event: LedgerEvent.SandboxCreated,
+        payload: { sandboxId: newId, fromSnapshot: snapshotId },
+      });
+      return new Sandbox(newId, name, {
+        control: this._control,
+        adapter: this._adapter,
+        onClose: () => this._releaseSlot(),
+        useServerProxy: this._useServerProxy,
+      });
+    } catch (err) {
+      this._releaseSlot();
+      throw err;
+    }
+  }
+
+  /**
    * Sandbox history management. List, inspect, and delete past sandbox records.
    *
    * @example

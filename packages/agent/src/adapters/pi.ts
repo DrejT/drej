@@ -381,7 +381,8 @@ export class PiAdapter {
     return this._bridgeUrl;
   }
 
-  async setup(sb: Sandbox, spec: AgentSpec, resolvedEnv: Record<string, string>): Promise<void> {
+  /** Install Pi CLI and any spec packages. Slow — result is captured by checkpoint(). */
+  async install(sb: Sandbox, spec: AgentSpec): Promise<void> {
     const pkgs = [...new Set(spec.packages ?? [])].filter(
       (p) => p !== "nodejs_22" && p !== "nodejs",
     );
@@ -391,13 +392,23 @@ export class PiAdapter {
       );
     }
     await sb.exec("npm install -g --ignore-scripts @earendil-works/pi-coding-agent");
+  }
 
-    // Write model/provider config separately from user env — bridge reads it as Pi CLI flags.
-    const piConfig: Record<string, string> = {};
+  /**
+   * Write config files and the bridge script. Always runs on every start (fresh install
+   * and snapshot resume alike) so env values, model/provider, and bridge code stay current.
+   */
+  async configure(
+    sb: Sandbox,
+    spec: AgentSpec,
+    resolvedEnv: Record<string, string>,
+    opts?: { resume?: boolean },
+  ): Promise<void> {
+    const piConfig: Record<string, unknown> = {};
     if (spec.provider) piConfig.provider = spec.provider;
     if (spec.model) piConfig.model = spec.model;
+    if (opts?.resume) piConfig.resume = true;
     await sb.writeFile("/etc/drej-pi.json", JSON.stringify(piConfig));
-
     await sb.writeFile("/etc/drej-env", toShellExports(resolvedEnv));
     await sb.writeFile("/drej-bridge.js", BRIDGE_SCRIPT);
   }

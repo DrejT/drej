@@ -27,11 +27,11 @@ Create an agent spec (`agents/my-agent.json`):
 ```
 
 ```ts
-import { Agent } from "@drej/agent";
+import { Agent, textOnly } from "@drej/agent";
 
 const agent = await Agent.load("./agents/my-agent.json");
 try {
-  for await (const chunk of agent.prompt("Write and run a Python hello world script.")) {
+  for await (const chunk of textOnly(agent.prompt("Write and run a Python hello world script."))) {
     process.stdout.write(chunk);
   }
 } finally {
@@ -41,49 +41,288 @@ try {
 
 ---
 
-## API
+## Agent spec
 
-### `Agent.load(specPath)`
+The spec JSON controls the agent's environment, model, and workspace setup.
 
-Loads an agent spec, spins up an OpenSandbox container, installs the Pi CLI, and returns a ready `Agent` instance.
+| Field        | Type                     | Description                                                           |
+| ------------ | ------------------------ | --------------------------------------------------------------------- |
+| `name`       | `string`                 | Unique identifier, used as the sandbox session name                   |
+| `cli`        | `"pi"`                   | CLI to run (currently only `"pi"`)                                    |
+| `cliVersion` | `string?`                | Pin to a specific Pi version, e.g. `"0.80.2"`. Defaults to latest.    |
+| `model`      | `string?`                | Model ID passed to Pi via `--model`                                   |
+| `provider`   | `string?`                | AI provider passed via `--provider`. Omit for direct Google API key.  |
+| `packages`   | `string[]?`              | APT packages to install before Pi. e.g. `["git", "python3"]`          |
+| `env`        | `Record<string,string>?` | Env vars in the sandbox. Values may reference host env: `"${MY_KEY}"` |
+| `resources`  | `object?`                | CPU/memory limits: `{ cpu: "1000m", memory: "2Gi" }`                  |
+| `setup`      | `SetupStep[]?`           | Workspace setup steps (see below)                                     |
 
-### `agent.prompt(message)`
+### Setup steps
 
-Sends a message to the agent and returns a `PromptStream` — an `AsyncIterable<string>` of response chunks.
+`setup` runs bash commands after Pi CLI install, before the snapshot is taken. Changes to any step automatically invalidate the snapshot cache.
+
+```json
+{
+  "name": "my-agent",
+  "cli": "pi",
+  "setup": [
+    { "name": "Create workspace", "run": "mkdir -p /workspace" },
+    { "name": "Install deps", "run": "npm install", "cwd": "/workspace" },
+    { "name": "Seed data", "run": "node scripts/seed.js", "cwd": "/workspace" }
+  ]
+}
+```
+
+Each step:
+
+| Field  | Type      | Description                                                       |
+| ------ | --------- | ----------------------------------------------------------------- |
+| `name` | `string`  | Human-readable label shown in logs and included in the setup hash |
+| `run`  | `string`  | Bash command to execute                                           |
+| `cwd`  | `string?` | Working directory. Runs as `cd <cwd> && <run>`                    |
+
+---
+
+## Snapshotting
+
+On first load, `Agent.load()` installs the Pi CLI and any `setup` steps, then checkpoints the sandbox. Subsequent loads restore from that snapshot — skipping the install entirely.
+
+```
+Load 1 (cold):   sandbox → Pi install → setup steps → checkpoint → bridge   ~50s
+Load 2 (warm):   snapshot restore → bridge                                   ~5s
+```
+
+The snapshot is invalidated automatically when `cli`, `cliVersion`, `packages`, or `setup` change.
 
 ```ts
-for await (const chunk of agent.prompt("Refactor this file to use async/await")) {
+const agent = await Agent.load("./agents/my-agent.json");
+console.log(agent.fromSnapshot); // false on first load, true after
+
+// Force a full reinstall:
+const agent = await Agent.load("./agents/my-agent.json", { rebuild: true });
+```
+
+---
+
+## Streaming
+
+`agent.prompt()` and `agent.bash()` return an `AgentStream` — an `AsyncIterable<AgentEvent>`:
+
+```ts
+type AgentEvent =
+  | { type: "text"; text: string }
+  | { type: "tool_start"; toolCallId: string; toolName: string; args: unknown }
+  | { type: "tool_update"; toolCallId: string; toolName: string; partialResult: unknown }
+  | { type: "tool_end"; toolCallId: string; toolName: string; result: unknown; isError: boolean };
+```
+
+Use `textOnly()` to filter to just the text chunks (equivalent to the old `PromptStream` behavior):
+
+```ts
+import { Agent, textOnly } from "@drej/agent";
+
+for await (const chunk of textOnly(agent.prompt("Summarise this repo."))) {
   process.stdout.write(chunk);
 }
 ```
 
-### `agent.steer(message)`
+### Tool call observability
 
-Inject a mid-stream instruction while the agent is responding.
-
-### `agent.sandbox`
-
-Direct access to the underlying `Sandbox` — read files, run commands, or inspect state independently of Pi.
+Iterate the raw stream to see every tool Pi uses:
 
 ```ts
-const output = await agent.sandbox.readFile("/workspace/result.txt");
+for await (const ev of agent.prompt("Run /workspace/script.py with python3.")) {
+  switch (ev.type) {
+    case "text":
+      process.stdout.write(ev.text);
+      break;
+    case "tool_start":
+      console.log(`[tool] ${ev.toolName} args=${JSON.stringify(ev.args)}`);
+      break;
+    case "tool_end":
+      console.log(`[tool] ${ev.toolName} done  isError=${ev.isError}`);
+      break;
+  }
+}
 ```
 
-### `agent.setEnv(vars)`
+---
 
-Set environment variables in the sandbox at runtime.
+## API reference
 
-### `agent.newSession()`
+### Loading and lifecycle
 
-Start a fresh conversation session without restarting the container.
+#### `Agent.load(specPath, opts?)`
 
-### `agent.abort()`
+Load a spec, spin up a sandbox, install Pi, run setup steps, and return a ready `Agent`. Restores from snapshot on subsequent calls.
 
-Interrupt the current in-progress prompt.
+```ts
+const agent = await Agent.load("./agents/my-agent.json");
+const agent = await Agent.load("./agents/my-agent.json", { rebuild: true });
+```
 
-### `agent.close()`
+#### `Agent.resume(sandboxId, opts?)`
 
-Shuts down the sandbox. Always call in a `finally` block.
+Reconnect to an existing sandbox after the host process has exited. Only restarts the bridge — Pi and the workspace are untouched.
+
+```ts
+// Original process saved agent.sandboxId somewhere...
+const agent = await Agent.resume(savedSandboxId);
+// Or provide the spec explicitly:
+const agent = await Agent.resume(savedSandboxId, { specPath: "./agents/my-agent.json" });
+```
+
+#### `agent.close()`
+
+Stop the sandbox container and release all resources. Always call in a `finally` block.
+
+---
+
+### Streaming
+
+#### `agent.prompt(message, opts?)`
+
+Send a message to Pi and stream the response as `AgentStream`.
+
+```ts
+for await (const chunk of textOnly(agent.prompt("Explain this file."))) {
+  process.stdout.write(chunk);
+}
+```
+
+#### `agent.bash(command)`
+
+Run a shell command inside Pi's working context and stream stdout as `AgentStream`.
+
+```ts
+for await (const chunk of textOnly(agent.bash("ls -la /workspace"))) {
+  process.stdout.write(chunk);
+}
+```
+
+---
+
+### Mid-flight control
+
+#### `agent.steer(message)`
+
+Redirect Pi's current response mid-flight. Pi acknowledges and adjusts.
+
+```ts
+const stream = textOnly(agent.prompt("Write an essay on every sorting algorithm..."));
+setTimeout(() => agent.steer("Stop — give me 3 bullet points instead."), 1500);
+for await (const chunk of stream) process.stdout.write(chunk);
+```
+
+#### `agent.followUp(message)`
+
+Queue a message for Pi to process after it finishes the current task.
+
+#### `agent.abort()`
+
+Interrupt the current in-progress response immediately.
+
+---
+
+### Session management
+
+#### `agent.newSession()`
+
+Start a fresh Pi conversation, clearing all context. Filesystem and workspace are unchanged.
+
+#### `agent.clone()`
+
+Branch the current Pi session at the current position. Returns `{ cancelled: boolean }`.
+
+#### `agent.fork(entryId)`
+
+Branch from a specific message entry in the conversation history. Returns `{ text, cancelled }`.
+
+#### `agent.switchSession(sessionPath)`
+
+Switch Pi to a different session file on disk.
+
+#### `agent.getMessages()`
+
+Retrieve the full conversation history for the current session.
+
+```ts
+const messages = await agent.getMessages();
+console.log(messages.length, "messages");
+```
+
+---
+
+### Model control
+
+#### `agent.setModel(provider, modelId)`
+
+Switch Pi to a specific model. Returns the activated `PiModel`.
+
+#### `agent.cycleModel()`
+
+Cycle to the next configured model. Returns `{ model, thinkingLevel, isScoped }` or `null` if only one model is configured.
+
+#### `agent.getAvailableModels()`
+
+List all models available to Pi under the current provider configuration.
+
+#### `agent.setThinkingLevel(level)`
+
+Set Pi's reasoning level (`"low" | "medium" | "high"`). Only effective on models that support extended thinking.
+
+#### `agent.cycleThinkingLevel()`
+
+Cycle Pi's thinking level. Returns `{ level }` or `null` if the current model doesn't support thinking.
+
+---
+
+### Context management
+
+#### `agent.setAutoCompaction(enabled)`
+
+Enable or disable Pi's automatic context compaction.
+
+#### `agent.compact(customInstructions?)`
+
+Manually trigger Pi's context compaction. Returns `{ tokensBefore, estimatedTokensAfter }`.
+
+---
+
+### Environment and debugging
+
+#### `agent.setEnv(vars)`
+
+Set or update env vars in the running container. Restarts Pi so it picks up the new env.
+
+```ts
+await agent.setEnv({ DATABASE_URL: "postgres://..." });
+```
+
+#### `agent.getLogs()`
+
+Retrieve recent bridge logs (ring-buffered, last 200 entries).
+
+#### `agent.sandbox`
+
+Direct access to the underlying `Sandbox` — run commands, read/write files, or inspect state independently of Pi.
+
+```ts
+await agent.sandbox.writeFile("/workspace/input.txt", data);
+const { stdout } = await agent.sandbox.exec("wc -l /workspace/input.txt");
+const result = await agent.sandbox.readFile("/workspace/output.txt");
+```
+
+---
+
+## Properties
+
+| Property             | Type      | Description                                    |
+| -------------------- | --------- | ---------------------------------------------- |
+| `agent.sandboxId`    | `string`  | OpenSandbox container ID                       |
+| `agent.name`         | `string`  | Agent name from the spec                       |
+| `agent.sandbox`      | `Sandbox` | Underlying drej `Sandbox` object               |
+| `agent.fromSnapshot` | `boolean` | `true` when restored from snapshot (fast path) |
 
 ---
 

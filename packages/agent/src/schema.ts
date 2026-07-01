@@ -1,4 +1,17 @@
 /**
+ * A single named setup step run inside the sandbox after Pi CLI install,
+ * before the snapshot is taken. The step is a bash shell command.
+ */
+export interface SetupStep {
+  /** Human-readable label shown in logs and included in the setup hash. */
+  name: string;
+  /** Shell command to run (bash). */
+  run: string;
+  /** If set, the command runs as `cd <cwd> && <run>`. */
+  cwd?: string;
+}
+
+/**
  * JSON spec for an agent — typically loaded from an `agent.json` file on disk.
  * Pass the path to `Agent.load(specPath)`.
  *
@@ -49,6 +62,12 @@ export interface AgentSpec {
   metadata?: Record<string, string>;
   /** Other agent specs to load as dependencies before this one. */
   registryDependencies?: string[];
+  /**
+   * Setup steps run inside the sandbox after Pi CLI install, before the snapshot.
+   * Baked into the snapshot — any change to a step invalidates the cache automatically.
+   * Example: create directories, write seed files, install project dependencies.
+   */
+  setup?: SetupStep[];
 }
 
 export function validateAgentSpec(data: unknown): AgentSpec {

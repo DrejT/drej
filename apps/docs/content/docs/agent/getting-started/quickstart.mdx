@@ -44,17 +44,14 @@ Create `agents/hello-agent.json`:
 ## 4. Load the agent and send a prompt
 
 ```ts title="run.ts"
-import { Agent } from "@drej/agent";
-
-process.env.GEMINI_API_KEY = "your-key-here"; // or set in environment
+import { Agent, textOnly } from "@drej/agent";
 
 const agent = await Agent.load("./agents/hello-agent.json");
-console.log(`Sandbox: ${agent.sandboxId}`);
+console.log(`Sandbox: ${agent.sandboxId}  fromSnapshot=${agent.fromSnapshot}`);
 
 try {
-  // Stream Pi's response chunk by chunk
-  for await (const chunk of agent.prompt(
-    "Write a Python script that prints the first 10 Fibonacci numbers. Run it.",
+  for await (const chunk of textOnly(
+    agent.prompt("Write a Python script that prints the first 10 Fibonacci numbers. Run it."),
   )) {
     process.stdout.write(chunk);
   }
@@ -67,34 +64,45 @@ try {
 bun run.ts
 ```
 
-`Agent.load()` logs timing for each phase:
+`Agent.load()` logs timing for each phase. The first run installs the Pi CLI (~30–60 s) and checkpoints the sandbox. Subsequent runs restore from that snapshot in ~5 s:
 
 ```
+# First run
 [agent] starting sandbox (hello-agent)...
 [agent] sandbox ready   12340ms (abc-123...)
 [agent] installing Pi CLI...
-[agent] Pi CLI ready    25s
+[agent] Pi CLI ready    28000ms
+[agent] checkpointing...
+[agent] checkpoint done 10000ms
 [agent] starting bridge...
 [agent] bridge ready    3210ms
-[agent] total           41s
+[agent] total           54s
+
+# Second run
+[agent] restoring from snapshot...
+[agent] snapshot ready  1900ms (def-456...)
+[agent] starting bridge...
+[agent] bridge ready    2800ms
+[agent] total           5s (from snapshot)
 ```
+
+See [Snapshotting](/docs/agent/getting-started/snapshotting) for details.
 
 ## 5. Read and write files
 
-The `agent.sandbox` property gives direct access to the underlying `Sandbox` — bypassing Pi entirely:
+`agent.sandbox` gives direct access to the underlying `Sandbox` — bypassing Pi entirely:
 
 ```ts
 // Host writes a file into the container
 await agent.sandbox.writeFile("/workspace/data.csv", csvContent);
 
 // Pi reads and processes it
-for await (const chunk of agent.prompt("Summarize the CSV at /workspace/data.csv.")) {
+for await (const chunk of textOnly(agent.prompt("Summarize the CSV at /workspace/data.csv."))) {
   process.stdout.write(chunk);
 }
 
 // Host reads back whatever Pi wrote
 const result = await agent.sandbox.readFile("/workspace/summary.txt");
-console.log(result);
 
 // Host can also run shell commands directly
 const { stdout } = await agent.sandbox.exec("ls /workspace/");
@@ -103,7 +111,7 @@ const { stdout } = await agent.sandbox.exec("ls /workspace/");
 ## 6. Session management
 
 ```ts
-// Pi has its own conversation context — this clears it
+// Clear Pi's conversation context (filesystem unchanged)
 await agent.newSession();
 
 // Update environment variables and restart Pi with the new values
@@ -112,5 +120,7 @@ await agent.setEnv({ EXTRA_CONTEXT: "project-alpha" });
 
 ## Next steps
 
-- [Agent API reference](/docs/agent/api-reference) — full reference for `Agent`, `AgentSpec`, and `PromptStream`
-- [Core SDK](/docs/core) — the underlying `Sandbox`, `exec`, and file operations API
+- [Snapshotting](/docs/agent/getting-started/snapshotting) — how fast restores work and how to control the cache
+- [Workspace setup](/docs/agent/getting-started/workspace-setup) — bake files and dependencies into the snapshot
+- [Streaming & tool events](/docs/agent/getting-started/streaming) — observe Pi's tool calls in real time
+- [Agent API reference](/docs/agent/api-reference) — full reference for all methods and types

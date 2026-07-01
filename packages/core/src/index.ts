@@ -11,9 +11,9 @@ export type {
 export { LogLevel, ConsoleLogger, noopLogger } from "./logger";
 export type { ILogger } from "./logger";
 
-export { Sandbox, resolveExecClient } from "./sandbox";
+export { Sandbox, BashSession, resolveExecClient } from "./sandbox";
 export type { ExecOptions, ExecCodeOptions, SandboxDeps, SandboxHooks } from "./sandbox";
-export type { FileInfo } from "@drej/opensandbox";
+export type { FileInfo, DiagnosticLog, DiagnosticEvent, Metrics } from "@drej/opensandbox";
 
 export { ExecHandle } from "./exec-handle";
 export type { ExecResult } from "./exec-handle";

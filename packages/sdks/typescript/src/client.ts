@@ -19,7 +19,7 @@ import {
   type EnvironmentSandboxOptions,
 } from "./environment";
 
-export { Sandbox } from "@drej/core";
+export { Sandbox, BashSession } from "@drej/core";
 export type { ExecHandle, ExecResult, ExecOptions, ExecCodeOptions } from "@drej/core";
 export {
   LedgerEvent,
@@ -36,6 +36,9 @@ export type {
   LedgerEntry,
   EnvironmentRecord,
   FileInfo,
+  DiagnosticLog,
+  DiagnosticEvent,
+  Metrics,
 } from "@drej/core";
 export { DrejError, type DrejOptions, type SandboxOptions, type ResumeOptions } from "./types";
 export type { CheckpointInfo } from "@drej/core";
@@ -288,6 +291,94 @@ export class Drej {
         },
         replayCache,
       );
+    } catch (err) {
+      this._releaseSlot();
+      throw err;
+    }
+  }
+
+  /**
+   * Attach to an already-running sandbox container without creating or restoring anything.
+   *
+   * Use this to reconnect to a sandbox whose host process has exited but whose container
+   * is still running. Unlike `resume()`, no snapshot is involved — the container keeps
+   * its current state. The execd endpoint is resolved lazily on first use.
+   *
+   * @throws `DrejError` (409) if the sandbox is not in Running state.
+   *
+   * @example
+   * ```ts
+   * // In a new process, reconnect to a sandbox started earlier:
+   * const sb = await client.connect(savedSandboxId, "my-sandbox");
+   * const { stdout } = await sb.exec("cat /results.txt");
+   * await sb.close();
+   * ```
+   */
+  async connect(sandboxId: string, name: string): Promise<Sandbox> {
+    await this._ensureConnected();
+    const info = await this._control.getSandbox(sandboxId);
+    if (info.status.state !== SandboxState.Running) {
+      throw new DrejError(
+        `Sandbox ${sandboxId} is ${info.status.state} — can only connect to Running sandboxes`,
+        409,
+      );
+    }
+    await this._acquireSlot();
+    return new Sandbox(sandboxId, name, {
+      control: this._control,
+      adapter: this._adapter,
+      onClose: () => this._releaseSlot(),
+      useServerProxy: this._useServerProxy,
+    });
+  }
+
+  /**
+   * Create a fresh sandbox from a snapshot ID without exec replay.
+   *
+   * Unlike `resume()`, this does not replay prior exec results — the new sandbox
+   * starts with a clean exec history. Use this when you want to restore a
+   * checkpointed environment and run new commands from scratch.
+   *
+   * @param snapshotId  The snapshot ID returned by `sb.checkpoint()`.
+   * @param name        A name for the new sandbox session in the ledger.
+   * @param resources   CPU and memory for the restored container.
+   *
+   * @example
+   * ```ts
+   * const snapshotId = await sb.checkpoint();
+   * await sb.close();
+   *
+   * // Later — restore and run fresh commands:
+   * const sb2 = await client.restoreSnapshot(snapshotId, "my-sandbox", { cpu: "500m", memory: "256Mi" });
+   * await sb2.exec("npm test");
+   * await sb2.close();
+   * ```
+   */
+  async restoreSnapshot(
+    snapshotId: string,
+    name: string,
+    resources: { cpu: string; memory: string; gpu?: string },
+  ): Promise<Sandbox> {
+    await this._ensureConnected();
+    await this._acquireSlot();
+    try {
+      const rawSb = await this._control.createSandbox({ snapshotId, resourceLimits: resources });
+      const newId = rawSb.id;
+      await this._waitForRunning(newId);
+      await this._adapter.append({
+        ts: Date.now(),
+        name,
+        sandboxId: newId,
+        stepIndex: -1,
+        event: LedgerEvent.SandboxCreated,
+        payload: { sandboxId: newId, fromSnapshot: snapshotId },
+      });
+      return new Sandbox(newId, name, {
+        control: this._control,
+        adapter: this._adapter,
+        onClose: () => this._releaseSlot(),
+        useServerProxy: this._useServerProxy,
+      });
     } catch (err) {
       this._releaseSlot();
       throw err;

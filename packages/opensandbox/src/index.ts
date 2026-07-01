@@ -22,4 +22,7 @@ export type {
   FileInfo,
   FileReplacement,
   Metrics,
+  CreateSessionRequest,
+  RunInSessionRequest,
+  CreateSessionResponse,
 } from "./types";

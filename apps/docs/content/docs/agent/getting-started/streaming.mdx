@@ -1,0 +1,97 @@
+---
+title: Streaming & tool events
+description: Observe Pi's text output and tool calls in real time using AgentStream and AgentEvent.
+---
+
+`agent.prompt()` and `agent.bash()` return an `AgentStream` — an `AsyncIterable<AgentEvent>`. Each event is a discriminated union that tells you whether Pi is writing text or using a tool.
+
+## AgentEvent
+
+```ts
+type AgentEvent =
+  | { type: "text"; text: string }
+  | { type: "tool_start"; toolCallId: string; toolName: string; args: unknown }
+  | { type: "tool_update"; toolCallId: string; toolName: string; partialResult: unknown }
+  | { type: "tool_end"; toolCallId: string; toolName: string; result: unknown; isError: boolean };
+```
+
+| Event         | When it fires                                                    |
+| ------------- | ---------------------------------------------------------------- |
+| `text`        | Pi is writing a text chunk                                       |
+| `tool_start`  | Pi has invoked a tool (e.g. `bash`, `write_file`)                |
+| `tool_update` | Partial output from a long-running tool                          |
+| `tool_end`    | Tool completed — includes the full result and whether it errored |
+
+## Text-only with textOnly()
+
+If you only care about the text output, use the `textOnly()` helper to filter the stream:
+
+```ts
+import { Agent, textOnly } from "@drej/agent";
+
+for await (const chunk of textOnly(agent.prompt("Summarise this repo."))) {
+  process.stdout.write(chunk);
+}
+```
+
+`textOnly()` is a thin generator that passes through `text` events and drops everything else. It returns `AsyncIterable<string>` — the same interface as the old `PromptStream`.
+
+## Observing tool calls
+
+Iterate the raw `AgentStream` to see every tool Pi invokes:
+
+```ts
+for await (const ev of agent.prompt("Run /workspace/script.py with python3.")) {
+  switch (ev.type) {
+    case "text":
+      process.stdout.write(ev.text);
+      break;
+
+    case "tool_start":
+      console.log(`\n[tool] ${ev.toolName}  args=${JSON.stringify(ev.args)}`);
+      break;
+
+    case "tool_update":
+      // Partial output from a running tool (e.g. streaming bash stdout)
+      process.stdout.write(`[partial: ${ev.toolName}]`);
+      break;
+
+    case "tool_end":
+      console.log(`[tool] ${ev.toolName}  done  isError=${ev.isError}`);
+      break;
+  }
+}
+```
+
+## Collecting tool events
+
+You can collect tool events alongside the text response:
+
+```ts
+const toolEvents: AgentEvent[] = [];
+let text = "";
+
+for await (const ev of agent.prompt("Write and run a hello world script.")) {
+  if (ev.type === "text") {
+    text += ev.text;
+  } else {
+    toolEvents.push(ev);
+  }
+}
+
+const toolNames = toolEvents
+  .filter((e) => e.type === "tool_start")
+  .map((e) => (e as Extract<AgentEvent, { type: "tool_start" }>).toolName);
+
+console.log("Tools used:", [...new Set(toolNames)].join(", "));
+```
+
+## bash()
+
+`agent.bash()` runs a shell command inside Pi's working context and returns the same `AgentStream`. Tool events from the bash execution are surfaced the same way:
+
+```ts
+for await (const chunk of textOnly(agent.bash("ls -la /workspace"))) {
+  process.stdout.write(chunk);
+}
+```

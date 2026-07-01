@@ -1,0 +1,13 @@
+{
+  "name": "drej-example-sandbox-extensions",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "start": "bun index.ts"
+  },
+  "dependencies": {
+    "@drej/agent": "workspace:*",
+    "@drej/sqlite": "workspace:*",
+    "drej": "workspace:*"
+  }
+}

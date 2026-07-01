@@ -1,0 +1,28 @@
+{
+  "$schema": "https://registry.drej.dev/schema/agent-item.json",
+  "name": "workspace-agent",
+  "title": "Workspace Agent",
+  "description": "Demonstrates setup steps: a small Node.js project is created before the snapshot.",
+  "author": "drej",
+  "cli": "pi",
+  "model": "gemini-flash-latest",
+  "packages": ["python3"],
+  "env": {
+    "GEMINI_API_KEY": "${GEMINI_API_KEY}"
+  },
+  "resources": { "cpu": "1000m", "memory": "2Gi" },
+  "setup": [
+    { "name": "Create workspace", "run": "mkdir -p /workspace" },
+    {
+      "name": "Write package.json",
+      "run": "printf '{\"name\":\"app\",\"version\":\"1.0.0\"}' > package.json",
+      "cwd": "/workspace"
+    },
+    {
+      "name": "Write index.js",
+      "run": "printf 'console.log(\"workspace ready — setup baked into snapshot\")' > index.js",
+      "cwd": "/workspace"
+    },
+    { "name": "Verify", "run": "node index.js", "cwd": "/workspace" }
+  ]
+}

@@ -42,6 +42,10 @@ export enum LedgerEvent {
   CheckpointCreated = "checkpoint_created",
   /** Emitted when a sandbox is closed. */
   SandboxClosed = "sandbox_closed",
+  /** Emitted when pause() freezes the container. */
+  SandboxPaused = "sandbox_paused",
+  /** Emitted when resume() restores the container to Running. */
+  SandboxResumed = "sandbox_resumed",
 
   // ── Workflow layer events (used by @drej/workflow) ────────────────────────
   /** Emitted once when a workflow run starts, before any steps execute. */

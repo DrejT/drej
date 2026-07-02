@@ -1,11 +1,11 @@
-name: Feature request
-description: Suggest an idea or improvement
-labels: ["enhancement"]
+title: "[Idea]: "
+labels: []
 body:
   - type: markdown
     attributes:
       value: |
-        Have an idea? Describe it below. The more concrete, the better.
+        Have an idea for drej? Describe it below and let's brainstorm — this is the place
+        for early-stage ideas, before they're concrete enough to become an issue.
 
   - type: textarea
     id: problem

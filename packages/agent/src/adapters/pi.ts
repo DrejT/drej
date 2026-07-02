@@ -211,6 +211,38 @@ function handleLine(line) {
     return;
   }
 
+  // Extension UI requests from Pi extensions.
+  // Dialog methods (select/confirm/input/editor) block Pi waiting for extension_ui_response.
+  // We auto-cancel them immediately so Pi never stalls — even when there is no active prompt.
+  // Fire-and-forget methods need no response; we just forward them.
+  if (ev.type === "extension_ui_request") {
+    var DIALOG_METHODS = ["select", "confirm", "input", "editor"];
+    var isDialog = DIALOG_METHODS.indexOf(ev.method) !== -1;
+    var uiParams = {};
+    Object.keys(ev).forEach(function(k) { if (k !== "type" && k !== "id") uiParams[k] = ev[k]; });
+    if (state.active) {
+      state.active.res.write("data: " + JSON.stringify({ type: "extension_ui", method: ev.method, params: uiParams, isDialog: isDialog, requestId: isDialog ? ev.id : undefined }) + "\\n\\n");
+    }
+    if (isDialog && ev.id) {
+      rpc({ type: "extension_ui_response", id: ev.id, cancelled: true });
+    }
+    return;
+  }
+
+  if (ev.type === "auto_retry_start") {
+    if (state.active) {
+      state.active.res.write("data: " + JSON.stringify({ type: "auto_retry_start", attempt: ev.attempt, maxAttempts: ev.maxAttempts, delayMs: ev.delayMs, errorMessage: ev.errorMessage || "" }) + "\\n\\n");
+    }
+    return;
+  }
+
+  if (ev.type === "auto_retry_end") {
+    if (state.active) {
+      state.active.res.write("data: " + JSON.stringify({ type: "auto_retry_end", success: !!ev.success, attempt: ev.attempt, finalError: ev.finalError }) + "\\n\\n");
+    }
+    return;
+  }
+
   var item = state.active;
   if (!item) return;
 
@@ -365,6 +397,14 @@ http.createServer(function(req, res) {
         rpcWithAck({ id: "sac" + Date.now(), type: "set_auto_compaction", enabled: !!data.enabled }, res);
         return;
 
+      case "/set-auto-retry":
+        rpcWithAck({ id: "sar" + Date.now(), type: "set_auto_retry", enabled: !!data.enabled }, res);
+        return;
+
+      case "/abort-retry":
+        rpcWithAck({ id: "ar" + Date.now(), type: "abort_retry" }, res);
+        return;
+
       case "/reload-env":
         // Merge any inline env the host sent, then restart Pi so it picks up the new env file.
         if (data.env && typeof data.env === "object") Object.assign(process.env, data.env);
@@ -505,6 +545,14 @@ export class PiAdapter {
 
   async setAutoCompaction(enabled: boolean): Promise<void> {
     await rpcPost(this.bridgeUrl, "/set-auto-compaction", { enabled });
+  }
+
+  async setAutoRetry(enabled: boolean): Promise<void> {
+    await rpcPost(this.bridgeUrl, "/set-auto-retry", { enabled });
+  }
+
+  async abortRetry(): Promise<void> {
+    await rpcPost(this.bridgeUrl, "/abort-retry");
   }
 
   // --- commands that return data ---

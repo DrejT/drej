@@ -230,6 +230,44 @@ Cycle Pi's thinking level. Returns `null` if the current model doesn't support t
 
 ---
 
+## Reliability
+
+### agent.setAutoRetry()
+
+```ts
+async setAutoRetry(enabled: boolean): Promise<void>
+```
+
+Enable or disable Pi's automatic retry on transient errors (429, 500, 502, 503, 504). Auto-retry is **on by default**: 3 attempts with exponential backoff (2 s / 4 s / 8 s).
+
+Disable it when you want to handle errors yourself by observing `auto_retry_start` and `auto_retry_end` events in the stream:
+
+```ts
+await agent.setAutoRetry(false);
+
+for await (const ev of agent.prompt("Run the test suite.")) {
+  if (ev.type === "text") process.stdout.write(ev.text);
+  if (ev.type === "auto_retry_start") {
+    console.error(
+      `[retry] attempt ${ev.attempt}/${ev.maxAttempts} in ${ev.delayMs}ms — ${ev.errorMessage}`,
+    );
+  }
+  if (ev.type === "auto_retry_end" && !ev.success) {
+    console.error(`[retry] failed after ${ev.attempt} attempts: ${ev.finalError}`);
+  }
+}
+```
+
+### agent.abortRetry()
+
+```ts
+async abortRetry(): Promise<void>
+```
+
+Abort an in-progress auto-retry immediately. Pi stops waiting and fails the current operation, emitting `auto_retry_end` with `success: false`.
+
+---
+
 ## Context management
 
 ### agent.setAutoCompaction()
@@ -421,7 +459,16 @@ type AgentEvent =
   | { type: "text"; text: string }
   | { type: "tool_start"; toolCallId: string; toolName: string; args: unknown }
   | { type: "tool_update"; toolCallId: string; toolName: string; partialResult: unknown }
-  | { type: "tool_end"; toolCallId: string; toolName: string; result: unknown; isError: boolean };
+  | { type: "tool_end"; toolCallId: string; toolName: string; result: unknown; isError: boolean }
+  | { type: "extension_ui"; method: string; params: unknown; isDialog: boolean; requestId?: string }
+  | {
+      type: "auto_retry_start";
+      attempt: number;
+      maxAttempts: number;
+      delayMs: number;
+      errorMessage: string;
+    }
+  | { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string };
 ```
 
 See [Streaming & tool events](/docs/agent/getting-started/streaming) for usage examples.

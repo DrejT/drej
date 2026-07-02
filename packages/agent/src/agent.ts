@@ -296,6 +296,24 @@ export class Agent {
     return this._adapter.setAutoCompaction(enabled);
   }
 
+  /**
+   * Enable or disable Pi's automatic retry on transient errors (429, 500, 502, 503, 504).
+   * Auto-retry is ON by default: 3 attempts with exponential backoff (2 s / 4 s / 8 s).
+   * Disable it when you want to handle errors yourself via `auto_retry_start`/`auto_retry_end`
+   * events in the stream.
+   */
+  async setAutoRetry(enabled: boolean): Promise<void> {
+    return this._adapter.setAutoRetry(enabled);
+  }
+
+  /**
+   * Abort an in-progress auto-retry immediately. Pi stops waiting and fails the current
+   * operation, emitting `auto_retry_end` with `success: false`.
+   */
+  async abortRetry(): Promise<void> {
+    return this._adapter.abortRetry();
+  }
+
   // --- commands that return data ---
 
   /**

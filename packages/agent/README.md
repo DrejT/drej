@@ -113,7 +113,16 @@ type AgentEvent =
   | { type: "text"; text: string }
   | { type: "tool_start"; toolCallId: string; toolName: string; args: unknown }
   | { type: "tool_update"; toolCallId: string; toolName: string; partialResult: unknown }
-  | { type: "tool_end"; toolCallId: string; toolName: string; result: unknown; isError: boolean };
+  | { type: "tool_end"; toolCallId: string; toolName: string; result: unknown; isError: boolean }
+  | { type: "extension_ui"; method: string; params: unknown; isDialog: boolean; requestId?: string }
+  | {
+      type: "auto_retry_start";
+      attempt: number;
+      maxAttempts: number;
+      delayMs: number;
+      errorMessage: string;
+    }
+  | { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string };
 ```
 
 Use `textOnly()` to filter to just the text chunks (equivalent to the old `PromptStream` behavior):
@@ -286,6 +295,22 @@ Enable or disable Pi's automatic context compaction.
 #### `agent.compact(customInstructions?)`
 
 Manually trigger Pi's context compaction. Returns `{ tokensBefore, estimatedTokensAfter }`.
+
+---
+
+### Reliability
+
+#### `agent.setAutoRetry(enabled)`
+
+Enable or disable Pi's automatic retry on transient errors (429, 500, 502, 503, 504). Auto-retry is **on by default**: 3 attempts with exponential backoff (2 s / 4 s / 8 s). Disable it when you want to handle failures yourself via `auto_retry_start` / `auto_retry_end` events.
+
+```ts
+await agent.setAutoRetry(false); // take full control
+```
+
+#### `agent.abortRetry()`
+
+Abort an in-progress auto-retry immediately. Pi fails the current operation and emits `auto_retry_end` with `success: false`.
 
 ---
 

@@ -4,10 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "bun run scripts/generate-redirects.ts && next build",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "deploy": "bun run scripts/generate-redirects.ts && next build && wrangler pages deploy out --project-name=drej-docs",
+    "deploy": "next build && wrangler pages deploy out --project-name=drej-docs",
     "postinstall": "fumadocs-mdx"
   },
   "dependencies": {

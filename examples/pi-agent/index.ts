@@ -6,6 +6,7 @@
  *   setModel, cycleModel, setThinkingLevel, cycleThinkingLevel
  *   setAutoCompaction, compact
  *   clone, fork
+ *   setAutoRetry, abortRetry
  *   setEnv, getLogs
  *   sandbox.exec, sandbox.writeFile, sandbox.readFile
  *
@@ -189,8 +190,35 @@ try {
   }
   console.log("\n");
 
-  // ── 13. getLogs ───────────────────────────────────────────────────────────────
-  section("13. getLogs — bridge ring-buffer (last 5 entries)");
+  // ── 13. setAutoRetry — toggle Pi's built-in transient-error retry ────────────
+  // Auto-retry is ON by default (3 attempts, 2s/4s/8s exponential backoff).
+  // Disable it when you want to handle transient failures yourself via events.
+  section("13. setAutoRetry — toggle transient-error retry");
+  await agent.setAutoRetry(false);
+  console.log("setAutoRetry(false) → ok (retry disabled)");
+  await agent.setAutoRetry(true);
+  console.log("setAutoRetry(true)  → ok (retry re-enabled)\n");
+
+  // To observe retry events, iterate the raw AgentStream:
+  // (We can't force a transient error here, so we just show the pattern.)
+  console.log("Retry event pattern (fires automatically on 429/5xx):");
+  console.log(
+    "  { type: 'auto_retry_start', attempt: 1, maxAttempts: 3, delayMs: 2000, errorMessage: '...' }",
+  );
+  console.log("  { type: 'auto_retry_end',   success: true, attempt: 1 }");
+  console.log(
+    "\nTo observe live, iterate agent.prompt() and switch on ev.type === 'auto_retry_start'.\n",
+  );
+
+  // ── 14. abortRetry — cancel an in-progress retry ─────────────────────────────
+  // abortRetry() is a no-op if no retry is currently pending.
+  // In production use it to let users cancel a stuck retry immediately.
+  section("14. abortRetry — cancel in-progress retry (no-op if idle)");
+  await agent.abortRetry();
+  console.log("abortRetry() → ok\n");
+
+  // ── 15. getLogs ───────────────────────────────────────────────────────────────
+  section("15. getLogs — bridge ring-buffer (last 5 entries)");
   const logs = await agent.getLogs();
   const logLines = logs.trim().split("\n");
   console.log(`${logLines.length} log entries total. Last 5:`);

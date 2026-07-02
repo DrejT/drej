@@ -5,12 +5,37 @@
  * - `tool_start` — Pi started executing a tool (bash, file write, etc.)
  * - `tool_update` — streaming progress from an in-flight tool execution
  * - `tool_end` — a tool finished; `result` holds its output, `isError` whether it failed
+ * - `extension_ui` — a Pi extension requested UI interaction; dialog requests are
+ *   auto-cancelled by the bridge so Pi never stalls, but the event is forwarded so
+ *   callers can observe what was requested
+ * - `auto_retry_start` — Pi is about to retry after a transient error (429, 5xx)
+ * - `auto_retry_end` — Pi's retry sequence completed (success or exhausted)
  */
 export type AgentEvent =
   | { type: "text"; text: string }
   | { type: "tool_start"; toolCallId: string; toolName: string; args: unknown }
   | { type: "tool_update"; toolCallId: string; toolName: string; partialResult: unknown }
-  | { type: "tool_end"; toolCallId: string; toolName: string; result: unknown; isError: boolean };
+  | { type: "tool_end"; toolCallId: string; toolName: string; result: unknown; isError: boolean }
+  | {
+      type: "extension_ui";
+      method: string;
+      params: unknown;
+      isDialog: boolean;
+      requestId?: string;
+    }
+  | {
+      type: "auto_retry_start";
+      attempt: number;
+      maxAttempts: number;
+      delayMs: number;
+      errorMessage: string;
+    }
+  | {
+      type: "auto_retry_end";
+      success: boolean;
+      attempt: number;
+      finalError?: string;
+    };
 
 /**
  * Async iterable of structured agent events. Returned by `Agent.prompt()` and `Agent.bash()`.

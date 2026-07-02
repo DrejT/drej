@@ -135,3 +135,120 @@ for await (const chunk of textOnly(agent.bash("ls -la /workspace"))) {
   process.stdout.write(chunk);
 }
 ```
+
+## Lifecycle events
+
+Every `prompt()` call fires a sequence of lifecycle events around the text and tool events. These are useful for measuring per-turn latency, building progress indicators, or capturing the full structured response.
+
+```ts
+for await (const ev of agent.prompt("Refactor this module.")) {
+  switch (ev.type) {
+    case "agent_start":
+      console.time("agent");
+      break;
+
+    case "turn_start":
+      console.log(`turn ${ev.turnIndex} started at ${new Date(ev.timestamp).toISOString()}`);
+      break;
+
+    case "text":
+      process.stdout.write(ev.text);
+      break;
+
+    case "turn_end":
+      // ev.message is the full assistant message; ev.toolResults holds tool results from this turn
+      console.log(`\nturn ${ev.turnIndex} done — ${ev.toolResults.length} tool(s) used`);
+      break;
+
+    case "agent_end":
+      // ev.messages contains every message generated across all turns
+      console.timeEnd("agent");
+      console.log(`total messages in run: ${ev.messages.length}`);
+      break;
+  }
+}
+```
+
+The event order within a single turn is always:
+
+```
+agent_start
+  turn_start (turnIndex: 0)
+    message_start
+      message_update  ← repeated for each streaming delta
+      text            ← emitted alongside message_update for text deltas
+    message_end
+    tool_start / tool_update / tool_end  ← if Pi used tools
+  turn_end
+  turn_start (turnIndex: 1)  ← if Pi needed another turn
+  ...
+agent_end
+```
+
+## Observing thinking and tool-call deltas
+
+`message_update` carries the raw Pi delta in its `delta` field. In addition to `text_delta` (which the bridge also surfaces as a `text` event), it can carry thinking and tool-call deltas from models that support extended thinking:
+
+```ts
+for await (const ev of agent.prompt("Solve this step by step.")) {
+  if (ev.type === "message_update") {
+    const delta = ev.delta as { type: string; delta?: string; thinking?: string };
+    if (delta.type === "thinking_delta") {
+      process.stdout.write(`[thinking] ${delta.thinking ?? ""}`);
+    }
+    // delta.type === "text_delta" is also emitted as a "text" event — no need to handle it twice
+  }
+  if (ev.type === "text") {
+    process.stdout.write(ev.text);
+  }
+}
+```
+
+## Compaction events
+
+Auto-compaction fires between turns when Pi's context fills past a threshold. The `compaction_start` and `compaction_end` events let you surface this to the user instead of silently pausing:
+
+```ts
+for await (const ev of agent.prompt("Analyse the entire repo.")) {
+  switch (ev.type) {
+    case "text":
+      process.stdout.write(ev.text);
+      break;
+
+    case "compaction_start":
+      console.log(`\n[compacting — ${ev.reason}]`);
+      break;
+
+    case "compaction_end":
+      if (ev.result) {
+        const saved = ev.result.tokensBefore - ev.result.estimatedTokensAfter;
+        console.log(`[compaction done — freed ~${saved} tokens]`);
+      }
+      if (ev.aborted) {
+        console.warn("[compaction aborted]");
+      }
+      break;
+  }
+}
+```
+
+`reason` is one of `"manual"` (triggered by `agent.compact()`), `"threshold"` (auto, approaching context limit), or `"overflow"` (auto, context was full).
+
+## Queue events
+
+`queue_update` fires when the steering or follow-up queue changes — for example, immediately after `agent.followUp()` is called while a prompt is in flight:
+
+```ts
+const stream = agent.prompt("Write a long analysis...");
+
+setTimeout(async () => {
+  await agent.followUp("Now summarize that in one paragraph.");
+}, 1000);
+
+for await (const ev of stream) {
+  if (ev.type === "text") process.stdout.write(ev.text);
+  if (ev.type === "queue_update") {
+    console.log(`\n[queued follow-ups: ${ev.followUp.length}]`);
+  }
+}
+```

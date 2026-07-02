@@ -1,0 +1,105 @@
+---
+title: Reliability & error recovery
+description: Handle transient API errors with auto-retry, observe retry events, and abort mid-flight bash commands.
+---
+
+Pi has built-in transient-error recovery that fires automatically when the AI provider returns a 429 (rate limit) or 5xx (server error). The `@drej/agent` bridge surfaces this as observable events so you can build responsive UIs without writing retry logic yourself.
+
+## Auto-retry
+
+Auto-retry is **on by default**: Pi retries up to 3 times with exponential backoff (2 s → 4 s → 8 s). You don't need to configure anything for it to work.
+
+When a transient error occurs mid-prompt, Pi pauses internally and emits `auto_retry_start`. After the delay it retries, and on completion emits `auto_retry_end`.
+
+```ts
+for await (const ev of agent.prompt("Run the full test suite.")) {
+  switch (ev.type) {
+    case "text":
+      process.stdout.write(ev.text);
+      break;
+
+    case "auto_retry_start":
+      console.warn(
+        `[retry] attempt ${ev.attempt}/${ev.maxAttempts} — ` +
+          `waiting ${ev.delayMs / 1000}s after: ${ev.errorMessage}`,
+      );
+      break;
+
+    case "auto_retry_end":
+      if (!ev.success) {
+        console.error(`[retry] failed after ${ev.attempt} attempts: ${ev.finalError}`);
+      }
+      break;
+  }
+}
+```
+
+`auto_retry_start` and `auto_retry_end` are part of the `AgentEvent` discriminated union — they're always present in the stream, so no extra setup is required.
+
+## Disabling auto-retry
+
+If you want full control over when retries happen — for example to gate them on user confirmation — disable auto-retry and handle failures yourself:
+
+```ts
+await agent.setAutoRetry(false);
+
+for await (const ev of agent.prompt("Deploy the application.")) {
+  if (ev.type === "text") process.stdout.write(ev.text);
+
+  if (ev.type === "auto_retry_end" && !ev.success) {
+    // auto-retry is off, so this fires immediately on the first failure
+    const shouldRetry = await askUser("API error. Retry?");
+    if (shouldRetry) {
+      await agent.setAutoRetry(true); // re-enable for the next prompt
+    }
+  }
+}
+```
+
+Re-enable it at any time with `agent.setAutoRetry(true)`. The setting persists across prompts until changed.
+
+## Aborting a retry in progress
+
+If a retry is currently waiting (counting down the backoff delay), you can cancel it immediately:
+
+```ts
+// User clicks "Cancel retry"
+await agent.abortRetry();
+```
+
+Pi fails the current operation immediately and emits `auto_retry_end` with `success: false`. No-op when no retry is pending.
+
+## Aborting a bash command
+
+`agent.abortBash()` stops a currently-executing bash command without cancelling the whole prompt. Pi receives the abort, the bash result is marked as errored, and Pi continues with whatever it would do next (typically reporting the failure to the user):
+
+```ts
+// Show a stop button while Pi is running bash
+const stream = agent.prompt("Run the build.");
+let bashRunning = false;
+
+for await (const ev of stream) {
+  if (ev.type === "tool_start" && ev.toolName === "bash") {
+    bashRunning = true;
+    showStopButton(() => agent.abortBash());
+  }
+  if (ev.type === "tool_end" && ev.toolName === "bash") {
+    bashRunning = false;
+    hideStopButton();
+  }
+  if (ev.type === "text") process.stdout.write(ev.text);
+}
+```
+
+`abortBash()` is a no-op when no bash command is running — safe to call speculatively.
+
+## Summary
+
+| Method / Event        | What it does                                                   |
+| --------------------- | -------------------------------------------------------------- |
+| `setAutoRetry(true)`  | Enable auto-retry on transient errors (default)                |
+| `setAutoRetry(false)` | Disable — handle `auto_retry_end` failures manually            |
+| `abortRetry()`        | Cancel the current retry countdown; Pi fails immediately       |
+| `abortBash()`         | Stop the running bash command; prompt continues                |
+| `auto_retry_start`    | Fires when a retry attempt is about to begin                   |
+| `auto_retry_end`      | Fires when the retry sequence completes (success or exhausted) |

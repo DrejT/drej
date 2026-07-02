@@ -1,5 +1,9 @@
 # drej
 
+[![CI](https://github.com/DrejT/drej/actions/workflows/ci.yml/badge.svg)](https://github.com/DrejT/drej/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/drej)](https://www.npmjs.com/package/drej)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
+
 Sandboxes as objects. Spawn live containers, run code, checkpoint state — from TypeScript.
 
 ```ts

@@ -122,7 +122,24 @@ type AgentEvent =
       delayMs: number;
       errorMessage: string;
     }
-  | { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string };
+  | { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string }
+  | { type: "agent_start" }
+  | { type: "agent_end"; messages: unknown[] }
+  | { type: "turn_start"; turnIndex: number; timestamp: number }
+  | { type: "turn_end"; turnIndex: number; message: unknown; toolResults: unknown[] }
+  | { type: "message_start"; message: unknown }
+  | { type: "message_update"; message: unknown; delta: unknown }
+  | { type: "message_end"; message: unknown }
+  | { type: "queue_update"; steering: string[]; followUp: string[] }
+  | { type: "compaction_start"; reason: "manual" | "threshold" | "overflow" }
+  | {
+      type: "compaction_end";
+      reason: string;
+      result: object | null;
+      aborted: boolean;
+      willRetry: boolean;
+    }
+  | { type: "extension_error"; extensionPath: string; event: string; error: string };
 ```
 
 Use `textOnly()` to filter to just the text chunks (equivalent to the old `PromptStream` behavior):
@@ -311,6 +328,65 @@ await agent.setAutoRetry(false); // take full control
 #### `agent.abortRetry()`
 
 Abort an in-progress auto-retry immediately. Pi fails the current operation and emits `auto_retry_end` with `success: false`.
+
+#### `agent.abortBash()`
+
+Abort a currently-executing bash command without cancelling the whole prompt. No-op when no bash is running.
+
+---
+
+### Session inspection
+
+#### `agent.getSessionStats()`
+
+Retrieve token usage, cost, and message counts for the current session. Returns a `SessionStats` object.
+
+```ts
+const stats = await agent.getSessionStats();
+console.log(`${stats.tokens.total} tokens used, $${stats.cost.toFixed(6)} cost`);
+```
+
+#### `agent.getLastAssistantText()`
+
+Retrieve the text of Pi's most recent assistant response without iterating the stream. Returns `null` if Pi hasn't responded yet.
+
+#### `agent.getForkMessages()`
+
+List the fork entry points available in the current session. Each entry has `entryId` (pass to `fork()`) and `text`.
+
+#### `agent.getCommands()`
+
+List Pi's available slash commands, including extensions, prompt templates, and skills. Returns `PiSlashCommand[]`.
+
+```ts
+const cmds = await agent.getCommands();
+for (const cmd of cmds) console.log(`/${cmd.name} [${cmd.source}]`);
+```
+
+#### `agent.setSessionName(name)`
+
+Set a display name for the current Pi session.
+
+#### `agent.exportHtml(outputPath?)`
+
+Export a static HTML transcript of the session to the sandbox filesystem. Returns `{ path }` — the container path of the file. Use `agent.sandbox.readFile(path)` to retrieve it.
+
+```ts
+const { path } = await agent.exportHtml();
+const html = await agent.sandbox.readFile(path);
+```
+
+---
+
+### Advanced control
+
+#### `agent.setSteeringMode(mode)`
+
+Control how Pi processes queued steering messages: `"all"` applies all at once, `"one-at-a-time"` applies them sequentially.
+
+#### `agent.setFollowUpMode(mode)`
+
+Control how Pi processes queued follow-up messages: `"all"` sends all at once, `"one-at-a-time"` sends them sequentially.
 
 ---
 

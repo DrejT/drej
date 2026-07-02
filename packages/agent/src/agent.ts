@@ -10,7 +10,15 @@ import {
   snapshotsPath,
   type AgentSnapshotRecord,
 } from "./snapshots";
-import type { AgentStream, CompactResult, PiMessage, PiModel, ThinkingLevel } from "./types";
+import type {
+  AgentStream,
+  CompactResult,
+  PiMessage,
+  PiModel,
+  PiSlashCommand,
+  SessionStats,
+  ThinkingLevel,
+} from "./types";
 
 function elapsed(t: number) {
   return `${Date.now() - t}ms`;
@@ -312,6 +320,64 @@ export class Agent {
    */
   async abortRetry(): Promise<void> {
     return this._adapter.abortRetry();
+  }
+
+  /** Abort a currently-executing bash command without cancelling the whole prompt. */
+  async abortBash(): Promise<void> {
+    return this._adapter.abortBash();
+  }
+
+  /** Retrieve token usage, cost, and message counts for the current session. */
+  async getSessionStats(): Promise<SessionStats> {
+    return this._adapter.getSessionStats();
+  }
+
+  /** Retrieve the text of Pi's most recent assistant response. Returns `null` if none yet. */
+  async getLastAssistantText(): Promise<string | null> {
+    return this._adapter.getLastAssistantText();
+  }
+
+  /**
+   * List the fork entry points available in the current session.
+   * Each entry has `entryId` (pass to `fork()`) and `text` (the message at that point).
+   */
+  async getForkMessages(): Promise<{ entryId: string; text: string }[]> {
+    return this._adapter.getForkMessages();
+  }
+
+  /** List Pi's available slash commands, including extensions, prompt templates, and skills. */
+  async getCommands(): Promise<PiSlashCommand[]> {
+    return this._adapter.getCommands();
+  }
+
+  /** Set a display name for the current Pi session. */
+  async setSessionName(name: string): Promise<void> {
+    return this._adapter.setSessionName(name);
+  }
+
+  /**
+   * Control how Pi processes queued steering messages.
+   * `"all"` applies all queued steers at once; `"one-at-a-time"` applies them sequentially.
+   */
+  async setSteeringMode(mode: "all" | "one-at-a-time"): Promise<void> {
+    return this._adapter.setSteeringMode(mode);
+  }
+
+  /**
+   * Control how Pi processes queued follow-up messages.
+   * `"all"` sends all queued follow-ups at once; `"one-at-a-time"` sends them sequentially.
+   */
+  async setFollowUpMode(mode: "all" | "one-at-a-time"): Promise<void> {
+    return this._adapter.setFollowUpMode(mode);
+  }
+
+  /**
+   * Export a static HTML transcript of the current session to the sandbox filesystem.
+   * Returns the container path of the generated file — use `agent.sandbox.readFile(path)`
+   * to retrieve it.
+   */
+  async exportHtml(outputPath?: string): Promise<{ path: string }> {
+    return this._adapter.exportHtml(outputPath);
   }
 
   // --- commands that return data ---

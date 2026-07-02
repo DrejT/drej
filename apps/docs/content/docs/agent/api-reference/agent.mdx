@@ -266,6 +266,115 @@ async abortRetry(): Promise<void>
 
 Abort an in-progress auto-retry immediately. Pi stops waiting and fails the current operation, emitting `auto_retry_end` with `success: false`.
 
+### agent.abortBash()
+
+```ts
+async abortBash(): Promise<void>
+```
+
+Abort a currently-executing bash command without cancelling the whole prompt. No-op when no bash command is running.
+
+---
+
+## Session inspection
+
+### agent.getSessionStats()
+
+```ts
+async getSessionStats(): Promise<SessionStats>
+```
+
+Retrieve token usage, cost, and message counts for the current session.
+
+```ts
+const stats = await agent.getSessionStats();
+console.log(`tokens: ${stats.tokens.total}, cost: $${stats.cost.toFixed(6)}`);
+if (stats.contextUsage) {
+  console.log(`context: ${stats.contextUsage.percent.toFixed(1)}% full`);
+}
+```
+
+See [SessionStats](#sessionstats) for the full type.
+
+### agent.getLastAssistantText()
+
+```ts
+async getLastAssistantText(): Promise<string | null>
+```
+
+Retrieve the text of Pi's most recent assistant response without needing to iterate the stream. Returns `null` if Pi hasn't responded yet in the current session.
+
+### agent.getForkMessages()
+
+```ts
+async getForkMessages(): Promise<{ entryId: string; text: string }[]>
+```
+
+List the fork entry points available in the current session. Each entry has `entryId` (suitable for passing to `fork()`) and `text` (the message content at that point).
+
+```ts
+const points = await agent.getForkMessages();
+for (const p of points) {
+  console.log(`${p.entryId}: "${p.text.slice(0, 60)}"`);
+}
+```
+
+### agent.getCommands()
+
+```ts
+async getCommands(): Promise<PiSlashCommand[]>
+```
+
+List Pi's available slash commands, including extensions, prompt templates, and skills. Returns `PiSlashCommand[]`.
+
+```ts
+const cmds = await agent.getCommands();
+for (const cmd of cmds) {
+  console.log(`/${cmd.name} [${cmd.source}]${cmd.description ? ` — ${cmd.description}` : ""}`);
+}
+```
+
+### agent.setSessionName()
+
+```ts
+async setSessionName(name: string): Promise<void>
+```
+
+Set a display name for the current Pi session.
+
+### agent.exportHtml()
+
+```ts
+async exportHtml(outputPath?: string): Promise<{ path: string }>
+```
+
+Export a static HTML transcript of the current session to the sandbox filesystem. Returns the container path of the generated file. Use `agent.sandbox.readFile(path)` to retrieve the contents.
+
+```ts
+const { path } = await agent.exportHtml();
+const html = await agent.sandbox.readFile(path);
+```
+
+---
+
+## Advanced control
+
+### agent.setSteeringMode()
+
+```ts
+async setSteeringMode(mode: "all" | "one-at-a-time"): Promise<void>
+```
+
+Control how Pi processes queued steering messages. `"all"` applies all queued steers at once; `"one-at-a-time"` applies them sequentially between turns.
+
+### agent.setFollowUpMode()
+
+```ts
+async setFollowUpMode(mode: "all" | "one-at-a-time"): Promise<void>
+```
+
+Control how Pi processes queued follow-up messages. `"all"` sends all queued follow-ups at once; `"one-at-a-time"` sends them sequentially.
+
 ---
 
 ## Context management
@@ -468,7 +577,24 @@ type AgentEvent =
       delayMs: number;
       errorMessage: string;
     }
-  | { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string };
+  | { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string }
+  | { type: "agent_start" }
+  | { type: "agent_end"; messages: unknown[] }
+  | { type: "turn_start"; turnIndex: number; timestamp: number }
+  | { type: "turn_end"; turnIndex: number; message: unknown; toolResults: unknown[] }
+  | { type: "message_start"; message: unknown }
+  | { type: "message_update"; message: unknown; delta: unknown }
+  | { type: "message_end"; message: unknown }
+  | { type: "queue_update"; steering: string[]; followUp: string[] }
+  | { type: "compaction_start"; reason: "manual" | "threshold" | "overflow" }
+  | {
+      type: "compaction_end";
+      reason: string;
+      result: object | null;
+      aborted: boolean;
+      willRetry: boolean;
+    }
+  | { type: "extension_error"; extensionPath: string; event: string; error: string };
 ```
 
 See [Streaming & tool events](/docs/agent/getting-started/streaming) for usage examples.
@@ -490,6 +616,50 @@ for await (const chunk of textOnly(agent.prompt("Hello"))) {
   process.stdout.write(chunk);
 }
 ```
+
+---
+
+## SessionStats
+
+```ts
+import type { SessionStats } from "@drej/agent";
+```
+
+Returned by `agent.getSessionStats()`.
+
+| Field               | Type      | Description                                         |
+| ------------------- | --------- | --------------------------------------------------- |
+| `sessionId`         | `string`  | Pi's internal session identifier                    |
+| `sessionFile`       | `string?` | Path to the session file on disk                    |
+| `userMessages`      | `number`  | Number of user turns                                |
+| `assistantMessages` | `number`  | Number of assistant turns                           |
+| `toolCalls`         | `number`  | Total tool calls made                               |
+| `toolResults`       | `number`  | Total tool results received                         |
+| `totalMessages`     | `number`  | Sum of all messages                                 |
+| `tokens.input`      | `number`  | Input tokens consumed                               |
+| `tokens.output`     | `number`  | Output tokens generated                             |
+| `tokens.cacheRead`  | `number`  | Tokens read from prompt cache                       |
+| `tokens.cacheWrite` | `number`  | Tokens written to prompt cache                      |
+| `tokens.total`      | `number`  | Total tokens (all categories)                       |
+| `cost`              | `number`  | Estimated cost in USD                               |
+| `contextUsage`      | `object?` | `{ tokens, contextWindow, percent }` — context fill |
+
+---
+
+## PiSlashCommand
+
+```ts
+import type { PiSlashCommand } from "@drej/agent";
+```
+
+Returned by `agent.getCommands()`.
+
+| Field         | Type                                 | Description                                      |
+| ------------- | ------------------------------------ | ------------------------------------------------ |
+| `name`        | `string`                             | Invokable command name (without the leading `/`) |
+| `description` | `string?`                            | Human-readable description                       |
+| `source`      | `"extension" \| "prompt" \| "skill"` | Where the command comes from                     |
+| `sourceInfo`  | `unknown`                            | Metadata about the owning resource               |
 
 ---
 

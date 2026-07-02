@@ -6,6 +6,8 @@ import type {
   CompactResult,
   PiMessage,
   PiModel,
+  PiSlashCommand,
+  SessionStats,
   ThinkingLevel,
 } from "../types";
 
@@ -243,20 +245,79 @@ function handleLine(line) {
     return;
   }
 
-  var item = state.active;
-  if (!item) return;
+  if (ev.type === "agent_start") {
+    if (state.active) {
+      state.active.res.write("data: " + JSON.stringify({ type: "agent_start" }) + "\\n\\n");
+    }
+    return;
+  }
+  if (ev.type === "turn_start") {
+    if (state.active) {
+      state.active.res.write("data: " + JSON.stringify({ type: "turn_start", turnIndex: ev.turnIndex, timestamp: ev.timestamp }) + "\\n\\n");
+    }
+    return;
+  }
+  if (ev.type === "turn_end") {
+    if (state.active) {
+      state.active.res.write("data: " + JSON.stringify({ type: "turn_end", turnIndex: ev.turnIndex, message: ev.message, toolResults: ev.toolResults || [] }) + "\\n\\n");
+    }
+    return;
+  }
+  if (ev.type === "message_start") {
+    if (state.active) {
+      state.active.res.write("data: " + JSON.stringify({ type: "message_start", message: ev.message }) + "\\n\\n");
+    }
+    return;
+  }
+  if (ev.type === "message_end") {
+    if (state.active) {
+      state.active.res.write("data: " + JSON.stringify({ type: "message_end", message: ev.message }) + "\\n\\n");
+    }
+    return;
+  }
+  if (ev.type === "queue_update") {
+    if (state.active) {
+      state.active.res.write("data: " + JSON.stringify({ type: "queue_update", steering: ev.steering || [], followUp: ev.followUp || [] }) + "\\n\\n");
+    }
+    return;
+  }
+  if (ev.type === "compaction_start") {
+    if (state.active) {
+      state.active.res.write("data: " + JSON.stringify({ type: "compaction_start", reason: ev.reason }) + "\\n\\n");
+    }
+    return;
+  }
+  if (ev.type === "compaction_end") {
+    if (state.active) {
+      state.active.res.write("data: " + JSON.stringify({ type: "compaction_end", reason: ev.reason, result: ev.result || null, aborted: !!ev.aborted, willRetry: !!ev.willRetry }) + "\\n\\n");
+    }
+    return;
+  }
+  if (ev.type === "extension_error") {
+    if (state.active) {
+      state.active.res.write("data: " + JSON.stringify({ type: "extension_error", extensionPath: ev.extensionPath, event: ev.event, error: ev.error }) + "\\n\\n");
+    }
+    return;
+  }
 
-  // prompt: forward text_delta chunks and agent lifecycle
+  // message_update: forward the raw delta event, then also extract text_delta as a "text" event
+  // so textOnly() keeps working without changes.
   if (ev.type === "message_update") {
+    if (!state.active) return;
+    state.active.res.write("data: " + JSON.stringify({ type: "message_update", message: ev.message, delta: ev.assistantMessageEvent }) + "\\n\\n");
     var aev = ev.assistantMessageEvent || {};
     if (aev.type === "text_delta" && aev.delta) {
-      item.text += aev.delta;
-      item.res.write("data: " + JSON.stringify({ type: "text", text: aev.delta }) + "\\n\\n");
+      state.active.text += aev.delta;
+      state.active.res.write("data: " + JSON.stringify({ type: "text", text: aev.delta }) + "\\n\\n");
     }
-  } else if (ev.type === "agent_end") {
-    log("agent_end: " + item.text.length + " chars in " + (Date.now() - item.t0) + "ms");
-    item.res.write("data: [DONE]\\n\\n");
-    item.res.end();
+    return;
+  }
+  if (ev.type === "agent_end") {
+    if (!state.active) return;
+    state.active.res.write("data: " + JSON.stringify({ type: "agent_end", messages: ev.messages || [] }) + "\\n\\n");
+    log("agent_end: " + state.active.text.length + " chars in " + (Date.now() - state.active.t0) + "ms");
+    state.active.res.write("data: [DONE]\\n\\n");
+    state.active.res.end();
     state.active = null;
     flush();
   }
@@ -403,6 +464,42 @@ http.createServer(function(req, res) {
 
       case "/abort-retry":
         rpcWithAck({ id: "ar" + Date.now(), type: "abort_retry" }, res);
+        return;
+
+      case "/abort-bash":
+        rpcWithAck({ id: "ab" + Date.now(), type: "abort_bash" }, res);
+        return;
+
+      case "/get-session-stats":
+        rpcWithAck({ id: "gss" + Date.now(), type: "get_session_stats" }, res);
+        return;
+
+      case "/get-last-assistant-text":
+        rpcWithAck({ id: "glat" + Date.now(), type: "get_last_assistant_text" }, res);
+        return;
+
+      case "/get-fork-messages":
+        rpcWithAck({ id: "gfm" + Date.now(), type: "get_fork_messages" }, res);
+        return;
+
+      case "/get-commands":
+        rpcWithAck({ id: "gc" + Date.now(), type: "get_commands" }, res);
+        return;
+
+      case "/set-session-name":
+        rpcWithAck({ id: "ssn" + Date.now(), type: "set_session_name", name: data.name }, res);
+        return;
+
+      case "/set-steering-mode":
+        rpcWithAck({ id: "ssm" + Date.now(), type: "set_steering_mode", mode: data.mode }, res);
+        return;
+
+      case "/set-follow-up-mode":
+        rpcWithAck({ id: "sfum" + Date.now(), type: "set_follow_up_mode", mode: data.mode }, res);
+        return;
+
+      case "/export-html":
+        rpcWithAck({ id: "eh" + Date.now(), type: "export_html", outputPath: data.outputPath }, res);
         return;
 
       case "/reload-env":
@@ -553,6 +650,52 @@ export class PiAdapter {
 
   async abortRetry(): Promise<void> {
     await rpcPost(this.bridgeUrl, "/abort-retry");
+  }
+
+  async abortBash(): Promise<void> {
+    await rpcPost(this.bridgeUrl, "/abort-bash");
+  }
+
+  async getSessionStats(): Promise<SessionStats> {
+    return rpcPost<SessionStats>(this.bridgeUrl, "/get-session-stats");
+  }
+
+  async getLastAssistantText(): Promise<string | null> {
+    const r = await rpcPost<{ text: string | null }>(this.bridgeUrl, "/get-last-assistant-text");
+    return r.text;
+  }
+
+  async getForkMessages(): Promise<{ entryId: string; text: string }[]> {
+    const r = await rpcPost<{ messages: { entryId: string; text: string }[] }>(
+      this.bridgeUrl,
+      "/get-fork-messages",
+    );
+    return r.messages;
+  }
+
+  async getCommands(): Promise<PiSlashCommand[]> {
+    const r = await rpcPost<{ commands: PiSlashCommand[] }>(this.bridgeUrl, "/get-commands");
+    return r.commands;
+  }
+
+  async setSessionName(name: string): Promise<void> {
+    await rpcPost(this.bridgeUrl, "/set-session-name", { name });
+  }
+
+  async setSteeringMode(mode: "all" | "one-at-a-time"): Promise<void> {
+    await rpcPost(this.bridgeUrl, "/set-steering-mode", { mode });
+  }
+
+  async setFollowUpMode(mode: "all" | "one-at-a-time"): Promise<void> {
+    await rpcPost(this.bridgeUrl, "/set-follow-up-mode", { mode });
+  }
+
+  async exportHtml(outputPath?: string): Promise<{ path: string }> {
+    return rpcPost<{ path: string }>(
+      this.bridgeUrl,
+      "/export-html",
+      outputPath !== undefined ? { outputPath } : {},
+    );
   }
 
   // --- commands that return data ---

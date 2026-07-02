@@ -10,6 +10,18 @@
  *   callers can observe what was requested
  * - `auto_retry_start` — Pi is about to retry after a transient error (429, 5xx)
  * - `auto_retry_end` — Pi's retry sequence completed (success or exhausted)
+ * - `agent_start` — Pi began processing the prompt
+ * - `agent_end` — Pi finished the full agent run (all turns complete)
+ * - `turn_start` — a new LLM turn began
+ * - `turn_end` — a turn completed with its assistant message and tool results
+ * - `message_start` — a new assistant message began streaming
+ * - `message_update` — streaming delta from an in-flight message; `delta` is the raw
+ *   Pi assistantMessageEvent (text_delta, thinking_delta, tool_call_delta, etc.)
+ * - `message_end` — an assistant message completed
+ * - `queue_update` — the steering/follow-up queue changed (e.g. after `followUp()`)
+ * - `compaction_start` — Pi began compacting context (manual or auto)
+ * - `compaction_end` — context compaction finished
+ * - `extension_error` — a Pi extension threw an error
  */
 export type AgentEvent =
   | { type: "text"; text: string }
@@ -30,12 +42,30 @@ export type AgentEvent =
       delayMs: number;
       errorMessage: string;
     }
+  | { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string }
+  | { type: "agent_start" }
+  | { type: "agent_end"; messages: unknown[] }
+  | { type: "turn_start"; turnIndex: number; timestamp: number }
+  | { type: "turn_end"; turnIndex: number; message: unknown; toolResults: unknown[] }
+  | { type: "message_start"; message: unknown }
+  | { type: "message_update"; message: unknown; delta: unknown }
+  | { type: "message_end"; message: unknown }
+  | { type: "queue_update"; steering: string[]; followUp: string[] }
+  | { type: "compaction_start"; reason: "manual" | "threshold" | "overflow" }
   | {
-      type: "auto_retry_end";
-      success: boolean;
-      attempt: number;
-      finalError?: string;
-    };
+      type: "compaction_end";
+      reason: "manual" | "threshold" | "overflow";
+      result: {
+        summary: string;
+        firstKeptEntryId: string;
+        tokensBefore: number;
+        estimatedTokensAfter: number;
+        details: unknown;
+      } | null;
+      aborted: boolean;
+      willRetry: boolean;
+    }
+  | { type: "extension_error"; extensionPath: string; event: string; error: string };
 
 /**
  * Async iterable of structured agent events. Returned by `Agent.prompt()` and `Agent.bash()`.
@@ -94,4 +124,36 @@ export interface CompactResult {
   firstKeptEntryId: string;
   tokensBefore: number;
   estimatedTokensAfter: number;
+}
+
+/** Session statistics returned by `agent.getSessionStats()`. */
+export interface SessionStats {
+  sessionFile?: string;
+  sessionId: string;
+  userMessages: number;
+  assistantMessages: number;
+  toolCalls: number;
+  toolResults: number;
+  totalMessages: number;
+  tokens: {
+    input: number;
+    output: number;
+    cacheRead: number;
+    cacheWrite: number;
+    total: number;
+  };
+  cost: number;
+  contextUsage?: {
+    tokens: number;
+    contextWindow: number;
+    percent: number;
+  };
+}
+
+/** A Pi slash command as returned by `agent.getCommands()`. */
+export interface PiSlashCommand {
+  name: string;
+  description?: string;
+  source: "extension" | "prompt" | "skill";
+  sourceInfo: unknown;
 }

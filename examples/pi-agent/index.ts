@@ -7,6 +7,8 @@
  *   setAutoCompaction, compact
  *   clone, fork
  *   setAutoRetry, abortRetry
+ *   abortBash, getSessionStats, getLastAssistantText, getForkMessages
+ *   getCommands, setSessionName, setSteeringMode, setFollowUpMode, exportHtml
  *   setEnv, getLogs
  *   sandbox.exec, sandbox.writeFile, sandbox.readFile
  *
@@ -217,8 +219,105 @@ try {
   await agent.abortRetry();
   console.log("abortRetry() → ok\n");
 
-  // ── 15. getLogs ───────────────────────────────────────────────────────────────
-  section("15. getLogs — bridge ring-buffer (last 5 entries)");
+  // ── 15. abortBash — stop a running bash without cancelling the prompt ────────
+  // No-op when idle; useful to interrupt a long-running shell command mid-flight.
+  section("15. abortBash — stop running bash (no-op if idle)");
+  await agent.abortBash();
+  console.log("abortBash() → ok\n");
+
+  // ── 16. getSessionStats — token usage + cost ──────────────────────────────────
+  section("16. getSessionStats — token usage and cost");
+  const stats = await agent.getSessionStats();
+  console.log(`sessionId:        ${stats.sessionId}`);
+  console.log(`messages:         ${stats.userMessages} user, ${stats.assistantMessages} assistant`);
+  console.log(`toolCalls:        ${stats.toolCalls}`);
+  console.log(
+    `tokens:           ${stats.tokens.input} in, ${stats.tokens.output} out, ${stats.tokens.total} total`,
+  );
+  console.log(`cost:             $${stats.cost.toFixed(6)}`);
+  if (stats.contextUsage) {
+    console.log(
+      `contextUsage:     ${stats.contextUsage.percent.toFixed(1)}% (${stats.contextUsage.tokens}/${stats.contextUsage.contextWindow})`,
+    );
+  }
+  console.log();
+
+  // ── 17. getLastAssistantText ──────────────────────────────────────────────────
+  section("17. getLastAssistantText — last Pi response (no stream needed)");
+  const lastText = await agent.getLastAssistantText();
+  if (lastText) {
+    console.log(
+      `Last response (first 120 chars): "${lastText.slice(0, 120).replace(/\n/g, " ")}…"`,
+    );
+  } else {
+    console.log("No assistant response yet.");
+  }
+  console.log();
+
+  // ── 18. getForkMessages — list fork entry points in current session ───────────
+  section("18. getForkMessages — list fork entry points");
+  const forkMessages = await agent.getForkMessages();
+  console.log(`${forkMessages.length} fork point(s) available:`);
+  for (const m of forkMessages.slice(0, 3)) {
+    console.log(
+      `  ${m.entryId.slice(0, 12)}… "${String(m.text).slice(0, 60).replace(/\n/g, " ")}"`,
+    );
+  }
+  if (forkMessages.length > 3) console.log(`  … and ${forkMessages.length - 3} more`);
+  console.log();
+
+  // ── 19. getCommands — introspect Pi slash commands, skills, prompt templates ──
+  section("19. getCommands — available slash commands");
+  const commands = await agent.getCommands();
+  console.log(`${commands.length} command(s) available:`);
+  for (const cmd of commands.slice(0, 8)) {
+    const desc = cmd.description ? ` — ${cmd.description.slice(0, 50)}` : "";
+    console.log(`  /${cmd.name} [${cmd.source}]${desc}`);
+  }
+  if (commands.length > 8) console.log(`  … and ${commands.length - 8} more`);
+  console.log();
+
+  // ── 20. setSessionName ────────────────────────────────────────────────────────
+  section("20. setSessionName — label the current session");
+  await agent.setSessionName("pi-agent-example-run");
+  console.log('setSessionName("pi-agent-example-run") → ok');
+  const statsAfterRename = await agent.getSessionStats();
+  console.log(`sessionId: ${statsAfterRename.sessionId} (name is metadata, id unchanged)\n`);
+
+  // ── 21. setSteeringMode / setFollowUpMode ─────────────────────────────────────
+  section("21. setSteeringMode + setFollowUpMode — queue processing modes");
+  await agent.setSteeringMode("one-at-a-time");
+  console.log('setSteeringMode("one-at-a-time") → ok');
+  await agent.setSteeringMode("all");
+  console.log('setSteeringMode("all")           → ok (restored)');
+  await agent.setFollowUpMode("one-at-a-time");
+  console.log('setFollowUpMode("one-at-a-time") → ok');
+  await agent.setFollowUpMode("all");
+  console.log('setFollowUpMode("all")           → ok (restored)\n');
+
+  // ── 22. exportHtml — HTML transcript of the current session ──────────────────
+  section("22. exportHtml — write HTML transcript to sandbox");
+  const exported = await agent.exportHtml();
+  console.log(`exportHtml() → ${exported.path}`);
+  // Verify the file exists in the sandbox.
+  const { stdout: htmlSize } = await agent.sandbox.exec(
+    `wc -c < "${exported.path}" 2>/dev/null || echo 0`,
+  );
+  console.log(`file size: ${htmlSize.trim()} bytes\n`);
+
+  // ── 23. event coverage — observe all new event types in a real stream ─────────
+  // Run a short prompt and log every event type we see.
+  // This exercises agent_start, turn_start, message_start, message_update,
+  // message_end, turn_end, agent_end — all in a single short response.
+  section("23. event coverage — observe all event types in raw stream");
+  const seenTypes = new Set<string>();
+  for await (const ev of agent.prompt("Reply with exactly: 'event coverage ok'")) {
+    seenTypes.add(ev.type);
+  }
+  console.log(`Event types seen: ${[...seenTypes].sort().join(", ")}\n`);
+
+  // ── 24. getLogs ───────────────────────────────────────────────────────────────
+  section("24. getLogs — bridge ring-buffer (last 5 entries)");
   const logs = await agent.getLogs();
   const logLines = logs.trim().split("\n");
   console.log(`${logLines.length} log entries total. Last 5:`);

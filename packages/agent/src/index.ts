@@ -9,6 +9,8 @@ export type {
   ThinkingLevel,
   PiMessage,
   CompactResult,
+  SessionStats,
+  PiSlashCommand,
 } from "./types";
 export { textOnly } from "./types";
 export type { AgentSnapshotRecord } from "./snapshots";

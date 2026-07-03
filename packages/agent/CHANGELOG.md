@@ -1,5 +1,50 @@
 # @drej/agent
 
+## 0.3.0
+
+### Minor Changes
+
+- fdc25db: Complete Pi RPC coverage: forward all Pi stdout events and implement all remaining RPC commands.
+
+  **New `AgentEvent` variants (11):** `agent_start`, `agent_end`, `turn_start`, `turn_end`, `message_start`, `message_update` (with `delta` field renaming Pi's `assistantMessageEvent`), `message_end`, `queue_update`, `compaction_start`, `compaction_end`, `extension_error`.
+
+  **New `Agent` methods (9):**
+
+  - `abortBash()` — stop a running bash command without cancelling the whole prompt
+  - `getSessionStats()` — token usage, cost, and message counts (`SessionStats`)
+  - `getLastAssistantText()` — retrieve the last Pi response without iterating a stream
+  - `getForkMessages()` — list fork entry points in the current session
+  - `getCommands()` — introspect Pi slash commands, skills, and prompt templates (`PiSlashCommand[]`)
+  - `setSessionName(name)` — set a display name for the current session
+  - `setSteeringMode(mode)` — control how queued steers are applied (`"all" | "one-at-a-time"`)
+  - `setFollowUpMode(mode)` — control how queued follow-ups are sent (`"all" | "one-at-a-time"`)
+  - `exportHtml(outputPath?)` — export an HTML transcript to the sandbox filesystem
+
+  **New exported types:** `SessionStats`, `PiSlashCommand`.
+
+### Patch Changes
+
+- 34cfa8b: Add the missing `license` field (Apache-2.0) to every published package's `package.json`, matching the repo's root `LICENSE` file.
+- cf9af70: Fix extension_ui_request bug and add auto-retry API
+
+  - **Bug fix**: `extension_ui_request` events from Pi extensions were silently dropped by the bridge. Dialog requests (select/confirm/input/editor) now receive an immediate `cancelled` response so Pi never stalls indefinitely. All extension UI events are forwarded through the stream as a new `extension_ui` AgentEvent.
+
+  - **New**: `agent.setAutoRetry(enabled)` — enable or disable Pi's built-in exponential-backoff retry on transient errors (429, 5xx). On by default (3 attempts, 2 s / 4 s / 8 s).
+
+  - **New**: `agent.abortRetry()` — abort an in-progress retry immediately.
+
+  - **New events**: `auto_retry_start` and `auto_retry_end` are now forwarded through the AgentStream with full context (attempt, maxAttempts, delayMs, errorMessage, finalError).
+
+- bca2a6b: Fix JSDoc comments that no longer matched the code they document (stale `DrejClient` references, incorrect claims about `DrejError`, `watchMetrics()`, `resume()`, `exec()` ledger logging, `CommandError`, `computeSetupHash`, `bash()` streaming, and the `when()` predicate context), and flag two fields (`AgentSpec.cliVersion`, `.metadata`, `.registryDependencies`) and one known concurrency limitation (`FlushContext` under `forEach({ concurrency > 1 })`) that are currently no-ops/buggy rather than doing what they were documented to do. No behavior changes — doc-only.
+- 7fb9d35: Reword `AgentSpec.cliVersion`/`.metadata`/`.registryDependencies` JSDoc to state their current behavior as plain fact instead of flag-style "NOT YET IMPLEMENTED" annotations. No behavior change.
+- 3f362d1: Enable npm provenance for published packages.
+- Updated dependencies [34cfa8b]
+- Updated dependencies [bca2a6b]
+- Updated dependencies [3f362d1]
+  - @drej/core@0.5.1
+  - drej@0.9.1
+  - @drej/sqlite@0.3.2
+
 ## 0.2.0
 
 ### Minor Changes

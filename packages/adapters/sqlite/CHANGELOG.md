@@ -1,5 +1,16 @@
 # @drej/sqlite
 
+## 0.3.2
+
+### Patch Changes
+
+- 34cfa8b: Add the missing `license` field (Apache-2.0) to every published package's `package.json`, matching the repo's root `LICENSE` file.
+- 3f362d1: Enable npm provenance for published packages.
+- Updated dependencies [34cfa8b]
+- Updated dependencies [bca2a6b]
+- Updated dependencies [3f362d1]
+  - @drej/core@0.5.1
+
 ## 0.3.1
 
 ### Patch Changes

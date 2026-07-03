@@ -1,6 +1,6 @@
 {
   "name": "@drej/flue",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "license": "Apache-2.0",
   "files": [
     "dist"
@@ -31,6 +31,6 @@
   },
   "peerDependencies": {
     "@flue/runtime": ">=1.0.0-beta",
-    "drej": ">=0.9.0"
+    "drej": ">=0.9.1"
   }
 }

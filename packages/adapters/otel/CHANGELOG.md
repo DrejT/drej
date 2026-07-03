@@ -1,5 +1,17 @@
 # @drej/otel
 
+## 0.2.2
+
+### Patch Changes
+
+- 34cfa8b: Add the missing `license` field (Apache-2.0) to every published package's `package.json`, matching the repo's root `LICENSE` file.
+- bca2a6b: Fix JSDoc comments that no longer matched the code they document (stale `DrejClient` references, incorrect claims about `DrejError`, `watchMetrics()`, `resume()`, `exec()` ledger logging, `CommandError`, `computeSetupHash`, `bash()` streaming, and the `when()` predicate context), and flag two fields (`AgentSpec.cliVersion`, `.metadata`, `.registryDependencies`) and one known concurrency limitation (`FlushContext` under `forEach({ concurrency > 1 })`) that are currently no-ops/buggy rather than doing what they were documented to do. No behavior changes — doc-only.
+- 3f362d1: Enable npm provenance for published packages.
+- Updated dependencies [34cfa8b]
+- Updated dependencies [bca2a6b]
+- Updated dependencies [3f362d1]
+  - @drej/core@0.5.1
+
 ## 0.2.1
 
 ### Patch Changes

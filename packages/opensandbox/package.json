@@ -2,6 +2,11 @@
   "name": "@drej/opensandbox",
   "version": "0.2.1",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DrejT/drej.git",
+    "directory": "packages/opensandbox"
+  },
   "files": [
     "dist"
   ],

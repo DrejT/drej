@@ -7,6 +7,5 @@ export default defineConfig({
   outDir: "dist",
   platform: "node",
   clean: true,
-  banner: { js: "#!/usr/bin/env bun" },
   deps: { neverBundle: ["drej", "@drej/agent", "@drej/sqlite"] },
 });

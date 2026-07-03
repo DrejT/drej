@@ -1,6 +1,6 @@
 ---
 title: Quickstart
-description: Start a local OpenSandbox server and provision your first sandbox in under five minutes.
+description: Start a local OpenSandbox server and fetch your first agent spec in under five minutes.
 ---
 
 ## Prerequisites
@@ -10,7 +10,7 @@ description: Start a local OpenSandbox server and provision your first sandbox i
 
 ## 1. Start OpenSandbox locally
 
-Run `drejx init` once per project. It starts an OpenSandbox server in Docker and writes a `.drej/config.json` to your project.
+Run `drejx init` once per project. It starts an OpenSandbox server in Docker and writes a `drej.config.json` to your project root.
 
 ```bash
 bunx drejx init
@@ -23,71 +23,67 @@ Waiting for OpenSandbox to be ready...
 OpenSandbox running at http://localhost:8080 — ready.
 ```
 
-If the server is already running from a previous `init`, `drejx init` exits immediately without starting a second container.
+If the server is already running from a previous `init`, `drejx init` prints the URL and exits immediately without starting a second container.
 
-## 2. Provision a sandbox
+## 2. Fetch an agent spec
 
-Point `drejx add` at any URL (or local file) that returns a valid registry item:
+Point `drejx add` at any URL (or local file path) that returns a valid `AgentSpec` JSON:
 
 ```bash
-bunx drejx add https://registry.drej.dev/node-toolchain.json
+bunx drejx add https://example.com/specs/code-reviewer.json
 ```
 
 ```
-Spawning sandbox 'node-toolchain'...
-  $ npm install -g typescript eslint
-  $ mkdir -p /workspace
-Sandbox ready: sb_a1b2c3d4  (node-toolchain)
-Resume it with: client.resume("sb_a1b2c3d4")
+Agent spec saved: agents/code-reviewer.json
+Load it with: Agent.load("agents/code-reviewer.json") from @drej/agent
 ```
 
-`drejx` fetches the spec, runs the setup commands, checkpoints the result, and records the sandbox ID in `.drej/sandboxes.json`. The checkpoint means future resumes skip setup entirely and start in seconds.
+`drejx add` fetches the spec, validates it (`name` and `cli: "pi"` are required), resolves any `registryDependencies` first (fetched recursively, depth-first), and writes it to `<agentsDir>/<name>.json` — `agentsDir` defaults to `./agents`. It does **not** create a sandbox, run setup, or checkpoint anything — that happens later, the first time you `Agent.load()` the spec.
 
-## 3. List your sandboxes
+## 3. List your saved specs
 
 ```bash
 bunx drejx list
 ```
 
 ```
-NAME                  SANDBOX ID            AGE     URL
-node-toolchain        sb_a1b2c3d4e5f6g7    2m      https://registry.drej.dev/node-toolchain.json
+NAME                  CLI       DESCRIPTION
+code-reviewer         pi        A Node.js sandbox pre-loaded with TypeScript tooling.
 ```
 
-## 4. Use the sandbox in your code
+## 4. Run the agent
 
-Read the sandbox ID from the output (or from `.drej/sandboxes.json`) and resume it with the `drej` client:
+`Agent.load()` (from `@drej/agent`) does the actual sandbox work: on first load it spins up a `node:22` sandbox, installs the Pi CLI and any `setup` steps, then checkpoints it. Subsequent loads restore from that snapshot, skipping the install.
 
 ```ts
-import { Drej } from "drej";
-import { SQLiteAdapter } from "@drej/sqlite";
+import { Agent, textOnly } from "@drej/agent";
 
-const client = new Drej({
-  baseUrl: "http://localhost:8080",
-  useServerProxy: true,
-  adapter: new SQLiteAdapter("./.drej/ledger.db"),
-});
+const agent = await Agent.load("agents/code-reviewer.json");
 
-const sb = await client.resume("sb_a1b2c3d4");
-try {
-  await sb.exec("tsc --version").pipe(process.stdout);
-} finally {
-  await sb.close();
+for await (const chunk of textOnly(agent.prompt("Review this repo for obvious bugs."))) {
+  process.stdout.write(chunk);
 }
+
+await agent.close();
 ```
 
-`useServerProxy: true` is required when the server was started by `drejx init`. The `.drej/config.json` written by `init` contains all the right values if you prefer to read them from there.
+`Agent.load()` reads `drej.config.json` itself for the OpenSandbox server URL and other defaults — the same file `drejx init` wrote in step 1. You don't need to construct a `Drej` client or pass connection details by hand.
 
-## 5. Remove a sandbox
+## 5. Remove a spec
 
 ```bash
-bunx drejx remove node-toolchain
+bunx drejx remove code-reviewer
 ```
 
-This removes the entry from `.drej/sandboxes.json`. The sandbox ID is no longer tracked.
+```
+Removed agent spec 'code-reviewer'
+```
+
+This deletes `agents/code-reviewer.json`. It's purely a local file operation — no sandbox or snapshot is touched. If you'd previously run `Agent.load()` on that spec, its sandbox snapshot (tracked separately, in `agent-snapshots.json` next to your ledger) is unaffected.
 
 ## Next steps
 
 - [Commands reference](/docs/drejx/commands) — all flags for each command
-- [Registry format](/docs/drejx/registry) — publish your own sandbox spec
-- [Using sandboxes in code](/docs/drejx/using-sandboxes) — full details on resuming and working with sandboxes
+- [Registry format](/docs/drejx/registry) — publish your own agent spec
+- [Running an agent spec](/docs/drejx/using-sandboxes) — full details on `Agent.load()`
+- [@drej/agent overview](/docs/agent) — the full Agent API (prompting, streaming, sessions, snapshotting)

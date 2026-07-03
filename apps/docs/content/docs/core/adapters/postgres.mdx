@@ -23,9 +23,8 @@ const client = new Drej({
   adapter: new PostgresAdapter(process.env.DATABASE_URL!),
 });
 
-await client.connect(); // runs CREATE TABLE IF NOT EXISTS migrations
-// ...
-await client.close(); // releases the connection pool
+// No connect() or close() needed — migrations run automatically on first
+// use, and the connection closes itself when the process exits.
 ```
 
 ## Constructor
@@ -48,21 +47,31 @@ The adapter uses the `postgres` package internally, which also respects the `PGP
 
 ## Migrations
 
-`connect()` runs `CREATE TABLE IF NOT EXISTS` migrations — safe to call on every startup. No migration tool required.
+Migrations run automatically as `CREATE TABLE IF NOT EXISTS` the first time the adapter is used — safe on every startup, no migration tool required.
 
 Schema created:
 
 ```sql
 CREATE TABLE IF NOT EXISTS drej_events (
-  id         SERIAL PRIMARY KEY,
-  sandbox_id TEXT    NOT NULL,
-  name       TEXT    NOT NULL,
-  step_idx   INTEGER NOT NULL,
-  branch     INTEGER,
-  event      TEXT    NOT NULL,
-  payload    JSONB,
-  error      TEXT,
-  ts         BIGINT  NOT NULL
+  id          BIGSERIAL   PRIMARY KEY,
+  sandbox_id  TEXT        NOT NULL,
+  name        TEXT        NOT NULL,
+  step_idx    INTEGER     NOT NULL,
+  branch      INTEGER,
+  event       TEXT        NOT NULL,
+  payload     JSONB,
+  error       TEXT,
+  ts          BIGINT      NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS drej_events_sandbox_id ON drej_events(sandbox_id);
+CREATE INDEX IF NOT EXISTS drej_events_name ON drej_events(name);
+
+CREATE TABLE IF NOT EXISTS drej_environments (
+  name        TEXT    PRIMARY KEY,
+  snapshot_id TEXT    NOT NULL,
+  image       TEXT    NOT NULL,
+  built_at    BIGINT  NOT NULL
 );
 ```
 

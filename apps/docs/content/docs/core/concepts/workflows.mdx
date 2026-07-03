@@ -17,7 +17,6 @@ const client = new Drej({
   baseUrl: "http://localhost:8080",
   adapter: new SQLiteAdapter("./ledger.db"),
 });
-await client.connect();
 
 const sb = await client.sandbox({
   image: "node:22",

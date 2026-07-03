@@ -33,8 +33,14 @@ type AgentEvent =
   | { type: "compaction_start"; reason: "manual" | "threshold" | "overflow" }
   | {
       type: "compaction_end";
-      reason: string;
-      result: object | null;
+      reason: "manual" | "threshold" | "overflow";
+      result: {
+        summary: string;
+        firstKeptEntryId: string;
+        tokensBefore: number;
+        estimatedTokensAfter: number;
+        details: unknown;
+      } | null;
       aborted: boolean;
       willRetry: boolean;
     }
@@ -128,7 +134,7 @@ console.log("Tools used:", [...new Set(toolNames)].join(", "));
 
 ## bash()
 
-`agent.bash()` runs a shell command inside Pi's working context and returns the same `AgentStream`. Tool events from the bash execution are surfaced the same way:
+`agent.bash()` runs a shell command inside Pi's working context and returns the same `AgentStream` type — but unlike `prompt()`, it's not incrementally streamed. Pi returns bash output synchronously, so the full output arrives as a single `text` event once the command completes; no `tool_start`/`tool_update`/`tool_end` events are emitted for it:
 
 ```ts
 for await (const chunk of textOnly(agent.bash("ls -la /workspace"))) {

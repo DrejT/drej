@@ -64,7 +64,7 @@ try {
 bun run.ts
 ```
 
-`Agent.load()` logs timing for each phase. The first run installs the Pi CLI (~30–60 s) and checkpoints the sandbox. Subsequent runs restore from that snapshot in ~5 s:
+`Agent.load()` logs timing for each phase. The first run installs the Pi CLI and checkpoints the sandbox — on the order of a minute. Subsequent runs restore from that snapshot in a few seconds:
 
 ```
 # First run

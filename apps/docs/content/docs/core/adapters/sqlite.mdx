@@ -22,12 +22,11 @@ const client = new Drej({
   adapter: new SQLiteAdapter("./ledger.db"),
 });
 
-await client.connect(); // creates the file and runs migrations
-// ...
-await client.close(); // closes the database connection
+// No connect() or close() needed — the file is created and migrations run
+// automatically the first time the adapter is used.
 ```
 
-The file is created if it doesn't exist. `connect()` runs `CREATE TABLE IF NOT EXISTS` migrations so it's safe to call on every startup.
+`CREATE TABLE IF NOT EXISTS` migrations run automatically on first use, so it's safe to construct the adapter fresh on every startup.
 
 ## Constructor
 
@@ -41,7 +40,7 @@ new SQLiteAdapter(path: string)
 
 ## WAL mode
 
-`SQLiteAdapter` enables WAL (Write-Ahead Logging) mode automatically on `connect()`. WAL mode prevents writers from blocking readers, so multiple concurrent sandbox sessions in the same process are safe.
+`SQLiteAdapter` enables WAL (Write-Ahead Logging) mode automatically the first time it's used. WAL mode prevents writers from blocking readers, so multiple concurrent sandbox sessions in the same process are safe.
 
 ## When to use
 
@@ -64,18 +63,28 @@ Switch to `@drej/postgres` when:
 
 ## Schema
 
-`connect()` creates a single table:
+The following is created automatically on first use:
 
 ```sql
 CREATE TABLE IF NOT EXISTS drej_events (
-  id         INTEGER PRIMARY KEY AUTOINCREMENT,
-  sandbox_id TEXT    NOT NULL,
-  name       TEXT    NOT NULL,
-  step_idx   INTEGER NOT NULL,
-  branch     INTEGER,
-  event      TEXT    NOT NULL,
-  payload    TEXT,
-  error      TEXT,
-  ts         INTEGER NOT NULL
+  id          INTEGER  PRIMARY KEY AUTOINCREMENT,
+  sandbox_id  TEXT     NOT NULL,
+  name        TEXT     NOT NULL,
+  step_idx    INTEGER  NOT NULL,
+  branch      INTEGER,
+  event       TEXT     NOT NULL,
+  payload     TEXT,
+  error       TEXT,
+  ts          INTEGER  NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS drej_events_sandbox_id ON drej_events(sandbox_id);
+CREATE INDEX IF NOT EXISTS drej_events_name ON drej_events(name);
+
+CREATE TABLE IF NOT EXISTS drej_environments (
+  name        TEXT    PRIMARY KEY,
+  snapshot_id TEXT    NOT NULL,
+  image       TEXT    NOT NULL,
+  built_at    INTEGER NOT NULL
 );
 ```

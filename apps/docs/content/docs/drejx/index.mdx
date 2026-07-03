@@ -1,13 +1,13 @@
 ---
 title: drejx
-description: "drejx — the drej CLI for provisioning pre-built sandboxes from a registry URL."
+description: "drejx — a local CLI for managing @drej/agent spec files: fetch, list, and remove them, plus a one-command local OpenSandbox server."
 ---
 
 <Cards>
   <Card
     href="/docs/drejx/getting-started"
     title="Getting Started"
-    description="Install drejx, start a local OpenSandbox server, and provision your first sandbox."
+    description="Install drejx, start a local OpenSandbox server, and fetch your first agent spec."
   />
   <Card
     href="/docs/drejx/commands"
@@ -17,11 +17,11 @@ description: "drejx — the drej CLI for provisioning pre-built sandboxes from a
   <Card
     href="/docs/drejx/registry"
     title="Registry Format"
-    description="Publish your own sandbox specs so others can spin them up with a single command."
+    description="Publish your own agent spec files so others can fetch them with a single command."
   />
   <Card
     href="/docs/drejx/using-sandboxes"
-    title="Using Sandboxes in Code"
-    description="Connect to a provisioned sandbox from your drej application."
+    title="Running an agent spec"
+    description="Load an agent spec saved by drejx add with @drej/agent's Agent.load()."
   />
 </Cards>

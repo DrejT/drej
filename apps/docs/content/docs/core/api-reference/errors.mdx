@@ -1,23 +1,24 @@
 ---
 title: Errors
-description: CommandError, SandboxError, ExecConnectionError, and WorkflowError — the full drej error hierarchy.
+description: CommandError, SandboxError, ExecConnectionError, WorkflowError, and DrejError — the full drej error hierarchy.
 ---
 
 ```ts
-import { CommandError, SandboxError, ExecConnectionError, WorkflowError } from "drej";
+import { CommandError, SandboxError, ExecConnectionError, WorkflowError, DrejError } from "drej";
 ```
 
 ## Error hierarchy
 
 ```
 Error
-└── WorkflowError        — base class for all drej errors
-    ├── SandboxError     — container failed to start or reach Running
-    ├── ExecConnectionError — execd not ready after retry window
-    └── CommandError     — non-zero exit code in strict mode
+├── WorkflowError            — base class for Sandbox-level errors
+│   ├── SandboxError        — Sandbox method failed to start, resume, or reach Running
+│   ├── ExecConnectionError — execd not ready after retry window
+│   └── CommandError        — non-zero exit code in strict mode
+└── DrejError                — client-level errors from Drej itself (not a WorkflowError)
 ```
 
-All drej errors extend `WorkflowError`, which extends `Error`. You can catch all of them with `e instanceof WorkflowError`.
+`SandboxError`, `ExecConnectionError`, and `CommandError` all extend `WorkflowError`, which extends `Error` — catch all three with `e instanceof WorkflowError`. `DrejError` is a separate, sibling class thrown by `Drej` client methods (`sandbox()`, `resume()`, `sandboxes.*`, `environment()`) rather than by `Sandbox` methods — see [DrejError](#drejerror) below.
 
 ## WorkflowError
 
@@ -75,19 +76,18 @@ const { exitCode } = await sb.exec("test -f /etc/hosts", { strict: false });
 
 ## SandboxError
 
-Thrown when a sandbox fails to create, boot, or reach `Running` state. Also thrown internally if a snapshot fails.
+Thrown by methods on `Sandbox` itself: `resume()` if the container never reaches `Running` (or enters `Failed`/`Terminated`), an exec call while the sandbox is paused, `fork()` when the deps don't support it, or a failed snapshot wait.
+
+A failure during `client.sandbox()`'s own initial creation throws `DrejError`, not `SandboxError` — see below.
 
 ```ts
 import { SandboxError } from "drej";
 
 try {
-  const sb = await client.sandbox({
-    image: "nonexistent:image",
-    resources: { cpu: "500m", memory: "256Mi" },
-  });
+  await sb.resume(); // sandbox previously pause()d, now stuck
 } catch (e) {
   if (e instanceof SandboxError) {
-    console.error(e.message); // "Sandbox <id> entered state Failed: ..."
+    console.error(e.message); // e.g. "Sandbox entered Failed: ..." or "sandbox is paused — call resume() first"
     console.error(e.sandboxId ?? ""); // sandbox ID if assigned before failure
   }
 }

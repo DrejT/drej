@@ -28,7 +28,7 @@ static async load(specPath: string, opts?: { rebuild?: boolean }): Promise<Agent
 
 Load and validate the JSON spec at `specPath`, spin up a `node:22` sandbox, install the Pi CLI and any `setup` steps, and return a ready `Agent`.
 
-On first load the container is checkpointed after install. Subsequent calls restore from the snapshot — skipping the install and completing in ~5 s instead of ~50 s. See [Snapshotting](/docs/agent/getting-started/snapshotting).
+On first load the container is checkpointed after install. Subsequent calls restore from the snapshot — skipping the install and starting in ~3s instead of ~90s. See [Snapshotting](/docs/agent/getting-started/snapshotting).
 
 ```ts
 const agent = await Agent.load("./agents/my-agent.json");
@@ -84,7 +84,7 @@ for await (const ev of agent.prompt("Run /workspace/script.py")) {
 bash(command: string): AgentStream
 ```
 
-Run a shell command inside Pi's working context and stream stdout. Returns the same `AgentStream` type as `prompt()`.
+Run a shell command inside Pi's working context. Returns the same `AgentStream` type as `prompt()`, but not incrementally streamed — Pi returns bash output synchronously, so the full output arrives as a single `text` event once the command completes.
 
 ```ts
 for await (const chunk of textOnly(agent.bash("ls -la /workspace"))) {
@@ -152,13 +152,12 @@ Branch the current Pi session at the current position, creating a new session fi
 async fork(entryId: string): Promise<{ text: string; cancelled: boolean }>
 ```
 
-Branch from a specific message entry in the conversation history. `entryId` comes from `getMessages()` — either `message.id` or `message.entryId`. Returns the text of the forked message and whether it was cancelled.
+Branch from a specific message entry in the conversation history. `entryId` comes from `getForkMessages()` (see below), not `getMessages()` — `PiMessage` has no `id`/`entryId` field. Returns the text of the forked message and whether it was cancelled.
 
 ```ts
-const messages = await agent.getMessages();
-const msg = messages.find((m) => m.role === "user" && m.id);
-if (msg) {
-  const forked = await agent.fork(msg.id);
+const points = await agent.getForkMessages();
+if (points.length > 0) {
+  const forked = await agent.fork(points[0].entryId);
   console.log(`Forked from: "${forked.text.slice(0, 60)}"`);
 }
 ```
@@ -393,7 +392,7 @@ Enable or disable Pi's automatic context compaction.
 async compact(customInstructions?: string): Promise<CompactResult>
 ```
 
-Manually trigger Pi's context compaction. Returns `{ tokensBefore, estimatedTokensAfter }`.
+Manually trigger Pi's context compaction. Returns a `CompactResult`: `{ summary, firstKeptEntryId, tokensBefore, estimatedTokensAfter }`.
 
 ---
 
@@ -487,23 +486,23 @@ The JSON shape of an agent spec file. Pass the path to `Agent.load(specPath)`.
 import type { AgentSpec } from "@drej/agent";
 ```
 
-| Field                  | Type                                     | Description                                                             |
-| ---------------------- | ---------------------------------------- | ----------------------------------------------------------------------- |
-| `name`                 | `string`                                 | Unique identifier. Used as the sandbox session name.                    |
-| `cli`                  | `"pi"`                                   | CLI to run. Only `"pi"` is supported.                                   |
-| `cliVersion`           | `string?`                                | Pin to a specific Pi version, e.g. `"0.80.2"`. Defaults to latest.      |
-| `model`                | `string?`                                | Model ID passed to Pi via `--model`.                                    |
-| `provider`             | `string?`                                | AI provider passed via `--provider`. Omit for a direct Google API key.  |
-| `packages`             | `string[]?`                              | APT packages to install before Pi (e.g. `["python3", "git"]`).          |
-| `env`                  | `Record<string,string>?`                 | Env vars for the sandbox. Values may reference host env: `"${MY_VAR}"`. |
-| `resources`            | `{ cpu: string; memory: string; gpu? }?` | Container resource limits. Falls back to `drej.config.json` defaults.   |
-| `setup`                | `SetupStep[]?`                           | Workspace setup steps — run after Pi install, baked into the snapshot.  |
-| `title`                | `string?`                                | Human-readable display name.                                            |
-| `description`          | `string?`                                | Short description of the agent.                                         |
-| `author`               | `string?`                                | Author name.                                                            |
-| `categories`           | `string[]?`                              | Arbitrary category tags.                                                |
-| `metadata`             | `Record<string,string>?`                 | Arbitrary labels attached to the sandbox.                               |
-| `registryDependencies` | `string[]?`                              | Other agent spec URLs to load as dependencies.                          |
+| Field                  | Type                                     | Description                                                                                                                                                                 |
+| ---------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`                 | `string`                                 | Unique identifier. Used as the sandbox session name.                                                                                                                        |
+| `cli`                  | `"pi"`                                   | CLI to run. Only `"pi"` is supported.                                                                                                                                       |
+| `cliVersion`           | `string?`                                | Included in the setup-hash cache key, so changing it forces a fresh Pi CLI install. `Agent.load()` always installs the latest Pi CLI — this doesn't pin a specific version. |
+| `model`                | `string?`                                | Model ID passed to Pi via `--model`.                                                                                                                                        |
+| `provider`             | `string?`                                | AI provider passed via `--provider`. Omit for a direct Google API key.                                                                                                      |
+| `packages`             | `string[]?`                              | APT packages to install before Pi (e.g. `["python3", "git"]`).                                                                                                              |
+| `env`                  | `Record<string,string>?`                 | Env vars for the sandbox. Values may reference host env: `"${MY_VAR}"`.                                                                                                     |
+| `resources`            | `{ cpu: string; memory: string; gpu? }?` | Container resource limits. Falls back to `drej.config.json` defaults.                                                                                                       |
+| `setup`                | `SetupStep[]?`                           | Workspace setup steps — run after Pi install, baked into the snapshot.                                                                                                      |
+| `title`                | `string?`                                | Human-readable display name.                                                                                                                                                |
+| `description`          | `string?`                                | Short description of the agent.                                                                                                                                             |
+| `author`               | `string?`                                | Author name.                                                                                                                                                                |
+| `categories`           | `string[]?`                              | Arbitrary category tags.                                                                                                                                                    |
+| `metadata`             | `Record<string,string>?`                 | Not read anywhere in `@drej/agent`; has no effect on the sandbox.                                                                                                           |
+| `registryDependencies` | `string[]?`                              | Other agent spec URLs. Not read by `@drej/agent` itself — used by `drejx add`, which fetches and saves each one first, depth-first.                                         |
 
 ### Example
 
@@ -589,8 +588,14 @@ type AgentEvent =
   | { type: "compaction_start"; reason: "manual" | "threshold" | "overflow" }
   | {
       type: "compaction_end";
-      reason: string;
-      result: object | null;
+      reason: "manual" | "threshold" | "overflow";
+      result: {
+        summary: string;
+        firstKeptEntryId: string;
+        tokensBefore: number;
+        estimatedTokensAfter: number;
+        details: unknown;
+      } | null;
       aborted: boolean;
       willRetry: boolean;
     }

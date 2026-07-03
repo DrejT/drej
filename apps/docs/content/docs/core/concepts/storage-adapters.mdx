@@ -3,7 +3,7 @@ title: Storage adapters
 description: How the IStorageAdapter interface persists every exec event for durability and replay.
 ---
 
-Every exec, checkpoint, and sandbox lifecycle event is written to a storage adapter as it happens. This makes runs durable — if your process crashes, the ledger contains everything needed to know what ran and what was captured.
+Every live exec, checkpoint, and sandbox lifecycle event is written to a storage adapter as it happens. This makes runs durable — if your process crashes, the ledger contains everything needed to know what ran and what was captured. (Replayed execs in a resumed sandbox return cached output instantly and do not write new events — see [Checkpoint & resume](/docs/core/building/snapshots).)
 
 ## Why persistence matters
 
@@ -31,10 +31,9 @@ const client = new Drej({
   baseUrl: "http://localhost:8080",
   adapter: new SQLiteAdapter("./ledger.db"),
 });
-await client.connect(); // runs migrations, enables WAL
 ```
 
-The file is created if it doesn't exist. WAL mode means readers don't block writers, so multiple concurrent sandbox sessions are safe.
+The file is created if it doesn't exist. WAL mode means readers don't block writers, so multiple concurrent sandbox sessions are safe. No `connect()` call is needed — see [Connect and close](#connect-and-close) below.
 
 ## Postgres
 
@@ -47,20 +46,17 @@ const client = new Drej({
   baseUrl: process.env.OPEN_SANDBOX_URL!,
   adapter: new PostgresAdapter(process.env.DATABASE_URL!),
 });
-await client.connect(); // runs CREATE TABLE IF NOT EXISTS migrations
 ```
 
 ## Connect and close
 
-Always call `await client.connect()` before first use and `await client.close()` on shutdown:
+`Drej` has no `connect()` or `close()` method to call — the adapter initializes lazily (`CREATE TABLE IF NOT EXISTS` migrations run automatically on first use) and closes itself automatically via a `process.on("beforeExit", ...)` hook. Just construct the client and start using it:
 
 ```ts
-await client.connect(); // opens connection, runs migrations
-// ... use client ...
-await client.close(); // releases connections
+const client = new Drej({ baseUrl: "...", adapter: new PostgresAdapter("...") });
+// ... use client — migrations run on first call, no setup step needed ...
+// no close() call needed; the adapter shuts down on process exit
 ```
-
-`connect()` is where migrations run — `CREATE TABLE IF NOT EXISTS` so it's safe to call on every startup.
 
 ## Events written to the ledger
 

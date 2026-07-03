@@ -26,7 +26,7 @@ sb.retry(
 | `delayMs` | `number`                   | `1000`    | Wait between attempts (ms) |
 | `backoff` | `"fixed" \| "exponential"` | `"fixed"` | Delay growth strategy      |
 
-With `backoff: "exponential"`, each retry multiplies `delayMs` by the attempt number: 1s, 2s, 4s, ...
+With `backoff: "exponential"`, the delay doubles each attempt (`delayMs * 2^(attempt-1)`): 1s, 2s, 4s, ...
 
 ## when
 
@@ -77,6 +77,8 @@ sb.forEach(packages, (sb, pkg) => sb.exec(`npm install ${pkg}`), { concurrency: 
 | Option        | Type     | Default | Description             |
 | ------------- | -------- | ------- | ----------------------- |
 | `concurrency` | `number` | `1`     | Max parallel iterations |
+
+With `concurrency > 1`, each parallel branch flushes against a shallow copy of the outer `FlushContext`. `stdout`/`exitCode` writes inside those branches don't propagate back to the outer context afterward — only `vars` (an object reference) does. Don't rely on `ctx.stdout`/`ctx.exitCode` reflecting what happened inside a concurrent `forEach` after it completes.
 
 ## Composing
 

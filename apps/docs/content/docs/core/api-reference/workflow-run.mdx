@@ -69,7 +69,7 @@ See [Error handling](/docs/core/patterns/error-handling) for more on `CommandErr
 
 ## Multiple consumers
 
-An `ExecHandle` can only be consumed once — the underlying stream is driven by the first consumer. All consumption modes (`pipe`, `stdout`, `await`, `result`) share the same internal chunk buffer.
+An `ExecHandle` can only be consumed once — the underlying stream starts draining as soon as `sb.exec()`/`sb.execCode()` is called, in the `ExecHandle` constructor, whether or not anything ever consumes it. All consumption modes (`pipe`, `stdout`, `await`, `result`) share the same internal chunk buffer.
 
 ```ts
 const handle = sb.exec("long-running-command");

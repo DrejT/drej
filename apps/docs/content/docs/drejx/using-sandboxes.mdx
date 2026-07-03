@@ -1,107 +1,85 @@
 ---
-title: Using Sandboxes in Code
-description: Connect to a drejx-provisioned sandbox from your drej application.
+title: Running an agent spec
+description: Load an agent spec saved by drejx add with @drej/agent's Agent.load() — drejx never creates a sandbox itself.
 ---
 
-After `drejx add` finishes, the sandbox is checkpointed and its ID is stored in `.drej/sandboxes.json`. To use it, create a `Drej` client and call `client.resume()`.
+`drejx add` only fetches and saves an `AgentSpec` JSON file — it never creates a sandbox, runs setup, or checkpoints anything. To actually run the agent, load the spec with [`@drej/agent`](/docs/agent)'s `Agent.load()`.
 
 ## Setup
 
 ```bash
-bun add drej @drej/sqlite
+bun add @drej/agent
 ```
 
-## Connecting
+## Loading and prompting
 
 ```ts
-import { Drej } from "drej";
-import { SQLiteAdapter } from "@drej/sqlite";
+import { Agent, textOnly } from "@drej/agent";
 
-const client = new Drej({
-  baseUrl: "http://localhost:8080",
-  useServerProxy: true,
-  adapter: new SQLiteAdapter("./.drej/ledger.db"),
-});
-```
+const agent = await Agent.load("agents/node-toolchain.json");
 
-`useServerProxy: true` is required when the server was started by `drejx init`. The values for `baseUrl` and `adapterPath` are in `.drej/config.json` if you want to read them dynamically.
-
-## Resuming a sandbox
-
-Pass the sandbox ID printed by `drejx add` (or read from `.drej/sandboxes.json`) to `client.resume()`:
-
-```ts
-const sb = await client.resume("sb_a1b2c3d4e5f6g7h8");
-try {
-  await sb.exec("node --version").pipe(process.stdout);
-} finally {
-  await sb.close();
+for await (const chunk of textOnly(agent.prompt("What Node version is installed?"))) {
+  process.stdout.write(chunk);
 }
+
+await agent.close();
 ```
 
-`resume()` restores the sandbox from its checkpoint. Because the setup was already run and checkpointed by `drejx add`, the sandbox is ready in seconds — no re-running of `setup` commands.
+`Agent.load()` reads `drej.config.json` itself — the same file `drejx init` writes — for the OpenSandbox server URL, `useServerProxy`, and default resource limits. You don't construct a `Drej` client or pass connection details by hand.
 
-## Reading the config and sandboxes file
+## What happens on load
 
-You can load connection details and sandbox IDs directly from the files `drejx` writes:
+- **First load for a spec**: spins up a `node:22` sandbox, installs the Pi CLI and any `setup` steps from the spec, then checkpoints the sandbox. This is the slow path.
+- **Subsequent loads**: restore from that checkpoint, skipping the install entirely — much faster. The snapshot is keyed on a hash of `cli`, `cliVersion`, `packages`, and `setup`, so changing any of those forces a fresh install on the next load.
+- Pass `{ rebuild: true }` to force a full reinstall regardless of the cache: `Agent.load(specPath, { rebuild: true })`.
+
+See [Snapshotting](/docs/agent/getting-started/snapshotting) for the full details.
+
+## Accessing the underlying sandbox
+
+`agent.sandbox` is the live `Sandbox` from `@drej/core` — use it for anything not covered by the `Agent` API, like reading files or exposing a port:
 
 ```ts
-import { readFileSync } from "fs";
+const agent = await Agent.load("agents/web-service.json");
 
-const config = JSON.parse(readFileSync(".drej/config.json", "utf8"));
-const sandboxes = JSON.parse(readFileSync(".drej/sandboxes.json", "utf8"));
+await agent.sandbox.exec("node server.js &");
+const { url, headers } = await agent.sandbox.proxy(3000);
+const res = await fetch(`${url}/health`, { headers });
+console.log(await res.text());
 
-const entry = sandboxes.find((s: { name: string }) => s.name === "node-toolchain");
-
-const client = new Drej({
-  baseUrl: config.serverUrl,
-  useServerProxy: config.useServerProxy,
-  adapter: new SQLiteAdapter(config.adapterPath),
-});
-
-const sb = await client.resume(entry.sandboxId);
+await agent.close();
 ```
 
-## Accessing ports
+## Multiple agents
 
-If the registry item documented exposed ports, use `sb.proxy()` to get a URL you can send HTTP requests to:
-
-```ts
-const sb = await client.resume("sb_a1b2c3d4");
-try {
-  await sb.exec("node server.js &");
-  const { url, headers } = await sb.proxy(3000);
-  const res = await fetch(`${url}/health`, { headers });
-  console.log(await res.text());
-} finally {
-  await sb.close();
-}
-```
-
-## Multiple resumes
-
-Every `client.resume()` call creates a fresh container restored from the same checkpoint. Each resume is independent — running commands on one does not affect another.
+Each `Agent.load()` call for the same spec restores an independent sandbox from the same checkpoint — running one doesn't affect another:
 
 ```ts
-const [sb1, sb2] = await Promise.all([client.resume("sb_a1b2c3d4"), client.resume("sb_a1b2c3d4")]);
-
-// sb1 and sb2 are separate containers, both starting from the same state
-await Promise.all([
-  sb1.exec("npm test").pipe(process.stdout),
-  sb2.exec("npm run build").pipe(process.stdout),
+const [a1, a2] = await Promise.all([
+  Agent.load("agents/reviewer.json"),
+  Agent.load("agents/reviewer.json"),
 ]);
 
-await Promise.all([sb1.close(), sb2.close()]);
+await Promise.all([
+  (async () => {
+    for await (const chunk of textOnly(a1.prompt("Review src/a.ts"))) process.stdout.write(chunk);
+  })(),
+  (async () => {
+    for await (const chunk of textOnly(a2.prompt("Review src/b.ts"))) process.stdout.write(chunk);
+  })(),
+]);
+
+await Promise.all([a1.close(), a2.close()]);
 ```
 
-## Sandbox lifecycle
+## Lifecycle
 
-- `client.resume()` creates a container. It costs resources until `sb.close()` is called.
-- Always call `sb.close()` when done — use `try/finally` to ensure it runs on error.
-- The original checkpoint is preserved after every resume. You can resume the same sandbox ID as many times as needed.
+- `Agent.load()` creates a sandbox (or resumes one). It costs resources until `agent.close()` is called.
+- Always call `agent.close()` when done — use `try/finally` to ensure it runs on error.
+- The checkpoint from the first load is preserved. You can `Agent.load()` the same spec as many times as needed without repeating setup.
 
 ## See also
 
+- [@drej/agent overview](/docs/agent) — the full `Agent` API: prompting, streaming, sessions, snapshotting
 - [drej core SDK — exec](/docs/core/building/exec)
 - [drej core SDK — file operations](/docs/core/building/file-ops)
-- [drej core SDK — snapshots and resume](/docs/core/building/snapshots)

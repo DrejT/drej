@@ -2,6 +2,11 @@
   "name": "@drej/otel",
   "version": "0.2.2",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DrejT/drej.git",
+    "directory": "packages/adapters/otel"
+  },
   "files": [
     "dist"
   ],

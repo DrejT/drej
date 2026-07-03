@@ -21,15 +21,16 @@ Sessions are returned newest first.
 
 Each session has:
 
-| Field         | Type            | Description                                              |
-| ------------- | --------------- | -------------------------------------------------------- |
-| `sandboxId`   | `string`        | OpenSandbox container ID                                 |
-| `name`        | `string`        | User-provided name (or auto-generated)                   |
-| `status`      | `SandboxStatus` | `"running"`, `"completed"`, `"failed"`, or `"cancelled"` |
-| `startedAt`   | `number`        | Unix timestamp (ms) of `sandbox_created` event           |
-| `completedAt` | `number?`       | Unix timestamp (ms) of `sandbox_closed` event            |
-| `execCount`   | `number`        | Number of completed execs                                |
-| `error`       | `string?`       | Error message if status is `failed`                      |
+| Field         | Type            | Description                                                                                        |
+| ------------- | --------------- | -------------------------------------------------------------------------------------------------- |
+| `sandboxId`   | `string`        | OpenSandbox container ID                                                                           |
+| `name`        | `string`        | User-provided name (or auto-generated)                                                             |
+| `status`      | `SandboxStatus` | `"running"` or `"completed"` — that's the full set; there is no `"failed"` or `"cancelled"` status |
+| `startedAt`   | `number`        | Unix timestamp (ms) of `sandbox_created` event                                                     |
+| `completedAt` | `number?`       | Unix timestamp (ms) of `sandbox_closed` event                                                      |
+| `execCount`   | `number`        | Number of completed execs                                                                          |
+
+There is no `error` field on `SandboxDetails` — a sandbox that failed to start doesn't get a ledger entry with a `"failed"` status; it just never has a `sandbox_created` event to derive one from.
 
 ## Filter by name
 

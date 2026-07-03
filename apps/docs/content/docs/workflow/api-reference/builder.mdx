@@ -174,7 +174,7 @@ sb.retry(
 ): this
 ```
 
-Queue a retry block. On failure, waits `delayMs` and retries up to `maxAttempts` times.
+Queue a retry block. Runs up to `maxAttempts` total attempts (the first run plus retries), waiting `delayMs` between each on failure.
 
 ```ts
 interface RetryOptions {

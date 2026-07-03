@@ -1,53 +1,57 @@
 ---
 title: Registry
-description: Publish a JSON spec to let anyone spin up your sandbox environment with a single command.
+description: Publish an AgentSpec JSON file so others can fetch it with a single command.
 ---
 
-A drejx registry is just a URL that returns a JSON object. There is no central registry — any URL works, including a GitHub raw file, a Gist, or your own server.
+A drejx "registry item" is just a URL that returns an `AgentSpec` JSON object (the same spec type used by [`@drej/agent`](/docs/agent)). There is no central registry — any URL works, including a GitHub raw file, a Gist, or your own server.
 
 <Cards>
   <Card
     href="/docs/drejx/registry/schema"
-    title="Registry item schema"
-    description="All fields, types, and constraints for a valid registry item."
+    title="AgentSpec schema"
+    description="All fields, types, and constraints for a valid agent spec."
   />
 </Cards>
 
-## Publishing a registry item
+## Publishing a spec
 
-A registry item is a static JSON file. Hosting it is as simple as pushing it to a public GitHub repository and sharing the raw URL:
+An agent spec is a static JSON file. Hosting it is as simple as pushing it to a public GitHub repository and sharing the raw URL:
 
 ```
-https://raw.githubusercontent.com/your-org/your-repo/main/sandboxes/node-toolchain.json
+https://raw.githubusercontent.com/your-org/your-repo/main/agents/node-toolchain.json
 ```
 
-Anyone can then provision it with:
+Anyone can then fetch it into their own project with:
 
 ```bash
-bunx drejx add https://raw.githubusercontent.com/your-org/your-repo/main/sandboxes/node-toolchain.json
+bunx drejx add https://raw.githubusercontent.com/your-org/your-repo/main/agents/node-toolchain.json
 ```
 
+This only saves the spec locally — it doesn't run anything. See [Running an agent spec](/docs/drejx/using-sandboxes) for how to actually load and run it with `Agent.load()`.
+
 ## Minimal example
+
+Every spec runs inside a `node:22` sandbox (there's no `image` field — the base image is fixed) and requires `cli: "pi"`:
 
 ```json
 {
   "name": "node-toolchain",
-  "image": "node:22",
-  "resources": { "cpu": "500m", "memory": "512Mi" },
-  "setup": ["npm install -g typescript eslint prettier", "mkdir -p /workspace"]
+  "cli": "pi",
+  "setup": [{ "name": "install tools", "run": "npm install -g typescript eslint prettier" }]
 }
 ```
 
 ## Composition with `registryDependencies`
 
-A registry item can declare dependencies on other items. `drejx add` provisions them first, depth-first:
+A spec can declare dependencies on other specs by URL. `drejx add` fetches and saves them first, depth-first, before saving the top-level spec — it does not merge or run them, each dependency just ends up as its own separate spec file in `agentsDir`:
 
 ```json
 {
   "name": "ts-reviewer",
-  "image": "node:22",
-  "resources": { "cpu": "500m", "memory": "512Mi" },
-  "registryDependencies": ["https://registry.drej.dev/node-toolchain.json"],
-  "setup": ["npm install -g @typescript-eslint/parser"]
+  "cli": "pi",
+  "registryDependencies": ["https://example.com/agents/node-toolchain.json"],
+  "setup": [{ "name": "install linter", "run": "npm install -g @typescript-eslint/parser" }]
 }
 ```
+
+There's no cycle detection — avoid dependency chains that reference each other.

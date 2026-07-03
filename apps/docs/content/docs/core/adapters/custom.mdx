@@ -18,6 +18,11 @@ export interface IStorageAdapter {
   listAllSandboxDetails(opts?: ListSandboxOptions): Promise<SandboxDetails[]>;
   getSandboxDetails(name: string, sandboxId: string): Promise<SandboxDetails | null>;
   deleteSandbox(name: string, sandboxId: string): Promise<void>;
+  listCheckpoints(name: string, sandboxId: string): Promise<CheckpointInfo[]>;
+  getEnvironment(name: string): Promise<EnvironmentRecord | null>;
+  saveEnvironment(record: EnvironmentRecord): Promise<void>;
+  deleteEnvironment(name: string): Promise<void>;
+  listEnvironments(): Promise<EnvironmentRecord[]>;
 }
 ```
 
@@ -30,22 +35,29 @@ import type {
   LedgerEvent,
   SandboxDetails,
   ListSandboxOptions,
+  CheckpointInfo,
+  EnvironmentRecord,
 } from "@drej/core";
 ```
 
 ## Method reference
 
-| Method                               | Required | Description                                                                  |
-| ------------------------------------ | -------- | ---------------------------------------------------------------------------- |
-| `connect()`                          | No       | Initialize connections. Called by `client.connect()`.                        |
-| `close()`                            | No       | Release connections. Called by `client.close()`.                             |
-| `append(entry)`                      | Yes      | Persist a single ledger event. Called during every exec.                     |
-| `readAll(name, sandboxId)`           | Yes      | Return all events for a session in ascending `ts` order. Used by `resume()`. |
-| `lastCheckpoint(name, sandboxId)`    | Yes      | Return the most recent `checkpoint_created` entry, or `null`.                |
-| `listSandboxDetails(name, opts?)`    | Yes      | Return sessions with this name, newest first.                                |
-| `listAllSandboxDetails(opts?)`       | Yes      | Return all sessions across all names, newest first.                          |
-| `getSandboxDetails(name, sandboxId)` | Yes      | Return a single session, or `null`.                                          |
-| `deleteSandbox(name, sandboxId)`     | Yes      | Delete all events for a session.                                             |
+| Method                               | Required | Description                                                                                                                     |
+| ------------------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `connect()`                          | No       | Initialize connections. Called lazily, once, the first time the client needs the adapter — not by any method you call yourself. |
+| `close()`                            | No       | Release connections. Called automatically when the process exits.                                                               |
+| `append(entry)`                      | Yes      | Persist a single ledger event. Called during every live exec.                                                                   |
+| `readAll(name, sandboxId)`           | Yes      | Return all events for a session in ascending `ts` order. Used by `resume()`.                                                    |
+| `lastCheckpoint(name, sandboxId)`    | Yes      | Return the most recent `checkpoint_created` entry, or `null`.                                                                   |
+| `listSandboxDetails(name, opts?)`    | Yes      | Return sessions with this name, newest first.                                                                                   |
+| `listAllSandboxDetails(opts?)`       | Yes      | Return all sessions across all names, newest first.                                                                             |
+| `getSandboxDetails(name, sandboxId)` | Yes      | Return a single session, or `null`.                                                                                             |
+| `deleteSandbox(name, sandboxId)`     | Yes      | Delete all events for a session.                                                                                                |
+| `listCheckpoints(name, sandboxId)`   | Yes      | Return all checkpoints for a session, in creation order.                                                                        |
+| `getEnvironment(name)`               | Yes      | Return the cached record for a named environment, or `null` if not built yet.                                                   |
+| `saveEnvironment(record)`            | Yes      | Upsert an environment record after a successful build.                                                                          |
+| `deleteEnvironment(name)`            | Yes      | Remove the record for a named environment. Does not delete the server-side snapshot.                                            |
+| `listEnvironments()`                 | Yes      | Return all environment records, newest first.                                                                                   |
 
 ## LedgerEntry
 
@@ -67,11 +79,19 @@ interface LedgerEntry {
 Useful for testing:
 
 ```ts
-import type { IStorageAdapter, LedgerEntry, SandboxDetails, ListSandboxOptions } from "@drej/core";
+import type {
+  IStorageAdapter,
+  LedgerEntry,
+  SandboxDetails,
+  ListSandboxOptions,
+  CheckpointInfo,
+  EnvironmentRecord,
+} from "@drej/core";
 import { SandboxStatus, LedgerEvent } from "@drej/core";
 
 export class MemoryAdapter implements IStorageAdapter {
   private readonly _events: LedgerEntry[] = [];
+  private readonly _environments = new Map<string, EnvironmentRecord>();
 
   async append(entry: LedgerEntry): Promise<void> {
     this._events.push(entry);
@@ -137,6 +157,32 @@ export class MemoryAdapter implements IStorageAdapter {
       this._events.splice(idx, 1);
     }
   }
+
+  async listCheckpoints(name: string, sandboxId: string): Promise<CheckpointInfo[]> {
+    const events = await this.readAll(name, sandboxId);
+    return events
+      .filter((e) => e.event === LedgerEvent.CheckpointCreated)
+      .map((e) => {
+        const payload = e.payload as { snapshotId: string; name?: string };
+        return { snapshotId: payload.snapshotId, tag: payload.name, createdAt: e.ts };
+      });
+  }
+
+  async getEnvironment(name: string): Promise<EnvironmentRecord | null> {
+    return this._environments.get(name) ?? null;
+  }
+
+  async saveEnvironment(record: EnvironmentRecord): Promise<void> {
+    this._environments.set(record.name, record);
+  }
+
+  async deleteEnvironment(name: string): Promise<void> {
+    this._environments.delete(name);
+  }
+
+  async listEnvironments(): Promise<EnvironmentRecord[]> {
+    return [...this._environments.values()].sort((a, b) => b.builtAt - a.builtAt);
+  }
 }
 ```
 
@@ -149,5 +195,5 @@ const client = new Drej({
   baseUrl: "http://localhost:8080",
   adapter: new MemoryAdapter(),
 });
-await client.connect();
+// No connect() call needed — the adapter is used as soon as the client is.
 ```

@@ -42,7 +42,7 @@ With exponential backoff, attempt delays are: `delayMs`, `delayMs * 2`, `delayMs
 
 ## when
 
-Branch on runtime state. The predicate receives `{ stdout, exitCode, vars }` from the last exec:
+Branch on runtime state. The predicate receives the current context: `stdout` accumulated across every exec run so far in the sandbox, `exitCode` from the most recent exec, and `vars` captured so far:
 
 ```ts
 await workflow(client)

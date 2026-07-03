@@ -6,8 +6,8 @@ description: How Agent.load() caches the Pi install so subsequent loads take sec
 On the first call to `Agent.load()`, the SDK installs the Pi CLI inside a `node:22` sandbox, runs any [workspace setup steps](/docs/agent/getting-started/workspace-setup), then checkpoints the container. On every subsequent call it restores from that snapshot — skipping the install entirely.
 
 ```
-Load 1 (cold):   sandbox → Pi install → setup steps → checkpoint → bridge   ~50s
-Load 2+ (warm):  snapshot restore → bridge                                   ~5s
+Load 1 (cold):   sandbox → Pi install → setup steps → checkpoint → bridge   ~90s
+Load 2+ (warm):  snapshot restore → bridge                                   ~3s
 ```
 
 ## fromSnapshot

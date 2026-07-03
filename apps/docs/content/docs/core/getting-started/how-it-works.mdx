@@ -48,7 +48,7 @@ All three modes drive the same underlying SSE stream from execd. `.result()` res
 
 ## The durable ledger
 
-Every `exec()` call writes three events to the storage adapter:
+Every live `exec()` call writes three events to the storage adapter (replayed execs on a resumed sandbox skip this — see [Checkpoint and resume](#checkpoint-and-resume) below):
 
 ```
 exec_start    { cmd, seq }
@@ -66,7 +66,7 @@ This means every run is fully replayable from the ledger — even if the process
 
 `client.resume(sandboxId)` reads the ledger, finds the last checkpoint, restores a new container from the snapshot, and populates a **replay cache** from execs that completed before the checkpoint.
 
-On the resumed sandbox, calling `sb.exec()` with the same sequence hits the cache — returning the stored result instantly. Subsequent execs run live on the restored container.
+On the resumed sandbox, calling `sb.exec()` with the same sequence hits the cache — returning the stored result instantly, without writing any new `exec_start`/`exec_event`/`exec_complete` events (they're already in the ledger from the original run). Subsequent execs run live on the restored container and are logged normally.
 
 ```
 Original run:

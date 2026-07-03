@@ -50,7 +50,7 @@ Search for files matching a glob pattern. Returns an array of matching paths:
 ```ts
 const tsFiles = await sb.searchFiles("*.ts", "/workspace/src");
 console.log(tsFiles);
-// [{ path: "/workspace/src/index.ts" }, { path: "/workspace/src/util.ts" }]
+// ["/workspace/src/index.ts", "/workspace/src/util.ts"]
 ```
 
 The second argument is the base path to search from. Defaults to `/` if omitted.

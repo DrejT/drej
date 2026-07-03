@@ -30,8 +30,9 @@ By default, `exec()` throws `CommandError` on non-zero exit (`strict: true`). Pa
 // Stateless — isolated context each time
 await sb.execCode(`print("hello")`).pipe(process.stdout);
 
-// Stateful — variables persist across calls sharing the same context
-const ctx = { id: "session-1", language: CodeLanguage.Python };
+// Stateful — variables persist across calls sharing the same context.
+// Contexts must be created first via createCodeContext() — you can't hand-roll one.
+const ctx = await sb.createCodeContext(CodeLanguage.Python);
 
 await sb.execCode(`data = [1, 2, 3]`, { context: ctx });
 await sb.execCode(`print(sum(data))`, { context: ctx }).pipe(process.stdout); // 6

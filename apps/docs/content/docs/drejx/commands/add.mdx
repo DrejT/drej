@@ -1,6 +1,6 @@
 ---
 title: drejx add
-description: Fetch a registry item from a URL and provision a sandbox from it.
+description: Fetch an agent spec from a URL or local file and save it to your project's agents directory.
 ---
 
 ```bash
@@ -9,82 +9,56 @@ bunx drejx add <url> [options]
 
 ## Arguments
 
-| Argument | Description                                               |
-| -------- | --------------------------------------------------------- |
-| `url`    | URL or local file path to a registry item JSON. Required. |
+| Argument | Description                                              |
+| -------- | -------------------------------------------------------- |
+| `url`    | URL or local file path to an `AgentSpec` JSON. Required. |
 
 ## Options
 
-| Option           | Description                                                                         |
-| ---------------- | ----------------------------------------------------------------------------------- |
-| `--name <name>`  | Override the sandbox name. Defaults to the `name` field in the registry item.       |
-| `--server <url>` | Use a different OpenSandbox server. Defaults to `serverUrl` in `.drej/config.json`. |
+| Option          | Description                                                               |
+| --------------- | ------------------------------------------------------------------------- |
+| `--name <name>` | Override the saved file's name. Defaults to the `name` field in the spec. |
+
+There is no `--server` flag — `add` doesn't talk to a server at all, it only reads and writes local files.
 
 ## What it does
 
-1. Reads `.drej/config.json` for the default server URL.
-2. Fetches the URL and validates it as a registry item.
-3. Resolves any `registryDependencies` first (depth-first, recursive).
-4. Creates a sandbox with the image, resources, and env from the spec.
-5. Runs each command in `setup` in order, streaming output to your terminal.
-6. Checkpoints the sandbox so future `client.resume()` calls skip setup entirely.
-7. Closes the sandbox.
-8. Appends an entry to `.drej/sandboxes.json` with the sandbox ID, name, source URL, and timestamp.
+1. Reads `drej.config.json` for `agentsDir` (defaults to `./agents`). Throws if `drej.config.json` doesn't exist — run `drejx init` first.
+2. Fetches the URL (or reads the local file) and validates it as an `AgentSpec`: `name` must be a string, `cli` must be `"pi"`. All other fields are unchecked.
+3. Resolves any `registryDependencies` first — each dependency URL is fetched and saved the same way, recursively, depth-first, before the top-level spec is saved. Dependencies are **not** deduplicated across separate `add` invocations, or within recursive resolution of the same tree — a dependency listed twice is fetched and saved twice.
+4. Writes the validated spec to `<agentsDir>/<name>.json`.
+
+`add` never creates a sandbox, runs `setup`, or contacts the OpenSandbox server directly — it's a local file operation. The sandbox work happens later, the first time you call `Agent.load()` on the saved spec (see [Running an agent spec](/docs/drejx/using-sandboxes)).
 
 ## Examples
 
 **From a URL:**
 
 ```bash
-bunx drejx add https://registry.drej.dev/node-toolchain.json
+bunx drejx add https://example.com/specs/node-toolchain.json
 ```
 
 **From a local file:**
 
 ```bash
-bunx drejx add ./my-sandbox.json
+bunx drejx add ./my-agent.json
 ```
 
 **With a custom name:**
 
 ```bash
-bunx drejx add https://registry.drej.dev/node-toolchain.json --name ci-env
-```
-
-**Against a remote server:**
-
-```bash
-bunx drejx add https://registry.drej.dev/node-toolchain.json --server https://sandbox.mycompany.com
+bunx drejx add https://example.com/specs/node-toolchain.json --name ci-env
 ```
 
 ## Output
 
-The sandbox ID printed at the end is what you pass to `client.resume()`:
-
 ```
-Sandbox ready: sb_a1b2c3d4  (node-toolchain)
-Resume it with: client.resume("sb_a1b2c3d4")
-```
-
-It is also stored in `.drej/sandboxes.json` so you can retrieve it with `drejx list`.
-
-## `.drej/sandboxes.json`
-
-Each `add` appends one entry:
-
-```json
-[
-  {
-    "name": "node-toolchain",
-    "sandboxId": "sb_a1b2c3d4e5f6g7h8",
-    "url": "https://registry.drej.dev/node-toolchain.json",
-    "createdAt": "2026-06-26T10:00:00.000Z"
-  }
-]
+Agent spec saved: agents/node-toolchain.json
+Load it with: Agent.load("agents/node-toolchain.json") from @drej/agent
 ```
 
 ## Notes
 
-- `drejx add` requires `drejx init` to have been run first (`.drej/config.json` must exist).
-- If a spec has no `setup` commands, the sandbox is created and checkpointed immediately with no setup time.
-- If two specs share a `registryDependency`, the dependency is provisioned once per `add` invocation — it is not deduplicated across invocations.
+- `drejx add` requires `drejx init` to have been run first (`drej.config.json` must exist).
+- If a spec's `registryDependencies` chain is large or has cycles, `add` will fetch and save every one of them without any cycle detection — be careful publishing self-referential or deeply nested dependency chains.
+- Re-running `add` on the same URL overwrites the previously saved spec file with the latest content from the URL.

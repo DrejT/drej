@@ -11,8 +11,16 @@
 ```bash
 git clone https://github.com/DrejT/drej.git
 cd drej
+bun run setup
+```
+
+`bun run setup` installs dependencies, builds workspace packages, scaffolds a `.env`, and runs typecheck + unit tests. It's equivalent to running the steps below by hand:
+
+```bash
 bun install
 bun run build
+bun run typecheck
+bun run test
 ```
 
 ## Running tests

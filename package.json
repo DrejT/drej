@@ -18,6 +18,7 @@
     "apps/www"
   ],
   "scripts": {
+    "setup": "bash scripts/setup.sh",
     "build": "bun run --cwd packages/opensandbox build && bun run --cwd packages/core build && bun run --cwd packages/sdks/typescript build && bun run --cwd packages/workflow build && bun run --cwd packages/adapters/sqlite build && bun run --cwd packages/adapters/postgres build && bun run --cwd packages/adapters/otel build && bun run --cwd packages/adapters/flue build && bun run --cwd packages/agent build",
     "typecheck": "bunx tsc --noEmit --strict --project packages/opensandbox/tsconfig.json && bunx tsc --noEmit --strict --project packages/core/tsconfig.json && bunx tsc --noEmit --strict --project packages/sdks/typescript/tsconfig.json && bunx tsc --noEmit --strict --project packages/workflow/tsconfig.json && bunx tsc --noEmit --strict --project packages/adapters/postgres/tsconfig.json && bunx tsc --noEmit --strict --project packages/adapters/sqlite/tsconfig.json && bunx tsc --noEmit --strict --project packages/adapters/otel/tsconfig.json && bunx tsc --noEmit --strict --project packages/adapters/flue/tsconfig.json",
     "test": "bun run --cwd packages/core test && bun run --cwd packages/sdks/typescript test && bun run --cwd packages/workflow test && bun run --cwd packages/adapters/sqlite test && bun run --cwd packages/adapters/flue test",

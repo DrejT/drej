@@ -30,11 +30,10 @@ export interface AgentSpec {
   /** CLI to run inside the sandbox. Currently only `"pi"` is supported. */
   cli: "pi";
   /**
-   * NOT YET IMPLEMENTED: does not actually pin the installed CLI version —
-   * `install()` always runs `npm install -g @earendil-works/pi-coding-agent`
-   * with no version qualifier, so the latest is always installed regardless
-   * of this value. Currently only affects the setup-hash cache key, so
-   * changing it forces a fresh snapshot rebuild.
+   * Included in the setup-hash cache key, so changing it forces a fresh
+   * snapshot rebuild. `install()` always runs
+   * `npm install -g @earendil-works/pi-coding-agent` with no version
+   * qualifier — this does not pin a specific installed CLI version.
    */
   cliVersion?: string;
   /**
@@ -64,9 +63,12 @@ export interface AgentSpec {
    * Falls back to defaults in `drej.config.json` if omitted.
    */
   resources?: { cpu: string; memory: string; gpu?: string };
-  /** NOT YET IMPLEMENTED: declared but never read anywhere in `@drej/agent`. */
+  /** Not read anywhere in `@drej/agent`; has no effect on the sandbox. */
   metadata?: Record<string, string>;
-  /** NOT YET IMPLEMENTED: declared but never read anywhere in `@drej/agent`. */
+  /**
+   * Not read by `@drej/agent` itself — used by `drejx add`, which fetches
+   * and saves each dependency spec first, depth-first.
+   */
   registryDependencies?: string[];
   /**
    * Setup steps run inside the sandbox after Pi CLI install, before the snapshot.

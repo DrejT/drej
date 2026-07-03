@@ -1,5 +1,14 @@
 # drej-example-agent
 
+## 0.0.5
+
+### Patch Changes
+
+- Updated dependencies [a91651c]
+  - drej@0.9.2
+  - @drej/sqlite@0.3.3
+  - @drej/agent@0.3.1
+
 ## 0.0.4
 
 ### Patch Changes

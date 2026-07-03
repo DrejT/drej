@@ -117,7 +117,9 @@ export class SandboxBuilder {
   /**
    * Conditionally execute one of two builder callbacks based on a predicate.
    *
-   * The predicate receives `{ stdout, exitCode, vars }` from the last exec.
+   * The predicate receives the current `FlushContext`: `stdout` accumulated
+   * across every exec run so far in this sandbox, `exitCode` from the most
+   * recent exec, and `vars` captured so far.
    *
    * @example
    * ```ts
@@ -155,11 +157,18 @@ export class SandboxBuilder {
   }
 }
 
-/** Execution context threaded through flush operations. */
+/**
+ * Execution context threaded through flush operations.
+ *
+ * Known limitation: inside a `forEach(items, fn, { concurrency: N })` branch
+ * with `N > 1`, each parallel worker flushes against a shallow copy of this
+ * context (`{ ...ctx }`), so `stdout`/`exitCode` writes from those branches
+ * never propagate back — only `vars` (an object reference) does.
+ */
 export interface FlushContext {
-  /** Accumulated stdout across all execs in this sandbox. */
+  /** Accumulated stdout across all execs in this sandbox (see limitation above for concurrent forEach). */
   stdout: string;
-  /** Exit code of the most recent exec. */
+  /** Exit code of the most recent exec (see limitation above for concurrent forEach). */
   exitCode: number;
   /** Named values captured by `readFile`. */
   vars: Record<string, unknown>;

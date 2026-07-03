@@ -15,7 +15,7 @@ export interface OtelHooksOptions {
  * Span structure:
  * ```
  * sandbox.run            ← root span (sandboxId attribute)
- *   sandbox.exec         ← child per exec (cmd, exitCode, seq)
+ *   sandbox.exec         ← child per exec (cmd, seq, exitCode unless recordExitCode: false)
  *   sandbox.checkpoint   ← child per checkpoint (snapshotId)
  * ```
  *

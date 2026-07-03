@@ -49,7 +49,7 @@ export interface SandboxHooks {
   onSandboxResumed?(sandboxId: string): void;
 }
 
-/** Internal dependencies injected by `DrejClient`. */
+/** Internal dependencies injected by `Drej`. */
 export interface SandboxDeps {
   control: ControlClient;
   adapter: IStorageAdapter;
@@ -93,7 +93,7 @@ export async function resolveExecClient(
 }
 
 /**
- * A live sandbox container. Returned by `DrejClient.sandbox()` and `DrejClient.resume()`.
+ * A live sandbox container. Returned by `Drej.sandbox()` and `Drej.resume()`.
  *
  * Call `exec()` to run commands, `checkpoint()` to snapshot state, and `close()`
  * when done. Multiple sandboxes can be held simultaneously — just assign to
@@ -115,7 +115,7 @@ export class Sandbox {
   readonly name: string;
 
   private readonly _deps: SandboxDeps;
-  /** Cached exec results for replay mode (populated by DrejClient.resume()). */
+  /** Cached exec results for replay mode (populated by `Drej.resume()`). */
   private readonly _replayCache: Map<number, ExecResult>;
   private _execClient: ExecClient | null = null;
   private _seq = 0;
@@ -179,9 +179,9 @@ export class Sandbox {
    * Execute a shell command inside the sandbox.
    *
    * Returns an `ExecHandle` — await it for the result, call `.pipe()` to stream
-   * stdout, or use `.stdout()` as an async generator. Every call is logged to
+   * stdout, or use `.stdout()` as an async generator. Live execs are logged to
    * the ledger; replayed execs in a resumed sandbox return cached output
-   * instantly without re-running.
+   * instantly without re-running and without emitting new ledger events.
    *
    * @example
    * ```ts
@@ -416,8 +416,9 @@ export class Sandbox {
   /**
    * Stream real-time CPU and memory metrics from execd via SSE.
    *
-   * Holds a long-lived connection — break out of the loop or pass an AbortSignal
-   * when done to avoid leaking the connection.
+   * Holds a long-lived connection — break out of the loop when done to avoid
+   * leaking the connection. Takes no arguments; there is no way to cancel it
+   * other than breaking out of the `for await` loop.
    *
    * @example
    * ```ts
@@ -461,7 +462,9 @@ export class Sandbox {
   }
 
   /**
-   * Restore a paused sandbox to Running state and re-resolve the execd endpoint.
+   * Restore a paused sandbox to Running state. The execd endpoint is not
+   * re-resolved here — `pause()` clears the cached client, so it's lazily
+   * re-resolved on the next call that needs it (e.g. the next `exec()`).
    *
    * On Docker, this unfreezes the container instantly. On Kubernetes, a new pod
    * is created from the OCI snapshot — in-memory process state is not preserved.
@@ -548,8 +551,8 @@ export class Sandbox {
    * Snapshot the current sandbox and return a new independent `Sandbox` from that state.
    *
    * The original sandbox keeps running. Both operate on separate containers restored
-   * from the same snapshot. Equivalent to `checkpoint()` followed by `resume()` on a
-   * clone, but without closing the original.
+   * from the same snapshot. Equivalent to `checkpoint()` followed by `Drej.resume()`
+   * into a new sandbox, but without closing the original.
    *
    * @example
    * ```ts
@@ -574,8 +577,8 @@ export class Sandbox {
    * Capture a snapshot of the sandbox's current filesystem state.
    *
    * Writes a `checkpoint_created` event to the ledger with the snapshot ID and
-   * returns the snapshot ID. Use `DrejClient.resume(sandboxId)` to restore from
-   * the latest checkpoint, or pass the returned ID to `DrejClient.restoreSnapshot()`.
+   * returns the snapshot ID. Use `Drej.resume(sandboxId)` to restore from
+   * the latest checkpoint, or pass the returned ID to `Drej.restoreSnapshot()`.
    */
   async checkpoint(name?: string): Promise<string> {
     const snap = await this._deps.control.createSnapshot(this.sandboxId);

@@ -267,7 +267,11 @@ export class Agent {
     return this._adapter.prompt(message, opts);
   }
 
-  /** Run a shell command inside Pi's working context and stream stdout. */
+  /**
+   * Run a shell command inside Pi's working context. Not incrementally
+   * streamed — Pi returns bash output synchronously, so the full output
+   * arrives as a single `text` event once the command completes.
+   */
   bash(command: string): AgentStream {
     return this._adapter.bash(command);
   }

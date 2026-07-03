@@ -102,7 +102,10 @@ export async function* textOnly(stream: AgentStream): AsyncIterable<string> {
  */
 export type PromptStream = AsyncIterable<string>;
 
-/** A Pi model as returned by `getAvailableModels`, `setModel`, and `cycleModel`. */
+/**
+ * A Pi model as returned by `getAvailableModels`, `setModel`, and (nested in
+ * `{ model, thinkingLevel, isScoped } | null`) `cycleModel`.
+ */
 export interface PiModel {
   id: string;
   api: string;

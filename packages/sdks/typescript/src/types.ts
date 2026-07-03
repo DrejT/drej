@@ -3,7 +3,14 @@ import { SandboxStatus } from "@drej/core";
 
 export { SandboxStatus };
 
-/** Thrown when an OpenSandbox API call returns a non-2xx response. */
+/**
+ * Client-side SDK error carrying an HTTP-style status code, thrown for
+ * invariant/state failures such as a sandbox missing from the local ledger
+ * (404), a sandbox not in `Running` state (409), or a client-side timeout
+ * (408). This does not wrap non-2xx OpenSandbox API responses — those throw
+ * `OpenSandboxError` from `@drej/opensandbox`, which is never rethrown as a
+ * `DrejError`.
+ */
 export class DrejError extends Error {
   constructor(
     message: string,

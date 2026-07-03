@@ -31,8 +31,11 @@ export class ExecConnectionError extends WorkflowError {
 }
 
 /**
- * Thrown when an `exec()` step exits with a non-zero exit code and the
- * `strict` option is enabled. Carries the exit code and original command.
+ * Thrown when a command exits with a non-zero exit code. Carries the exit
+ * code and original command. For `Sandbox.exec()`, only thrown when `strict`
+ * is enabled (the default — pass `{ strict: false }` to opt out). For
+ * `BashSession.exec()` (a persistent session from `createSession()`), always
+ * thrown on non-zero exit; there is no `strict` option for session execs.
  */
 export class CommandError extends WorkflowError {
   constructor(

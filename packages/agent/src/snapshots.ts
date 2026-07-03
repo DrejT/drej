@@ -12,8 +12,8 @@ export interface AgentSnapshotRecord {
 }
 
 /**
- * Hash of the fields that require re-installing the agent CLI:
- * cli, cliVersion, and packages. Excludes env (hot-reloadable),
+ * Hash of the fields that require re-installing the agent CLI or rerunning
+ * setup: cli, cliVersion, packages, and setup. Excludes env (hot-reloadable),
  * model/provider (CLI flags only), and cosmetic fields.
  */
 export function computeSetupHash(spec: AgentSpec): string {

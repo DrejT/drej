@@ -1,5 +1,17 @@
 # @drej/flue
 
+## 2.0.1
+
+### Patch Changes
+
+- 34cfa8b: Add the missing `license` field (Apache-2.0) to every published package's `package.json`, matching the repo's root `LICENSE` file.
+- cd88d21: Bump dev-dependencies group (@types/node, eslint, eslint-config-next, oxfmt, @flue/runtime) — no code changes.
+- 3f362d1: Enable npm provenance for published packages.
+- Updated dependencies [34cfa8b]
+- Updated dependencies [bca2a6b]
+- Updated dependencies [3f362d1]
+  - drej@0.9.1
+
 ## 2.0.0
 
 ### Patch Changes

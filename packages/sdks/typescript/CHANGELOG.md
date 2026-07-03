@@ -1,5 +1,18 @@
 # drej
 
+## 0.9.1
+
+### Patch Changes
+
+- 34cfa8b: Add the missing `license` field (Apache-2.0) to every published package's `package.json`, matching the repo's root `LICENSE` file.
+- bca2a6b: Fix JSDoc comments that no longer matched the code they document (stale `DrejClient` references, incorrect claims about `DrejError`, `watchMetrics()`, `resume()`, `exec()` ledger logging, `CommandError`, `computeSetupHash`, `bash()` streaming, and the `when()` predicate context), and flag two fields (`AgentSpec.cliVersion`, `.metadata`, `.registryDependencies`) and one known concurrency limitation (`FlushContext` under `forEach({ concurrency > 1 })`) that are currently no-ops/buggy rather than doing what they were documented to do. No behavior changes — doc-only.
+- 3f362d1: Enable npm provenance for published packages.
+- Updated dependencies [34cfa8b]
+- Updated dependencies [bca2a6b]
+- Updated dependencies [3f362d1]
+  - @drej/core@0.5.1
+  - @drej/opensandbox@0.2.1
+
 ## 0.9.0
 
 ### Minor Changes
@@ -108,7 +121,7 @@
       .exec("git rev-parse HEAD", { capture: sha })
       .searchFiles("**/*.ts", { as: tsFiles })
       .forEach(tsFiles, (s, file) => s.exec(`tsc ${file}`))
-      .exec("deploy.sh", { envs: { GIT_SHA: sha } }),
+      .exec("deploy.sh", { envs: { GIT_SHA: sha } })
   );
   ```
 
@@ -186,7 +199,9 @@
 
   ```ts
   workflow("deploy").sandbox({ image: { uri: "node:20-slim" } }, (s) =>
-    s.exec("git rev-parse HEAD", { capture: "sha" }).exec("echo deploying commit {{sha}}"),
+    s
+      .exec("git rev-parse HEAD", { capture: "sha" })
+      .exec("echo deploying commit {{sha}}")
   );
   ```
 
@@ -214,7 +229,7 @@
     s
       .exec('node -e "process.version" > /tmp/version.txt')
       .readFile("/tmp/version.txt", { as: "version" })
-      .exec("echo Node version: {{version}}"),
+      .exec("echo Node version: {{version}}")
   );
   ```
 
@@ -259,7 +274,7 @@
     s
       .exec("npm ci")
       .snapshot() // checkpoint: deps installed
-      .exec("npm test"),
+      .exec("npm test")
   );
   ```
 

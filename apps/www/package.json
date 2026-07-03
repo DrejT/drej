@@ -12,6 +12,6 @@
     "@fontsource-variable/geist": "^5.1.1",
     "@fontsource-variable/geist-mono": "^5.2.2",
     "animejs": "^4.5.0",
-    "astro": "^5.7.0"
+    "astro": "^6.4.8"
   }
 }

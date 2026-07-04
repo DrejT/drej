@@ -1,5 +1,13 @@
 # drej-example-file-ops
 
+## 0.0.6
+
+### Patch Changes
+
+- Updated dependencies [a4856f1]
+  - drej@0.9.3
+  - @drej/sqlite@0.3.4
+
 ## 0.0.5
 
 ### Patch Changes

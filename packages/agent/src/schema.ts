@@ -30,10 +30,12 @@ export interface AgentSpec {
   /** CLI to run inside the sandbox. Currently only `"pi"` is supported. */
   cli: "pi";
   /**
-   * Included in the setup-hash cache key, so changing it forces a fresh
-   * snapshot rebuild. `install()` always runs
-   * `npm install -g @earendil-works/pi-coding-agent` with no version
-   * qualifier — this does not pin a specific installed CLI version.
+   * npm version specifier for the Pi CLI, e.g. `"1.2.3"`, `"^1.2.0"`, or a
+   * dist-tag like `"latest"`. Passed directly to
+   * `npm install -g @earendil-works/pi-coding-agent@<cliVersion>`. When
+   * omitted, `install()` runs the bare package name and npm resolves
+   * whatever it considers latest. Included in the setup-hash cache key, so
+   * changing it forces a fresh snapshot rebuild.
    */
   cliVersion?: string;
   /**

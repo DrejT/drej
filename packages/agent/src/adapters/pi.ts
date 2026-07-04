@@ -552,7 +552,11 @@ export class PiAdapter {
         `apt-get update -qq && apt-get install -y --no-install-recommends ${pkgs.join(" ")}`,
       );
     }
-    await sb.exec("npm install -g --ignore-scripts @earendil-works/pi-coding-agent");
+    const versionSpecifier = spec.cliVersion?.trim();
+    const pkg = versionSpecifier
+      ? `@earendil-works/pi-coding-agent@${versionSpecifier}`
+      : "@earendil-works/pi-coding-agent";
+    await sb.exec(`npm install -g --ignore-scripts ${pkg}`);
   }
 
   /**

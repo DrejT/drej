@@ -12,11 +12,17 @@ export { LogLevel, ConsoleLogger, noopLogger } from "./logger";
 export type { ILogger } from "./logger";
 
 export { Sandbox, BashSession, resolveExecClient } from "./sandbox";
-export type { ExecOptions, ExecCodeOptions, SandboxDeps, SandboxHooks } from "./sandbox";
+export type {
+  ExecOptions,
+  ExecCodeOptions,
+  SandboxDeps,
+  SandboxHooks,
+  PendingInteractiveExec,
+} from "./sandbox";
 export type { FileInfo, DiagnosticLog, DiagnosticEvent, Metrics } from "@drej/opensandbox";
 
-export { ExecHandle } from "./exec-handle";
-export type { ExecResult } from "./exec-handle";
+export { ExecHandle, InteractiveExecHandle } from "./exec-handle";
+export type { ExecResult, PtyControls, AttachableSource } from "./exec-handle";
 
 export {
   WorkflowError,

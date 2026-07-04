@@ -1,4 +1,4 @@
-import { ExecClient, SnapshotState, SandboxState } from "@drej/opensandbox";
+import { ExecClient, PtyClient, SnapshotState, SandboxState } from "@drej/opensandbox";
 import type {
   ControlClient,
   SSEEvent,
@@ -8,9 +8,15 @@ import type {
   RunInSessionRequest,
 } from "@drej/opensandbox";
 import { SandboxError, ExecConnectionError, CommandError } from "./errors";
-import type { IStorageAdapter, CheckpointInfo } from "./ledger";
+import type { IStorageAdapter, CheckpointInfo, LedgerEntry } from "./ledger";
 import { LedgerEvent } from "./ledger";
-import { ExecHandle, type ExecResult } from "./exec-handle";
+import {
+  ExecHandle,
+  InteractiveExecHandle,
+  type ExecDriver,
+  type ExecResult,
+  type PtyControls,
+} from "./exec-handle";
 
 export interface ExecOptions {
   /** Working directory inside the sandbox. */
@@ -30,6 +36,25 @@ export interface ExecOptions {
    * Defaults to `"/bin/sh"`.
    */
   shell?: string;
+  /**
+   * Open a live, bidirectional PTY session instead of running `cmd` as a
+   * one-shot buffered command. `cmd` is the program to launch (e.g. `"bash"`),
+   * not a script blob. Returns an `InteractiveExecHandle` with `write()`,
+   * `resize()`, `signal()`, `close()`, and `attach()` in addition to the
+   * usual `stdout()`/`pipe()`/`result()`/`await` surface.
+   */
+  interactive?: boolean;
+}
+
+/** A session still open at the last checkpoint — reconstructed on resume. See `Drej.resume()`. */
+export interface PendingInteractiveExec {
+  cmd: string;
+  cwd?: string;
+  env?: Record<string, string>;
+  /** Recorded stdin, in order — replayed for real against the freshly restored filesystem. */
+  stdin: string[];
+  /** Recorded stdout — shown as scrollback before live output resumes. */
+  stdout: string;
 }
 
 export interface ExecCodeOptions {
@@ -122,17 +147,29 @@ export class Sandbox {
   private _closed = false;
   private _paused = false;
   private readonly _openSessionClosers = new Set<() => Promise<void>>();
+  /** Interactive sessions still open at the last checkpoint (populated by `Drej.resume()`). */
+  private readonly _pendingInteractive: Map<number, PendingInteractiveExec>;
+  /**
+   * Serializes every `_emit()` call for this sandbox so ledger writes complete in the
+   * order they were called, regardless of adapter latency. Needed because several call
+   * sites (PTY output chunks, `write()`) fire `_emit()` without awaiting it — on a
+   * network-bound adapter (e.g. Postgres) two such appends can otherwise land out of
+   * order even though they were invoked in the right order.
+   */
+  private _ledgerQueue: Promise<unknown> = Promise.resolve();
 
   constructor(
     sandboxId: string,
     name: string,
     deps: SandboxDeps,
     replayCache: Map<number, ExecResult> = new Map(),
+    pendingInteractive: Map<number, PendingInteractiveExec> = new Map(),
   ) {
     this.sandboxId = sandboxId;
     this.name = name;
     this._deps = deps;
     this._replayCache = replayCache;
+    this._pendingInteractive = pendingInteractive;
   }
 
   private async _getExecClient(): Promise<ExecClient> {
@@ -146,6 +183,21 @@ export class Sandbox {
       );
     }
     return this._execClient;
+  }
+
+  /** Resolve a fresh `PtyClient` for a new interactive session. Reuses `_getExecClient()`'s readiness wait. */
+  private async _resolvePtyClient(): Promise<PtyClient> {
+    if (this._paused)
+      throw new SandboxError("sandbox is paused — call resume() first", this.sandboxId);
+    await this._getExecClient(); // ensures execd is up and polling has already succeeded
+    const ep = await this._deps.control.getEndpoint(
+      this.sandboxId,
+      44772,
+      this._deps.useServerProxy,
+    );
+    const baseUrl = ep.endpoint.startsWith("http") ? ep.endpoint : `http://${ep.endpoint}`;
+    const token = ep.headers?.["X-EXECD-ACCESS-TOKEN"] ?? "";
+    return new PtyClient({ baseUrl, accessToken: token });
   }
 
   private async _waitForRunning(timeoutMs = 120_000): Promise<void> {
@@ -164,15 +216,23 @@ export class Sandbox {
     throw new SandboxError(`Sandbox did not reach Running within ${timeoutMs}ms`, this.sandboxId);
   }
 
-  private async _emit(event: LedgerEvent, stepIndex: number, payload?: unknown): Promise<void> {
-    await this._deps.adapter.append({
+  private _emit(event: LedgerEvent, stepIndex: number, payload?: unknown): Promise<void> {
+    // Captured synchronously so the recorded timestamp reflects when this was called,
+    // not whenever the queue below gets around to actually writing it.
+    const entry: LedgerEntry = {
       ts: Date.now(),
       name: this.name,
       sandboxId: this.sandboxId,
       stepIndex,
       event,
       payload,
-    });
+    };
+    const result = this._ledgerQueue.then(() => this._deps.adapter.append(entry));
+    // Keep the queue alive even if this append fails — otherwise every future _emit()
+    // on this sandbox would silently stop writing. The real rejection still propagates
+    // to whoever awaits `result` (this call's own return value).
+    this._ledgerQueue = result.catch(() => {});
+    return result;
   }
 
   /**
@@ -183,13 +243,32 @@ export class Sandbox {
    * the ledger; replayed execs in a resumed sandbox return cached output
    * instantly without re-running and without emitting new ledger events.
    *
+   * Pass `{ interactive: true }` to open a live, bidirectional PTY session
+   * instead — `cmd` is the program to launch (e.g. `"bash"`), and the returned
+   * `InteractiveExecHandle` adds `write()`/`resize()`/`signal()`/`attach()`.
+   * If the session was still open at the last checkpoint, resuming replays
+   * its recorded stdin for real against the freshly restored filesystem
+   * before handing control back live.
+   *
    * @example
    * ```ts
    * const { exitCode } = await sb.exec("npm test");
    * await sb.exec("npm run build").pipe(process.stdout);
+   *
+   * const shell = sb.exec("bash", { interactive: true });
+   * shell.pipe(process.stdout);
+   * shell.write("whoami\n");
+   * await shell.close();
    * ```
    */
+  exec(cmd: string, opts?: ExecOptions & { interactive?: false }): ExecHandle;
+  exec(cmd: string, opts: ExecOptions & { interactive: true }): InteractiveExecHandle;
+  // Fallback for callers holding a plain `ExecOptions` whose `interactive` flag isn't
+  // known at the type level (e.g. passed through from a queued op) — see `@drej/workflow`.
+  exec(cmd: string, opts: ExecOptions): ExecHandle | InteractiveExecHandle;
   exec(cmd: string, opts: ExecOptions = {}): ExecHandle {
+    if (opts.interactive) return this._execInteractive(cmd, opts);
+
     const seq = ++this._seq;
 
     if (this._replayCache.has(seq)) {
@@ -226,6 +305,120 @@ export class Sandbox {
         }
       },
     });
+  }
+
+  /** Backs `exec(cmd, { interactive: true })` — see that method's docs. */
+  private _execInteractive(cmd: string, opts: ExecOptions): InteractiveExecHandle {
+    const seq = ++this._seq;
+
+    // Session had already exited before the last checkpoint — nothing live to attach to.
+    if (this._replayCache.has(seq)) {
+      return new InteractiveExecHandle({ type: "replay", result: this._replayCache.get(seq)! });
+    }
+
+    const pending = this._pendingInteractive.get(seq);
+    const self = this;
+    let closer: (() => Promise<void>) | undefined;
+
+    // Logged eagerly, before returning the handle to the caller — write() (below) awaits
+    // this same promise before logging its own stdin event, so a write() called
+    // synchronously right after exec() returns can never race ExecStart into the ledger
+    // (ExecStart itself would otherwise be delayed behind _resolvePtyClient()'s network
+    // round-trip, while write()'s own ledger append has no such delay).
+    const execStartLogged = self._emit(LedgerEvent.ExecStart, seq, {
+      cmd,
+      seq,
+      interactive: true,
+      cwd: pending?.cwd ?? opts.cwd,
+      env: pending?.env ?? opts.env,
+    });
+    self._deps.hooks?.onExecStart?.(self.sandboxId, seq, cmd);
+
+    // Resolves only after the PTY is connected and (if resuming) recorded stdin has
+    // been fully replayed — guarantees new caller writes queued below never jump ahead
+    // of the replay.
+    const ptyPromise: Promise<PtyClient> = (async () => {
+      await execStartLogged;
+      const pty = await self._resolvePtyClient();
+
+      let onFirstOutput: (() => void) | undefined;
+      const firstOutput = new Promise<void>((r) => {
+        onFirstOutput = r;
+      });
+
+      const sessionId = await pty.create({ cwd: pending?.cwd ?? opts.cwd, command: cmd });
+      await pty.connect(
+        sessionId,
+        (chunk) => {
+          onFirstOutput?.();
+          onFirstOutput = undefined;
+          void self._emit(LedgerEvent.ExecEvent, seq, { seq, type: "stdout", text: chunk });
+          push(chunk);
+        },
+        (exitCode) => finish(exitCode),
+      );
+
+      closer = async () => {
+        if (closer) self._openSessionClosers.delete(closer);
+        pty.close();
+      };
+      self._openSessionClosers.add(closer);
+
+      // execd reports the pty session as connected before bash has necessarily
+      // attached to its controlling terminal — same readiness gap as execd's REST
+      // API (see resolveExecClient). Wait for the shell's first output (its initial
+      // prompt) before sending anything, so replayed/live input isn't dropped.
+      await Promise.race([firstOutput, new Promise<void>((r) => setTimeout(r, 3_000))]);
+
+      for (const line of pending?.stdin ?? []) {
+        pty.write(line);
+        await new Promise<void>((r) => setTimeout(r, 50));
+      }
+
+      return pty;
+    })();
+    ptyPromise.catch(() => {}); // surfaced via `fail` below — avoid an unhandled-rejection warning
+
+    let push: (chunk: string) => void = () => {};
+    let finish: (exitCode: number) => void = () => {};
+
+    const driver: ExecDriver = {
+      type: "pty",
+      seedStdout: pending?.stdout,
+      attach: (p, f, fail) => {
+        push = p;
+        finish = f;
+        ptyPromise.catch(fail);
+      },
+      onDone: async (result) => {
+        if (closer) self._openSessionClosers.delete(closer);
+        await self._emit(LedgerEvent.ExecComplete, seq, { exitCode: result.exitCode, seq });
+        self._deps.hooks?.onExecComplete?.(self.sandboxId, seq, result);
+        if (opts.strict !== false && result.exitCode !== 0) {
+          throw new CommandError(result.exitCode, cmd, self.sandboxId);
+        }
+      },
+    };
+
+    const controls: PtyControls = {
+      write: (data) => {
+        void execStartLogged.then(() =>
+          self._emit(LedgerEvent.ExecEvent, seq, { seq, type: "stdin", text: data }),
+        );
+        void ptyPromise.then((pty) => pty.write(data));
+      },
+      resize: (cols, rows) => {
+        void ptyPromise.then((pty) => pty.resize(cols, rows));
+      },
+      signal: (name) => {
+        void ptyPromise.then((pty) => pty.signal(name));
+      },
+      close: () => {
+        void ptyPromise.then((pty) => pty.close());
+      },
+    };
+
+    return new InteractiveExecHandle(driver, controls);
   }
 
   /**

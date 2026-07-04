@@ -201,3 +201,26 @@ export interface RunInSessionRequest {
 export interface CreateSessionResponse {
   session_id: string;
 }
+
+// POST /pty body
+export interface CreatePtyOptions {
+  cwd?: string;
+  command?: string;
+}
+
+export interface CreatePtyResponse {
+  session_id: string;
+}
+
+// Client -> server WS control frames for a /pty/:sessionId/ws connection
+export type PtyClientMessage =
+  | { type: "stdin"; data: string }
+  | { type: "resize"; cols: number; rows: number }
+  | { type: "signal"; signal: string }
+  | { type: "ping" };
+
+// Server -> client JSON control frames (output itself arrives as binary frames)
+export type PtyServerMessage =
+  | { type: "exit"; exit_code: number }
+  | { type: "pong" }
+  | { type: "connected"; session_id: string; mode: string };

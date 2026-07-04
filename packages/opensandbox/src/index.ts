@@ -1,5 +1,7 @@
 export { ControlClient, OpenSandboxError } from "./control";
 export { ExecClient } from "./exec";
+export { PtyClient } from "./pty";
+export type { PtyOutputListener, PtyExitListener } from "./pty";
 export { SandboxState, SnapshotState, SSEEventType, CodeLanguage } from "./types";
 export type {
   Resources,
@@ -25,4 +27,8 @@ export type {
   CreateSessionRequest,
   RunInSessionRequest,
   CreateSessionResponse,
+  CreatePtyOptions,
+  CreatePtyResponse,
+  PtyClientMessage,
+  PtyServerMessage,
 } from "./types";

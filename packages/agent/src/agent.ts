@@ -1,6 +1,5 @@
 import { Drej } from "drej";
-import { SQLiteAdapter } from "@drej/sqlite";
-import type { Sandbox } from "@drej/core";
+import type { IStorageAdapter, Sandbox } from "@drej/core";
 import { readProjectConfig } from "./config";
 import { validateAgentSpec, type AgentSpec } from "./schema";
 import { PiAdapter, resolveEnv, toShellExports } from "./adapters/pi";
@@ -96,7 +95,10 @@ export class Agent {
    *
    * Logs timing for each phase to stdout via `[agent]` prefixed lines.
    */
-  static async load(specPath: string, opts?: { rebuild?: boolean }): Promise<Agent> {
+  static async load(
+    specPath: string,
+    opts: { adapter: IStorageAdapter; rebuild?: boolean },
+  ): Promise<Agent> {
     const t0 = Date.now();
     const spec = validateAgentSpec(await Bun.file(specPath).json());
     const config = await readProjectConfig();
@@ -106,7 +108,7 @@ export class Agent {
     const client = new Drej({
       baseUrl: config.serverUrl,
       apiKey: config.apiKey,
-      adapter: new SQLiteAdapter(config.adapterPath),
+      adapter: opts.adapter,
       useServerProxy: config.useServerProxy,
     });
 
@@ -118,7 +120,7 @@ export class Agent {
     let fromSnapshot = false;
 
     // ── Snapshot fast path ────────────────────────────────────────────────────
-    if (!opts?.rebuild) {
+    if (!opts.rebuild) {
       const record = await store.get(spec.name, setupHash);
       if (record) {
         try {
@@ -199,31 +201,34 @@ export class Agent {
    * @example
    * ```ts
    * // Original process:
-   * const agent = await Agent.load("./agents/hello-agent.json");
+   * const agent = await Agent.load("./agents/hello-agent.json", { adapter });
    * console.log(agent.sandboxId); // save this
    * // ... process exits ...
    *
    * // New process:
-   * const agent = await Agent.resume(savedSandboxId);
+   * const agent = await Agent.resume(savedSandboxId, { adapter });
    * for await (const chunk of agent.prompt("What did we discuss earlier?")) {
    *   process.stdout.write(chunk);
    * }
    * await agent.close();
    * ```
    */
-  static async resume(sandboxId: string, opts?: { specPath?: string }): Promise<Agent> {
+  static async resume(
+    sandboxId: string,
+    opts: { adapter: IStorageAdapter; specPath?: string },
+  ): Promise<Agent> {
     const t0 = Date.now();
     const config = await readProjectConfig();
 
     const client = new Drej({
       baseUrl: config.serverUrl,
       apiKey: config.apiKey,
-      adapter: new SQLiteAdapter(config.adapterPath),
+      adapter: opts.adapter,
       useServerProxy: config.useServerProxy,
     });
 
     let spec: AgentSpec;
-    if (opts?.specPath) {
+    if (opts.specPath) {
       spec = validateAgentSpec(await Bun.file(opts.specPath).json());
     } else {
       const sessions = await client.sandboxes.list();

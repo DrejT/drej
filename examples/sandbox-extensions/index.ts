@@ -13,10 +13,11 @@ import { Drej } from "drej";
 import { SQLiteAdapter } from "@drej/sqlite";
 import { Agent } from "@drej/agent";
 
+const adapter = new SQLiteAdapter("./.drej/test-extensions.db");
 const client = new Drej({
   baseUrl: "http://localhost:8080",
   apiKey: "",
-  adapter: new SQLiteAdapter("./.drej/test-extensions.db"),
+  adapter,
 });
 
 function section(label: string) {
@@ -112,7 +113,7 @@ try {
 // ── Feature 7 — Agent.resume() ───────────────────────────────────────────────
 section("7. Agent.resume() — reconnect to a running agent");
 
-const agent = await Agent.load("../pi-agent/agents/hello-agent.json");
+const agent = await Agent.load("../pi-agent/agents/hello-agent.json", { adapter });
 const agentSandboxId = agent.sandboxId;
 console.log(`Original agent sandbox: ${agentSandboxId}`);
 
@@ -132,6 +133,7 @@ await agent.sandbox.exec("pkill -f 'node /drej-bridge.js' 2>/dev/null; true", { 
 await new Promise<void>((r) => setTimeout(r, 500));
 
 const resumed = await Agent.resume(agentSandboxId, {
+  adapter,
   specPath: "../pi-agent/agents/hello-agent.json",
 });
 console.log(`Resumed agent sandbox: ${resumed.sandboxId}`);

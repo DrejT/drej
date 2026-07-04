@@ -10,12 +10,14 @@
  *   Load 2: fromSnapshot=true,  no setup steps logged, workspace files still present
  */
 import { Agent, textOnly } from "@drej/agent";
+import { SQLiteAdapter } from "@drej/sqlite";
 
 const SPEC = "./agents/workspace-agent.json";
+const adapter = new SQLiteAdapter("./.drej/ledger.db");
 
 // ── Load 1: full install + setup steps + checkpoint ───────────────────────────
 console.log("=== Load 1 — full install ===\n");
-const agent1 = await Agent.load(SPEC);
+const agent1 = await Agent.load(SPEC, { adapter });
 console.log(`\nSandbox: ${agent1.sandboxId}  fromSnapshot=${agent1.fromSnapshot}\n`);
 
 if (agent1.fromSnapshot) {
@@ -48,7 +50,7 @@ console.log("Agent 1 closed.\n");
 
 // ── Load 2: restore from snapshot — setup steps must NOT re-run ───────────────
 console.log("=== Load 2 — from snapshot ===\n");
-const agent2 = await Agent.load(SPEC);
+const agent2 = await Agent.load(SPEC, { adapter });
 console.log(`\nSandbox: ${agent2.sandboxId}  fromSnapshot=${agent2.fromSnapshot}\n`);
 
 if (!agent2.fromSnapshot) {

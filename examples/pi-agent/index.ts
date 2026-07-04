@@ -16,12 +16,14 @@
  * Needs: OpenSandbox running (drejx init) and GEMINI_API_KEY in .env
  */
 import { Agent, textOnly } from "@drej/agent";
+import { SQLiteAdapter } from "@drej/sqlite";
 
 function section(label: string) {
   console.log(`\n── ${label} ${"─".repeat(Math.max(0, 58 - label.length))}\n`);
 }
 
-const agent = await Agent.load("./agents/hello-agent.json");
+const adapter = new SQLiteAdapter("./.drej/ledger.db");
+const agent = await Agent.load("./agents/hello-agent.json", { adapter });
 console.log(`\nSandbox: ${agent.sandboxId}\n${"─".repeat(60)}`);
 await agent.sandbox.exec("mkdir -p /workspace");
 

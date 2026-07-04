@@ -29,7 +29,6 @@
   },
   "dependencies": {
     "@drej/core": "workspace:*",
-    "@drej/sqlite": "workspace:*",
     "drej": "workspace:*"
   },
   "devDependencies": {

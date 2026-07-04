@@ -240,7 +240,6 @@
       "version": "0.3.2",
       "dependencies": {
         "@drej/core": "workspace:*",
-        "@drej/sqlite": "workspace:*",
         "drej": "workspace:*",
       },
       "devDependencies": {

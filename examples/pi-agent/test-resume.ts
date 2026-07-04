@@ -9,12 +9,14 @@
  * Needs: OpenSandbox server running (uvx opensandbox-server)
  */
 import { Agent } from "@drej/agent";
+import { SQLiteAdapter } from "@drej/sqlite";
 
 const SPEC = "./agents/hello-agent.json";
+const adapter = new SQLiteAdapter("./.drej/ledger.db");
 
 // ── Step 1: Spawn a fresh agent and seed its session ─────────────────────────
 console.log("=== Step 1: Load agent and seed session ===\n");
-const agent = await Agent.load(SPEC);
+const agent = await Agent.load(SPEC, { adapter });
 const sandboxId = agent.sandboxId;
 console.log(`Sandbox ID: ${sandboxId}\n`);
 
@@ -36,7 +38,7 @@ console.log("Bridge killed. Container still running.\n");
 
 // ── Step 3: Reconnect via Agent.resume() ─────────────────────────────────────
 console.log("=== Step 3: Resume agent in a new process ===\n");
-const resumed = await Agent.resume(sandboxId, { specPath: SPEC });
+const resumed = await Agent.resume(sandboxId, { adapter, specPath: SPEC });
 console.log(`Resumed sandbox ID: ${resumed.sandboxId}\n`);
 
 if (resumed.sandboxId !== sandboxId) {

@@ -1,0 +1,159 @@
+---
+import Base from "../layouts/Base.astro";
+import Nav from "../components/Nav.astro";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+
+// process.cwd() is the app root (apps/registry) regardless of where Astro
+// bundles this frontmatter's chunk during the build — a relative import.meta.url
+// path breaks once prerendering moves chunks under dist/.prerender/.
+const itemsDir = join(process.cwd(), "public", "items");
+
+const items = readdirSync(itemsDir)
+  .filter((f) => f.endsWith(".json"))
+  .map((f) => {
+    const spec = JSON.parse(readFileSync(join(itemsDir, f), "utf-8"));
+    return {
+      name: spec.name,
+      title: spec.title ?? spec.name,
+      description: spec.description ?? "",
+      path: `/items/${f}`,
+      spec,
+    };
+  })
+  .sort((a, b) => a.name.localeCompare(b.name));
+---
+
+<Base>
+  <Nav />
+  <main class="mx-auto max-w-[960px] px-8 pt-[96px] pb-16">
+    <section class="mb-8">
+      <h1 class="text-2xl font-semibold tracking-tight">registry</h1>
+      <p class="mt-2 text-[var(--color-muted)]">
+        Example <code>AgentSpec</code> files for <code>bunx drejx add</code>. Any URL works with <code
+          >drejx add</code
+        > — GitHub raw, a Gist, your own server — these are just a curated starting point. See the
+        <a class="underline underline-offset-2 hover:text-[var(--color-fg)]" href="/schema/agent-item.json"
+          >JSON Schema</a
+        >.
+      </p>
+    </section>
+
+    <input
+      id="search"
+      type="text"
+      placeholder="Search agent specs by name or description…"
+      autocomplete="off"
+      class="w-full rounded-[var(--radius-btn)] border border-[var(--color-border)] bg-white px-4 py-2.5 text-sm outline-none transition-colors focus:border-[var(--color-accent)]"
+    />
+
+    <div class="mt-6 grid gap-6 md:grid-cols-[280px_1fr]">
+      <ul id="results" class="flex flex-col gap-1"></ul>
+
+      <div class="overflow-hidden rounded-lg border border-[oklch(0.24_0.05_270)]">
+        <div class="flex items-center h-[38px] px-4 bg-[oklch(0.13_0.03_270)] border-b border-[oklch(0.24_0.05_270)]">
+          <div class="flex gap-2">
+            <span class="w-[11px] h-[11px] rounded-full bg-[oklch(0.63_0.22_25)]"></span>
+            <span class="w-[11px] h-[11px] rounded-full bg-[oklch(0.84_0.17_84)]"></span>
+            <span class="w-[11px] h-[11px] rounded-full bg-[oklch(0.73_0.22_142)]"></span>
+          </div>
+          <span id="detail-name" class="ml-4 font-mono text-xs text-[oklch(0.68_0.012_252)]"></span>
+          <button
+            id="copy-btn"
+            type="button"
+            class="ml-auto rounded-[var(--radius-btn)] border border-[oklch(0.24_0.05_270)] px-2.5 py-1 font-mono text-xs text-[oklch(0.68_0.012_252)] transition-colors hover:border-[oklch(0.4_0.05_270)] hover:text-white"
+          >
+            Copy
+          </button>
+        </div>
+        <pre
+          class="m-0 min-h-[19rem] max-h-[32rem] overflow-auto bg-[oklch(0.17_0.04_266)] px-6 py-5 font-mono text-sm leading-[1.5]"><code id="detail-code"></code></pre>
+      </div>
+    </div>
+  </main>
+</Base>
+
+<script define:vars={{ items }}>
+  const searchInput = document.getElementById("search");
+  const resultsEl = document.getElementById("results");
+  const detailNameEl = document.getElementById("detail-name");
+  const detailCodeEl = document.getElementById("detail-code");
+  const copyBtn = document.getElementById("copy-btn");
+  let currentItem = null;
+
+  function escapeHtml(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  // Single-pass tokenizer: strings (incl. embedded punctuation) are matched whole
+  // so structural braces/commas inside string values never get re-wrapped.
+  const TOKEN_RE =
+    /("(?:\\.|[^"\\])*"(\s*:)?)|(\btrue\b|\bfalse\b|\bnull\b)|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|([{}[\],:])/g;
+
+  function highlightJSON(value) {
+    const json = JSON.stringify(value, null, 2);
+    return json.replace(TOKEN_RE, (match, str, colon, kw, num) => {
+      let cls;
+      if (str !== undefined) cls = colon ? "tok-prop" : "tok-str";
+      else if (kw !== undefined) cls = "tok-kw";
+      else if (num !== undefined) cls = "tok-var";
+      else cls = "tok-punct";
+      return `<span class="${cls}">${escapeHtml(match)}</span>`;
+    });
+  }
+
+  function selectItem(item) {
+    currentItem = item;
+    detailNameEl.textContent = item.path;
+    detailCodeEl.innerHTML = highlightJSON(item.spec);
+  }
+
+  copyBtn.addEventListener("click", async () => {
+    if (!currentItem) return;
+    await navigator.clipboard.writeText(JSON.stringify(currentItem.spec, null, 2));
+    const original = copyBtn.textContent;
+    copyBtn.textContent = "Copied!";
+    setTimeout(() => {
+      copyBtn.textContent = original;
+    }, 1500);
+  });
+
+  function filterItems(query) {
+    const q = query.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter(
+      (it) =>
+        it.name.toLowerCase().includes(q) ||
+        it.title.toLowerCase().includes(q) ||
+        it.description.toLowerCase().includes(q),
+    );
+  }
+
+  function renderResults(list) {
+    resultsEl.innerHTML = "";
+    if (list.length === 0) {
+      resultsEl.innerHTML = '<li class="px-3 py-2 text-sm text-[var(--color-muted)]">No matching specs.</li>';
+      return;
+    }
+    for (const item of list) {
+      const li = document.createElement("li");
+      li.tabIndex = 0;
+      li.className =
+        "cursor-pointer rounded-[var(--radius-btn)] border border-transparent px-3 py-2 transition-colors hover:border-[var(--color-border)] hover:bg-white";
+      li.innerHTML = `<div class="font-mono text-sm">${escapeHtml(item.title)}</div><div class="mt-0.5 text-xs text-[var(--color-muted)]">${escapeHtml(item.description)}</div>`;
+      const activate = () => selectItem(item);
+      li.addEventListener("click", activate);
+      li.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") activate();
+      });
+      resultsEl.appendChild(li);
+    }
+  }
+
+  searchInput.addEventListener("input", () => {
+    renderResults(filterItems(searchInput.value));
+  });
+
+  renderResults(items);
+  if (items.length > 0) selectItem(items[0]);
+</script>

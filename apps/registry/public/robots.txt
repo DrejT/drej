@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://registry.drej.dev/sitemap-index.xml

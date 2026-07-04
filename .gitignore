@@ -9,3 +9,4 @@ plans/
 *.db-wal
 .drej
 apps/www/.astro/
+apps/registry/.astro/

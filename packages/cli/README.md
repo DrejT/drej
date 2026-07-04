@@ -25,7 +25,7 @@ When using a server started this way, pass `useServerProxy: true` to `new Drej(.
 Fetches a sandbox spec from the registry, builds it, and checkpoints it locally.
 
 ```bash
-drejx add https://registry.drej.dev/python-data
+drejx add https://registry.drej.dev/items/python-data.json
 ```
 
 ### `drejx list`

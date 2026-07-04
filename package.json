@@ -15,7 +15,8 @@
     "examples/*",
     "tests/integration",
     "apps/docs",
-    "apps/www"
+    "apps/www",
+    "apps/registry"
   ],
   "scripts": {
     "setup": "bash scripts/setup.sh",

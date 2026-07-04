@@ -26,7 +26,8 @@
     "lint": "oxlint packages examples",
     "lint:fix": "oxlint --fix packages examples",
     "format": "oxfmt packages examples apps '!**/CHANGELOG.md'",
-    "format:check": "oxfmt --check packages examples apps '!**/CHANGELOG.md'"
+    "format:check": "oxfmt --check packages examples apps '!**/CHANGELOG.md'",
+    "release:publish": "bun scripts/resolve-workspace-protocol.ts && bun changeset publish"
   },
   "devDependencies": {
     "@changesets/cli": "2.31.0",

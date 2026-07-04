@@ -7,6 +7,7 @@
  * Run with: bun test tests/integration/agent.test.ts --timeout 600000
  */
 import { Agent } from "@drej/agent";
+import { SQLiteAdapter } from "@drej/sqlite";
 import { beforeAll, afterAll, test, expect, describe } from "bun:test";
 
 const GEMINI_API_KEY = "AIzaSyBNyRoeeX_gsuL1Dqj9ElcjBGtw1cAdKhc";
@@ -29,7 +30,7 @@ beforeAll(async () => {
 
   const specPath = "/tmp/test-agent-spec.json";
   await Bun.write(specPath, JSON.stringify(SPEC));
-  agent = await Agent.load(specPath);
+  agent = await Agent.load(specPath, { adapter: new SQLiteAdapter("./.drej/ledger.db") });
 }, 600_000);
 
 afterAll(async () => {

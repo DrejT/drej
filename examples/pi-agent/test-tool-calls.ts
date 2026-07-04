@@ -11,10 +11,12 @@
  *   - The final text answer from Pi
  */
 import { Agent, textOnly, type AgentEvent } from "@drej/agent";
+import { SQLiteAdapter } from "@drej/sqlite";
 
 const SPEC = "./agents/hello-agent.json";
+const adapter = new SQLiteAdapter("./.drej/ledger.db");
 
-const agent = await Agent.load(SPEC);
+const agent = await Agent.load(SPEC, { adapter });
 console.log(
   `\nSandbox: ${agent.sandboxId}  fromSnapshot=${agent.fromSnapshot}\n${"─".repeat(60)}\n`,
 );

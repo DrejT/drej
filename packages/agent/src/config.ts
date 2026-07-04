@@ -6,7 +6,13 @@ export interface DrejAgentConfig {
   serverUrl: string;
   /** OpenSandbox API key. Pass an empty string for local dev with no auth. */
   apiKey: string;
-  /** Path to the SQLite ledger database. Default: `./.drej/ledger.db`. */
+  /**
+   * Anchor path used to derive the agent snapshot store location
+   * (`agent-snapshots.json` is written next to this path). Does not select
+   * the ledger storage adapter — pass that directly via `Agent.load`'s
+   * `opts.adapter` / `Agent.resume`'s `opts.adapter`.
+   * Default: `./.drej/ledger.db`.
+   */
   adapterPath: string;
   /**
    * Route execd and proxy traffic through the OpenSandbox server.

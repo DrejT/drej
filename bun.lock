@@ -34,6 +34,19 @@
         "typescript": "^5",
       },
     },
+    "apps/registry": {
+      "name": "@drej/registry",
+      "dependencies": {
+        "@astrojs/sitemap": "^3.7.3",
+        "@fontsource-variable/geist": "^5.1.1",
+        "@fontsource-variable/geist-mono": "^5.2.2",
+        "astro": "^6.4.8",
+      },
+      "devDependencies": {
+        "@tailwindcss/vite": "^4.3.2",
+        "tailwindcss": "^4.3.2",
+      },
+    },
     "apps/www": {
       "name": "@drej/www",
       "dependencies": {
@@ -240,7 +253,6 @@
       "version": "0.3.2",
       "dependencies": {
         "@drej/core": "workspace:*",
-        "@drej/sqlite": "workspace:*",
         "drej": "workspace:*",
       },
       "devDependencies": {
@@ -493,6 +505,8 @@
     "@drej/otel": ["@drej/otel@workspace:packages/adapters/otel"],
 
     "@drej/postgres": ["@drej/postgres@workspace:packages/adapters/postgres"],
+
+    "@drej/registry": ["@drej/registry@workspace:apps/registry"],
 
     "@drej/sqlite": ["@drej/sqlite@workspace:packages/adapters/sqlite"],
 

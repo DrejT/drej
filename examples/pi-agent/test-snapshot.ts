@@ -6,13 +6,15 @@
  * Needs: OpenSandbox server running (uvx opensandbox-server)
  */
 import { Agent } from "@drej/agent";
+import { SQLiteAdapter } from "@drej/sqlite";
 
 const SPEC = "./agents/hello-agent.json";
+const adapter = new SQLiteAdapter("./.drej/ledger.db");
 
 // ── First load: full install + checkpoint ─────────────────────────────────────
 console.log("=== Load 1: full install ===\n");
 const t1 = Date.now();
-const agent1 = await Agent.load(SPEC);
+const agent1 = await Agent.load(SPEC, { adapter });
 const elapsed1 = Date.now() - t1;
 console.log(`\nLoad 1 total: ${elapsed1}ms  fromSnapshot=${agent1.fromSnapshot}`);
 
@@ -35,7 +37,7 @@ console.log("Agent 1 closed.\n");
 // ── Second load: should restore from snapshot ─────────────────────────────────
 console.log("=== Load 2: snapshot restore ===\n");
 const t2 = Date.now();
-const agent2 = await Agent.load(SPEC);
+const agent2 = await Agent.load(SPEC, { adapter });
 const elapsed2 = Date.now() - t2;
 console.log(`\nLoad 2 total: ${elapsed2}ms  fromSnapshot=${agent2.fromSnapshot}`);
 

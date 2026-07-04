@@ -7,9 +7,29 @@ export interface ExecResult {
   exitCode: number;
 }
 
-type ExecDriver =
+export type ExecDriver =
   | { type: "stream"; gen: AsyncGenerator<SSEEvent>; onDone: (r: ExecResult) => Promise<void> }
-  | { type: "replay"; result: ExecResult };
+  | { type: "replay"; result: ExecResult }
+  | {
+      type: "pty";
+      /** Output already recorded before this handle was created (e.g. resumed from ledger) — shown as scrollback before live output resumes. */
+      seedStdout?: string;
+      /** Wire up push-based output/exit/failure callbacks. Called once, synchronously. */
+      attach: (
+        push: (chunk: string) => void,
+        finish: (exitCode: number) => void,
+        fail: (err: unknown) => void,
+      ) => void;
+      onDone: (r: ExecResult) => Promise<void>;
+    };
+
+/** Live input/control surface for an `InteractiveExecHandle`. Absent for finished/replayed sessions. */
+export interface PtyControls {
+  write(data: string): void;
+  resize(cols: number, rows: number): void;
+  signal(name: string): void;
+  close(): void;
+}
 
 /**
  * Returned by `Sandbox.exec()` and `Sandbox.execCode()`.
@@ -42,10 +62,45 @@ export class ExecHandle implements PromiseLike<ExecResult> {
       if (driver.result.stdout) this._chunks.push(driver.result.stdout);
       this._done = true;
       this._promise = Promise.resolve(driver.result);
+    } else if (driver.type === "pty") {
+      this._promise = this._drainPty(driver);
+      this._promise.catch(() => {});
     } else {
       this._promise = this._drain(driver.gen, driver.onDone);
       this._promise.catch(() => {});
     }
+  }
+
+  private _drainPty(driver: Extract<ExecDriver, { type: "pty" }>): Promise<ExecResult> {
+    if (driver.seedStdout) this._chunks.push(driver.seedStdout);
+    return new Promise((resolve, reject) => {
+      driver.attach(
+        (chunk) => {
+          this._chunks.push(chunk);
+          this._notify();
+        },
+        (exitCode) => {
+          this._done = true;
+          const result: ExecResult = { stdout: this._chunks.join(""), stderr: "", exitCode };
+          this._notify();
+          driver.onDone(result).then(
+            () => resolve(result),
+            (err) => {
+              this._err = err;
+              this._hasErr = true;
+              reject(err);
+            },
+          );
+        },
+        (err) => {
+          this._done = true;
+          this._err = err;
+          this._hasErr = true;
+          this._notify();
+          reject(err);
+        },
+      );
+    });
   }
 
   private async _drain(
@@ -121,5 +176,82 @@ export class ExecHandle implements PromiseLike<ExecResult> {
   /** Pipe stdout to any writable with a `write(chunk: string)` method. */
   async pipe(writable: { write(chunk: string): unknown }): Promise<void> {
     for await (const chunk of this.stdout()) writable.write(chunk);
+  }
+}
+
+/** Minimal structural readable — matches `process.stdin` without depending on `@types/node`. */
+export interface AttachableSource {
+  on(event: "data", listener: (chunk: Buffer | string) => void): unknown;
+  off(event: "data", listener: (chunk: Buffer | string) => void): unknown;
+}
+
+/**
+ * Returned by `Sandbox.exec(cmd, { interactive: true })`.
+ *
+ * Extends `ExecHandle` with the input/control side of a live PTY session:
+ * `write()` sends input, `resize()`/`signal()` control the terminal, `close()`
+ * ends the session, and `attach()` pumps a real readable/writable pair (e.g.
+ * `process.stdin`/`process.stdout`) for full human passthrough.
+ *
+ * `stdout()`/`pipe()`/`result()`/`await` are inherited unchanged from `ExecHandle`.
+ * For a session that had already finished before a checkpoint (replayed, not
+ * live), `write()`/`resize()`/`signal()`/`close()` are no-ops — there is
+ * nothing left to attach to.
+ *
+ * @example
+ * ```ts
+ * const shell = sb.exec("bash", { interactive: true });
+ * shell.pipe(process.stdout);
+ * shell.write("whoami\n");
+ * await shell.close();
+ *
+ * // or full human passthrough:
+ * await sb.exec("bash", { interactive: true }).attach(process.stdin, process.stdout);
+ * ```
+ */
+export class InteractiveExecHandle extends ExecHandle {
+  private readonly _controls?: PtyControls;
+
+  constructor(driver: ExecDriver, controls?: PtyControls) {
+    super(driver);
+    this._controls = controls;
+  }
+
+  /** Send input to the running process. No-op if the session already ended. */
+  write(data: string | Uint8Array): void {
+    this._controls?.write(typeof data === "string" ? data : new TextDecoder().decode(data));
+  }
+
+  /** Resize the PTY. No-op if the session already ended. */
+  resize(cols: number, rows: number): void {
+    this._controls?.resize(cols, rows);
+  }
+
+  /** Send a signal (e.g. `"SIGINT"`) to the running process. No-op if the session already ended. */
+  signal(name: string): void {
+    this._controls?.signal(name);
+  }
+
+  /** Force-end the session. No-op if it already ended on its own. */
+  async close(): Promise<void> {
+    this._controls?.close();
+  }
+
+  /**
+   * Pump a real readable/writable pair for full terminal passthrough — e.g.
+   * `shell.attach(process.stdin, process.stdout)` drops a human straight into
+   * the live remote shell. Resolves when the session ends.
+   */
+  async attach(
+    readable: AttachableSource,
+    writable: { write(chunk: string): unknown },
+  ): Promise<void> {
+    const onData = (chunk: Buffer | string) => this.write(chunk.toString());
+    readable.on("data", onData);
+    try {
+      await this.pipe(writable);
+    } finally {
+      readable.off("data", onData);
+    }
   }
 }

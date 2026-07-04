@@ -113,6 +113,14 @@
         "drej": "workspace:*",
       },
     },
+    "examples/interactive-exec": {
+      "name": "drej-example-interactive-exec",
+      "version": "0.0.1",
+      "dependencies": {
+        "@drej/sqlite": "workspace:*",
+        "drej": "workspace:*",
+      },
+    },
     "examples/pi-agent": {
       "name": "drej-example-pi-agent",
       "version": "0.0.6",
@@ -278,6 +286,7 @@
         "bun-types": "1.3.14",
         "tsdown": "0.22.3",
         "typescript": "6.0.3",
+        "vitest": "4.1.9",
       },
     },
     "packages/sdks/typescript": {
@@ -1456,6 +1465,8 @@
     "drej-example-file-ops": ["drej-example-file-ops@workspace:examples/file-ops"],
 
     "drej-example-hello-world": ["drej-example-hello-world@workspace:examples/hello-world"],
+
+    "drej-example-interactive-exec": ["drej-example-interactive-exec@workspace:examples/interactive-exec"],
 
     "drej-example-pi-agent": ["drej-example-pi-agent@workspace:examples/pi-agent"],
 

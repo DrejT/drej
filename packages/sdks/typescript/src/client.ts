@@ -9,6 +9,7 @@ import {
   type SandboxHooks,
   type EnvironmentRecord,
   type CheckpointInfo,
+  type PendingInteractiveExec,
 } from "@drej/core";
 import { ControlClient, SandboxState, SnapshotState } from "@drej/opensandbox";
 
@@ -20,7 +21,14 @@ import {
 } from "./environment";
 
 export { Sandbox, BashSession } from "@drej/core";
-export type { ExecHandle, ExecResult, ExecOptions, ExecCodeOptions } from "@drej/core";
+export type {
+  ExecHandle,
+  InteractiveExecHandle,
+  ExecResult,
+  ExecOptions,
+  ExecCodeOptions,
+  PendingInteractiveExec,
+} from "@drej/core";
 export {
   LedgerEvent,
   SandboxStatus,
@@ -233,17 +241,33 @@ export class Drej {
     const replayCache = new Map<number, ExecResult>();
     const pendingStdout = new Map<number, string[]>();
     const pendingStderr = new Map<number, string[]>();
+    const pendingStdin = new Map<number, string[]>();
+    const interactiveMeta = new Map<
+      number,
+      { cmd: string; cwd?: string; env?: Record<string, string> }
+    >();
 
     for (const entry of entries.slice(0, checkpointIdx)) {
       if (entry.event === LedgerEvent.ExecStart) {
-        const { seq } = entry.payload as { seq: number };
+        const { seq, cmd, interactive, cwd, env } = entry.payload as {
+          seq: number;
+          cmd: string;
+          interactive?: boolean;
+          cwd?: string;
+          env?: Record<string, string>;
+        };
         pendingStdout.set(seq, []);
         pendingStderr.set(seq, []);
+        if (interactive) {
+          pendingStdin.set(seq, []);
+          interactiveMeta.set(seq, { cmd, cwd, env });
+        }
       } else if (entry.event === LedgerEvent.ExecEvent) {
         const { seq, type, text } = entry.payload as { seq: number; type: string; text?: string };
         if (text) {
           if (type === "stdout") pendingStdout.get(seq)?.push(text);
           else if (type === "stderr") pendingStderr.get(seq)?.push(text);
+          else if (type === "stdin") pendingStdin.get(seq)?.push(text);
         }
       } else if (entry.event === LedgerEvent.ExecComplete) {
         const { seq, exitCode } = entry.payload as { seq: number; exitCode: number };
@@ -253,6 +277,19 @@ export class Drej {
           exitCode,
         });
       }
+    }
+
+    // Interactive sessions with an ExecStart but no ExecComplete before the checkpoint were
+    // still open (a human mid-conversation) — reconstruct them by replaying stdin, not by
+    // dropping them like a finished/never-started plain exec would be.
+    const pendingInteractive = new Map<number, PendingInteractiveExec>();
+    for (const [seq, meta] of interactiveMeta) {
+      if (replayCache.has(seq)) continue;
+      pendingInteractive.set(seq, {
+        ...meta,
+        stdin: pendingStdin.get(seq) ?? [],
+        stdout: (pendingStdout.get(seq) ?? []).join(""),
+      });
     }
 
     await this._acquireSlot();
@@ -290,6 +327,7 @@ export class Drej {
           useServerProxy: this._useServerProxy,
         },
         replayCache,
+        pendingInteractive,
       );
     } catch (err) {
       this._releaseSlot();

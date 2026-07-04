@@ -87,7 +87,8 @@ describe("Sandbox — ledger write ordering (_emit queue)", () => {
     void (sb as any)._emit(LedgerEvent.ExecEvent, -1, {});
 
     await vi.waitFor(() => expect(adapter.append).toHaveBeenCalledTimes(1));
-    const entryAtCallTime = (adapter.append as ReturnType<typeof vi.fn>).mock.calls[0][0] as LedgerEntry;
+    const entryAtCallTime = (adapter.append as ReturnType<typeof vi.fn>).mock
+      .calls[0][0] as LedgerEntry;
 
     await new Promise((r) => setTimeout(r, 50));
     resolveSlow?.();

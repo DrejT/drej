@@ -1,42 +1,54 @@
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+@import "tailwindcss";
 
-:root {
-  --color-bg: oklch(0.985 0 0);
-  --color-fg: oklch(0.16 0.005 286);
-  --color-muted: oklch(0.52 0.013 286);
-  --color-border: oklch(0.92 0.005 286);
-  --color-accent: oklch(0.5 0.26 292);
-  --color-accent-hover: oklch(0.44 0.24 292);
-  --font-sans: "Geist Variable", "Inter", system-ui, sans-serif;
-  --font-mono: "Geist Mono Variable", "Fira Code", ui-monospace, monospace;
-  --max-width: 860px;
-  --radius-btn: 6px;
-}
+/*
+ * Tailwind emits its own rules inside `@layer theme, base, components, utilities`.
+ * Per the CSS cascade-layers spec, unlayered rules always beat layered ones
+ * regardless of specificity or source order — so anything here that should be
+ * overridable by a Tailwind utility class MUST live in `@layer base`, matching
+ * Tailwind's own Preflight, or utilities like `mx-auto`/`text-white`/`px-4`
+ * silently lose to whatever's declared below.
+ */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
 
-html {
-  background: var(--color-bg);
-  color: var(--color-fg);
-  font-family: var(--font-sans);
-  font-size: 16px;
-  line-height: 1.6;
-  -webkit-font-smoothing: antialiased;
-  scroll-behavior: smooth;
-  transition: background-color 0.4s ease;
-}
+  :root {
+    --color-bg: oklch(0.985 0 0);
+    --color-fg: oklch(0.16 0.005 286);
+    --color-muted: oklch(0.52 0.013 286);
+    --color-border: oklch(0.92 0.005 286);
+    --color-accent: oklch(0.5 0.26 292);
+    --color-accent-hover: oklch(0.44 0.24 292);
+    --font-sans: "Geist Variable", "Inter", system-ui, sans-serif;
+    --font-mono: "Geist Mono Variable", "Fira Code", ui-monospace, monospace;
+    --max-width: 860px;
+    --radius-btn: 6px;
+  }
 
-body {
-  min-height: 100vh;
-}
+  html {
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    scroll-behavior: smooth;
+    transition: background-color 0.4s ease;
+  }
 
-a {
-  color: inherit;
-  text-decoration: none;
+  body {
+    min-height: 100vh;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -47,4 +59,30 @@ a {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Syntax-highlighting tokens for hand-marked-up code snippets (Tokyo Night palette). */
+@utility tok-kw {
+  color: oklch(0.73 0.18 294);
+}
+@utility tok-var {
+  color: oklch(0.78 0.07 278);
+}
+@utility tok-fn {
+  color: oklch(0.67 0.16 255);
+}
+@utility tok-str {
+  color: oklch(0.79 0.17 135);
+}
+@utility tok-prop {
+  color: oklch(0.83 0.12 186);
+}
+@utility tok-op {
+  color: oklch(0.78 0.07 278);
+}
+@utility tok-punct {
+  color: oklch(0.68 0.07 262);
+}
+@utility tok-cmt {
+  color: oklch(0.5 0.05 266);
 }

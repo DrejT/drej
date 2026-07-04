@@ -1,404 +1,386 @@
 ---
-const features = [
+interface Example {
+  keyword: string;
+  desc: string;
+  filename?: string;
+  code: string;
+}
+
+interface Pkg {
+  id: string;
+  label: string;
+  examples: Example[];
+}
+
+const packages: Pkg[] = [
   {
-    index: 0,
-    keyword: "Spawn.",
-    desc: "Start a live container in one call. Pick any Docker image, set resource limits, and get back a Sandbox you hold like any other object.",
+    id: "core",
+    label: "Core",
+    examples: [
+      {
+        keyword: "Spawn.",
+        desc: "Start a live container in one call. Pick any Docker image, set resource limits, and get back a Sandbox you hold like any other object.",
+        code: `<span class="block whitespace-pre text-sm"><span class="tok-kw">const</span> <span class="tok-var">sb</span> <span class="tok-op">=</span> <span class="tok-kw">await</span> <span class="tok-var">client</span><span class="tok-punct">.</span><span class="tok-fn">sandbox</span><span class="tok-punct">(&#123;</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-prop">image</span><span class="tok-punct">:</span> <span class="tok-str">"node:22"</span><span class="tok-punct">,</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-prop">resources</span><span class="tok-punct">: &#123;</span></span>
+<span class="block whitespace-pre text-sm">    <span class="tok-prop">cpu</span><span class="tok-punct">:</span>    <span class="tok-str">"500m"</span><span class="tok-punct">,</span></span>
+<span class="block whitespace-pre text-sm">    <span class="tok-prop">memory</span><span class="tok-punct">:</span> <span class="tok-str">"256Mi"</span><span class="tok-punct">,</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-punct">&#125;,</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-punct">&#125;);</span></span>`,
+      },
+      {
+        keyword: "Exec.",
+        desc: "Run commands and get stdout, stderr, and exit code back. Stream live output to your process, set a working directory, inject environment variables.",
+        code: `<span class="block whitespace-pre text-sm"><span class="tok-kw">const</span> <span class="tok-punct">&#123;</span> <span class="tok-prop">stdout</span> <span class="tok-punct">&#125;</span> <span class="tok-op">=</span> <span class="tok-kw">await</span> <span class="tok-var">sb</span><span class="tok-punct">.</span><span class="tok-fn">exec</span><span class="tok-punct">(</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-str">"node index.js"</span><span class="tok-punct">,</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-punct">);</span></span>
+<span class="block whitespace-pre text-sm min-h-[1.5em]"> </span>
+<span class="block whitespace-pre text-sm"><span class="tok-cmt">// stream live output</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-kw">await</span> <span class="tok-var">sb</span><span class="tok-punct">.</span><span class="tok-fn">exec</span><span class="tok-punct">(</span><span class="tok-str">"npm test"</span><span class="tok-punct">)</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-punct">.</span><span class="tok-fn">pipe</span><span class="tok-punct">(</span><span class="tok-var">process</span><span class="tok-punct">.</span><span class="tok-prop">stdout</span><span class="tok-punct">);</span></span>`,
+      },
+      {
+        keyword: "Files.",
+        desc: "Read and write files directly inside the sandbox. Inject source code, pull build artifacts, inspect logs — all from TypeScript with no extra tooling.",
+        code: `<span class="block whitespace-pre text-sm"><span class="tok-kw">await</span> <span class="tok-var">sb</span><span class="tok-punct">.</span><span class="tok-fn">writeFile</span><span class="tok-punct">(</span><span class="tok-str">"/app/main.py"</span><span class="tok-punct">,</span> <span class="tok-var">src</span><span class="tok-punct">);</span></span>
+<span class="block whitespace-pre text-sm min-h-[1.5em]"> </span>
+<span class="block whitespace-pre text-sm"><span class="tok-kw">const</span> <span class="tok-var">logs</span> <span class="tok-op">=</span> <span class="tok-kw">await</span> <span class="tok-var">sb</span><span class="tok-punct">.</span><span class="tok-fn">readFile</span><span class="tok-punct">(</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-str">"/var/log/app.log"</span><span class="tok-punct">,</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-punct">);</span></span>
+<span class="block whitespace-pre text-sm min-h-[1.5em]"> </span>
+<span class="block whitespace-pre text-sm"><span class="tok-kw">const</span> <span class="tok-var">entries</span> <span class="tok-op">=</span> <span class="tok-kw">await</span> <span class="tok-var">sb</span><span class="tok-punct">.</span><span class="tok-fn">listDirectory</span><span class="tok-punct">(</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-str">"/app"</span><span class="tok-punct">,</span> <span class="tok-punct">&#123;</span> <span class="tok-prop">depth</span><span class="tok-punct">:</span> <span class="tok-var">1</span> <span class="tok-punct">&#125;,</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-punct">);</span></span>`,
+      },
+      {
+        keyword: "Checkpoint.",
+        desc: "Snapshot the container at any point — filesystem, processes, memory. Resume later from the exact same state. Pay for compute only when you need it.",
+        code: `<span class="block whitespace-pre text-sm"><span class="tok-kw">await</span> <span class="tok-var">sb</span><span class="tok-punct">.</span><span class="tok-fn">checkpoint</span><span class="tok-punct">(</span><span class="tok-str">"before-tests"</span><span class="tok-punct">);</span></span>
+<span class="block whitespace-pre text-sm min-h-[1.5em]"> </span>
+<span class="block whitespace-pre text-sm"><span class="tok-cmt">// restore exact state later</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-kw">const</span> <span class="tok-var">resumed</span> <span class="tok-op">=</span> <span class="tok-kw">await</span> <span class="tok-var">client</span><span class="tok-punct">.</span><span class="tok-fn">resume</span><span class="tok-punct">(</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-var">sandboxId</span><span class="tok-punct">,</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-punct">);</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-kw">await</span> <span class="tok-var">resumed</span><span class="tok-punct">.</span><span class="tok-fn">exec</span><span class="tok-punct">(</span><span class="tok-str">"npm test"</span><span class="tok-punct">);</span></span>`,
+      },
+      {
+        keyword: "Fork.",
+        desc: "Branch a running container from any checkpoint. Each fork is an independent Sandbox — run parallel test shards, A/B variants, or speculative executions.",
+        code: `<span class="block whitespace-pre text-sm"><span class="tok-kw">await</span> <span class="tok-var">sb</span><span class="tok-punct">.</span><span class="tok-fn">checkpoint</span><span class="tok-punct">();</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-kw">const</span> <span class="tok-var">fork</span> <span class="tok-op">=</span> <span class="tok-kw">await</span> <span class="tok-var">sb</span><span class="tok-punct">.</span><span class="tok-fn">fork</span><span class="tok-punct">();</span></span>
+<span class="block whitespace-pre text-sm min-h-[1.5em]"> </span>
+<span class="block whitespace-pre text-sm"><span class="tok-cmt">// two independent containers, same state</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-kw">await</span> <span class="tok-fn">Promise</span><span class="tok-punct">.</span><span class="tok-fn">all</span><span class="tok-punct">([</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-var">sb</span><span class="tok-punct">.</span><span class="tok-fn">exec</span><span class="tok-punct">(</span><span class="tok-str">"npm test -- --shard=1/2"</span><span class="tok-punct">),</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-var">fork</span><span class="tok-punct">.</span><span class="tok-fn">exec</span><span class="tok-punct">(</span><span class="tok-str">"npm test -- --shard=2/2"</span><span class="tok-punct">),</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-punct">]);</span></span>`,
+      },
+      {
+        keyword: "Environments.",
+        desc: "Define a named environment once — image, resources, setup script. drej builds it, snapshots it, and restores from that snapshot on every subsequent call.",
+        code: `<span class="block whitespace-pre text-sm"><span class="tok-kw">const</span> <span class="tok-var">env</span> <span class="tok-op">=</span> <span class="tok-var">client</span><span class="tok-punct">.</span><span class="tok-fn">environment</span><span class="tok-punct">(</span><span class="tok-str">"ci"</span><span class="tok-punct">,</span> <span class="tok-punct">&#123;</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-prop">image</span><span class="tok-punct">:</span> <span class="tok-str">"node:22"</span><span class="tok-punct">,</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-prop">resources</span><span class="tok-punct">:</span> <span class="tok-punct">&#123;</span> <span class="tok-prop">cpu</span><span class="tok-punct">:</span> <span class="tok-str">"500m"</span><span class="tok-punct">,</span> <span class="tok-prop">memory</span><span class="tok-punct">:</span> <span class="tok-str">"512Mi"</span> <span class="tok-punct">&#125;,</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-prop">setup</span><span class="tok-punct">:</span> <span class="tok-kw">async</span> <span class="tok-punct">(</span><span class="tok-var">sb</span><span class="tok-punct">)</span> <span class="tok-op">=&gt;</span> <span class="tok-punct">&#123;</span></span>
+<span class="block whitespace-pre text-sm">    <span class="tok-kw">await</span> <span class="tok-var">sb</span><span class="tok-punct">.</span><span class="tok-fn">exec</span><span class="tok-punct">(</span><span class="tok-str">"npm ci"</span><span class="tok-punct">);</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-punct">&#125;,</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-punct">&#125;);</span></span>
+<span class="block whitespace-pre text-sm min-h-[1.5em]"> </span>
+<span class="block whitespace-pre text-sm"><span class="tok-cmt">// builds once, restores from snapshot</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-kw">const</span> <span class="tok-var">sb</span> <span class="tok-op">=</span> <span class="tok-kw">await</span> <span class="tok-var">env</span><span class="tok-punct">.</span><span class="tok-fn">sandbox</span><span class="tok-punct">();</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-kw">await</span> <span class="tok-var">sb</span><span class="tok-punct">.</span><span class="tok-fn">exec</span><span class="tok-punct">(</span><span class="tok-str">"npm test"</span><span class="tok-punct">);</span></span>`,
+      },
+      {
+        keyword: "History.",
+        desc: "Every exec is logged to a durable ledger. Query past sessions, inspect exec counts and timing, or delete records — all through a typed API.",
+        code: `<span class="block whitespace-pre text-sm"><span class="tok-kw">const</span> <span class="tok-var">sessions</span> <span class="tok-op">=</span> <span class="tok-kw">await</span> <span class="tok-var">client</span><span class="tok-punct">.</span><span class="tok-var">sandboxes</span><span class="tok-punct">.</span><span class="tok-fn">list</span><span class="tok-punct">(&#123;</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-prop">status</span><span class="tok-punct">:</span> <span class="tok-var">SandboxStatus</span><span class="tok-punct">.</span><span class="tok-prop">Running</span><span class="tok-punct">,</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-prop">limit</span><span class="tok-punct">:</span> <span class="tok-var">20</span><span class="tok-punct">,</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-punct">&#125;);</span></span>
+<span class="block whitespace-pre text-sm min-h-[1.5em]"> </span>
+<span class="block whitespace-pre text-sm"><span class="tok-kw">const</span> <span class="tok-var">details</span> <span class="tok-op">=</span> <span class="tok-kw">await</span> <span class="tok-var">client</span><span class="tok-punct">.</span><span class="tok-var">sandboxes</span><span class="tok-punct">.</span><span class="tok-fn">get</span><span class="tok-punct">(</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-str">"ci"</span><span class="tok-punct">,</span> <span class="tok-var">sandboxId</span><span class="tok-punct">,</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-punct">);</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-cmt">// &#123; status, execCount, startedAt &#125;</span></span>`,
+      },
+    ],
   },
   {
-    index: 1,
-    keyword: "Exec.",
-    desc: "Run commands and get stdout, stderr, and exit code back. Stream live output to your process, set a working directory, inject environment variables.",
+    id: "workflow",
+    label: "Workflow",
+    examples: [
+      {
+        keyword: "Run.",
+        desc: "Chain sandbox steps into one lazy pipeline. Nothing runs until you await .pipe() or .result() — the whole thing executes as a single unit.",
+        code: `<span class="block whitespace-pre text-sm"><span class="tok-kw">import</span> <span class="tok-punct">&#123;</span> <span class="tok-var">workflow</span> <span class="tok-punct">&#125;</span> <span class="tok-kw">from</span> <span class="tok-str">"@drej/workflow"</span><span class="tok-punct">;</span></span>
+<span class="block whitespace-pre text-sm min-h-[1.5em]"> </span>
+<span class="block whitespace-pre text-sm"><span class="tok-kw">await</span> <span class="tok-fn">workflow</span><span class="tok-punct">(</span><span class="tok-var">client</span><span class="tok-punct">)</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-punct">.</span><span class="tok-fn">sandbox</span><span class="tok-punct">(</span></span>
+<span class="block whitespace-pre text-sm">    <span class="tok-punct">&#123;</span> <span class="tok-prop">image</span><span class="tok-punct">:</span> <span class="tok-str">"node:22"</span><span class="tok-punct">,</span> <span class="tok-prop">resources</span><span class="tok-punct">:</span> <span class="tok-punct">&#123;</span> <span class="tok-prop">cpu</span><span class="tok-punct">:</span> <span class="tok-str">"500m"</span><span class="tok-punct">,</span> <span class="tok-prop">memory</span><span class="tok-punct">:</span> <span class="tok-str">"512Mi"</span> <span class="tok-punct">&#125;</span> <span class="tok-punct">&#125;,</span></span>
+<span class="block whitespace-pre text-sm">    <span class="tok-punct">(</span><span class="tok-var">sb</span><span class="tok-punct">)</span> <span class="tok-op">=&gt;</span> <span class="tok-punct">&#123;</span></span>
+<span class="block whitespace-pre text-sm">      <span class="tok-var">sb</span><span class="tok-punct">.</span><span class="tok-fn">exec</span><span class="tok-punct">(</span><span class="tok-str">"node --version"</span><span class="tok-punct">);</span></span>
+<span class="block whitespace-pre text-sm">      <span class="tok-var">sb</span><span class="tok-punct">.</span><span class="tok-fn">exec</span><span class="tok-punct">(</span><span class="tok-str">"npm --version"</span><span class="tok-punct">);</span></span>
+<span class="block whitespace-pre text-sm">    <span class="tok-punct">&#125;,</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-punct">)</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-punct">.</span><span class="tok-fn">pipe</span><span class="tok-punct">(</span><span class="tok-var">process</span><span class="tok-punct">.</span><span class="tok-prop">stdout</span><span class="tok-punct">);</span></span>`,
+      },
+      {
+        keyword: "Capture.",
+        desc: "Get combined stdout and any files you read back as vars, in one return value — no manual bookkeeping across steps.",
+        code: `<span class="block whitespace-pre text-sm"><span class="tok-kw">const</span> <span class="tok-punct">&#123;</span> <span class="tok-prop">stdout</span><span class="tok-punct">,</span> <span class="tok-prop">vars</span> <span class="tok-punct">&#125;</span> <span class="tok-op">=</span> <span class="tok-kw">await</span> <span class="tok-fn">workflow</span><span class="tok-punct">(</span><span class="tok-var">client</span><span class="tok-punct">)</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-punct">.</span><span class="tok-fn">sandbox</span><span class="tok-punct">(</span></span>
+<span class="block whitespace-pre text-sm">    <span class="tok-punct">&#123;</span> <span class="tok-prop">image</span><span class="tok-punct">:</span> <span class="tok-str">"node:22"</span><span class="tok-punct">,</span> <span class="tok-prop">resources</span><span class="tok-punct">:</span> <span class="tok-punct">&#123;</span> <span class="tok-prop">cpu</span><span class="tok-punct">:</span> <span class="tok-str">"500m"</span><span class="tok-punct">,</span> <span class="tok-prop">memory</span><span class="tok-punct">:</span> <span class="tok-str">"512Mi"</span> <span class="tok-punct">&#125;</span> <span class="tok-punct">&#125;,</span></span>
+<span class="block whitespace-pre text-sm">    <span class="tok-punct">(</span><span class="tok-var">sb</span><span class="tok-punct">)</span> <span class="tok-op">=&gt;</span> <span class="tok-punct">&#123;</span></span>
+<span class="block whitespace-pre text-sm">      <span class="tok-var">sb</span><span class="tok-punct">.</span><span class="tok-fn">exec</span><span class="tok-punct">(</span><span class="tok-str">"node --version > /tmp/ver.txt"</span><span class="tok-punct">);</span></span>
+<span class="block whitespace-pre text-sm">      <span class="tok-var">sb</span><span class="tok-punct">.</span><span class="tok-fn">readFile</span><span class="tok-punct">(</span><span class="tok-str">"/tmp/ver.txt"</span><span class="tok-punct">,</span> <span class="tok-str">"nodeVersion"</span><span class="tok-punct">);</span></span>
+<span class="block whitespace-pre text-sm">    <span class="tok-punct">&#125;,</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-punct">)</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-punct">.</span><span class="tok-fn">result</span><span class="tok-punct">();</span></span>
+<span class="block whitespace-pre text-sm min-h-[1.5em]"> </span>
+<span class="block whitespace-pre text-sm"><span class="tok-var">console</span><span class="tok-punct">.</span><span class="tok-fn">log</span><span class="tok-punct">(</span><span class="tok-var">vars</span><span class="tok-punct">.</span><span class="tok-prop">nodeVersion</span><span class="tok-punct">);</span></span>`,
+      },
+      {
+        keyword: "Control flow.",
+        desc: "retry and when branch on runtime state — exit codes, captured vars — right inside the builder callback.",
+        code: `<span class="block whitespace-pre text-sm"><span class="tok-var">sb</span><span class="tok-punct">.</span><span class="tok-fn">retry</span><span class="tok-punct">(</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-var">3</span><span class="tok-punct">,</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-punct">(</span><span class="tok-var">sb</span><span class="tok-punct">)</span> <span class="tok-op">=&gt;</span> <span class="tok-punct">&#123;</span></span>
+<span class="block whitespace-pre text-sm">    <span class="tok-var">sb</span><span class="tok-punct">.</span><span class="tok-fn">exec</span><span class="tok-punct">(</span><span class="tok-str">"curl -f https://api.example.com/health"</span><span class="tok-punct">);</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-punct">&#125;,</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-punct">&#123;</span> <span class="tok-prop">delayMs</span><span class="tok-punct">:</span> <span class="tok-var">2000</span><span class="tok-punct">,</span> <span class="tok-prop">backoff</span><span class="tok-punct">:</span> <span class="tok-str">"exponential"</span> <span class="tok-punct">&#125;,</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-punct">);</span></span>
+<span class="block whitespace-pre text-sm min-h-[1.5em]"> </span>
+<span class="block whitespace-pre text-sm"><span class="tok-var">sb</span><span class="tok-punct">.</span><span class="tok-fn">when</span><span class="tok-punct">(</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-punct">(</span><span class="tok-var">ctx</span><span class="tok-punct">)</span> <span class="tok-op">=&gt;</span> <span class="tok-var">ctx</span><span class="tok-punct">.</span><span class="tok-prop">exitCode</span> <span class="tok-op">===</span> <span class="tok-var">0</span><span class="tok-punct">,</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-punct">(</span><span class="tok-var">sb</span><span class="tok-punct">)</span> <span class="tok-op">=&gt;</span> <span class="tok-var">sb</span><span class="tok-punct">.</span><span class="tok-fn">exec</span><span class="tok-punct">(</span><span class="tok-str">"tar -xzf /tmp/cache.tar.gz"</span><span class="tok-punct">),</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-punct">(</span><span class="tok-var">sb</span><span class="tok-punct">)</span> <span class="tok-op">=&gt;</span> <span class="tok-var">sb</span><span class="tok-punct">.</span><span class="tok-fn">exec</span><span class="tok-punct">(</span><span class="tok-str">"npm ci"</span><span class="tok-punct">),</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-punct">);</span></span>`,
+      },
+      {
+        keyword: "Parallel.",
+        desc: "Fan a step out over a list with forEach, with an optional concurrency cap for parallel branches.",
+        code: `<span class="block whitespace-pre text-sm"><span class="tok-kw">const</span> <span class="tok-var">packages</span> <span class="tok-op">=</span> <span class="tok-punct">[</span><span class="tok-str">"lodash"</span><span class="tok-punct">,</span> <span class="tok-str">"zod"</span><span class="tok-punct">,</span> <span class="tok-str">"tsx"</span><span class="tok-punct">];</span></span>
+<span class="block whitespace-pre text-sm min-h-[1.5em]"> </span>
+<span class="block whitespace-pre text-sm"><span class="tok-var">sb</span><span class="tok-punct">.</span><span class="tok-fn">forEach</span><span class="tok-punct">(</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-var">packages</span><span class="tok-punct">,</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-punct">(</span><span class="tok-var">sb</span><span class="tok-punct">,</span> <span class="tok-var">pkg</span><span class="tok-punct">)</span> <span class="tok-op">=&gt;</span> <span class="tok-var">sb</span><span class="tok-punct">.</span><span class="tok-fn">exec</span><span class="tok-punct">(</span><span class="tok-str">\`npm install &#36;&#123;pkg&#125;\`</span><span class="tok-punct">),</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-punct">&#123;</span> <span class="tok-prop">concurrency</span><span class="tok-punct">:</span> <span class="tok-var">3</span> <span class="tok-punct">&#125;,</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-punct">);</span></span>`,
+      },
+    ],
   },
   {
-    index: 2,
-    keyword: "Files.",
-    desc: "Read and write files directly inside the sandbox. Inject source code, pull build artifacts, inspect logs — all from TypeScript with no extra tooling.",
+    id: "agent",
+    label: "Agent",
+    examples: [
+      {
+        keyword: "Load.",
+        desc: "Spin up a Pi coding agent in a sandbox and stream its response back to your process in one call.",
+        code: `<span class="block whitespace-pre text-sm"><span class="tok-kw">import</span> <span class="tok-punct">&#123;</span> <span class="tok-var">Agent</span><span class="tok-punct">,</span> <span class="tok-var">textOnly</span> <span class="tok-punct">&#125;</span> <span class="tok-kw">from</span> <span class="tok-str">"@drej/agent"</span><span class="tok-punct">;</span></span>
+<span class="block whitespace-pre text-sm min-h-[1.5em]"> </span>
+<span class="block whitespace-pre text-sm"><span class="tok-kw">const</span> <span class="tok-var">agent</span> <span class="tok-op">=</span> <span class="tok-kw">await</span> <span class="tok-var">Agent</span><span class="tok-punct">.</span><span class="tok-fn">load</span><span class="tok-punct">(</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-str">"./agents/hello-agent.json"</span><span class="tok-punct">,</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-punct">);</span></span>
+<span class="block whitespace-pre text-sm min-h-[1.5em]"> </span>
+<span class="block whitespace-pre text-sm"><span class="tok-kw">for</span> <span class="tok-kw">await</span> <span class="tok-punct">(</span><span class="tok-kw">const</span> <span class="tok-var">chunk</span> <span class="tok-kw">of</span> <span class="tok-fn">textOnly</span><span class="tok-punct">(</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-var">agent</span><span class="tok-punct">.</span><span class="tok-fn">prompt</span><span class="tok-punct">(</span><span class="tok-str">"Summarize this repo."</span><span class="tok-punct">),</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-punct">))</span> <span class="tok-punct">&#123;</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-var">process</span><span class="tok-punct">.</span><span class="tok-var">stdout</span><span class="tok-punct">.</span><span class="tok-fn">write</span><span class="tok-punct">(</span><span class="tok-var">chunk</span><span class="tok-punct">);</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-punct">&#125;</span></span>`,
+      },
+      {
+        keyword: "Tool events.",
+        desc: "Watch Pi's tool calls as they happen — not just the final text — for full visibility into what the agent is doing.",
+        code: `<span class="block whitespace-pre text-sm"><span class="tok-kw">for</span> <span class="tok-kw">await</span> <span class="tok-punct">(</span><span class="tok-kw">const</span> <span class="tok-var">ev</span> <span class="tok-kw">of</span> <span class="tok-var">agent</span><span class="tok-punct">.</span><span class="tok-fn">prompt</span><span class="tok-punct">(</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-str">"Run /workspace/script.py"</span><span class="tok-punct">,</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-punct">))</span> <span class="tok-punct">&#123;</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-kw">if</span> <span class="tok-punct">(</span><span class="tok-var">ev</span><span class="tok-punct">.</span><span class="tok-prop">type</span> <span class="tok-op">===</span> <span class="tok-str">"text"</span><span class="tok-punct">)</span></span>
+<span class="block whitespace-pre text-sm">    <span class="tok-var">process</span><span class="tok-punct">.</span><span class="tok-var">stdout</span><span class="tok-punct">.</span><span class="tok-fn">write</span><span class="tok-punct">(</span><span class="tok-var">ev</span><span class="tok-punct">.</span><span class="tok-prop">text</span><span class="tok-punct">);</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-kw">if</span> <span class="tok-punct">(</span><span class="tok-var">ev</span><span class="tok-punct">.</span><span class="tok-prop">type</span> <span class="tok-op">===</span> <span class="tok-str">"tool_start"</span><span class="tok-punct">)</span></span>
+<span class="block whitespace-pre text-sm">    <span class="tok-var">console</span><span class="tok-punct">.</span><span class="tok-fn">log</span><span class="tok-punct">(</span><span class="tok-str">\`[tool] &#36;&#123;ev.toolName&#125;\`</span><span class="tok-punct">);</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-punct">&#125;</span></span>`,
+      },
+      {
+        keyword: "Files.",
+        desc: "Read and write files directly inside the agent's sandbox, alongside its own edits — no extra tooling needed.",
+        code: `<span class="block whitespace-pre text-sm"><span class="tok-kw">await</span> <span class="tok-var">agent</span><span class="tok-punct">.</span><span class="tok-var">sandbox</span><span class="tok-punct">.</span><span class="tok-fn">writeFile</span><span class="tok-punct">(</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-str">"/workspace/data.csv"</span><span class="tok-punct">,</span> <span class="tok-var">csv</span><span class="tok-punct">,</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-punct">);</span></span>
+<span class="block whitespace-pre text-sm min-h-[1.5em]"> </span>
+<span class="block whitespace-pre text-sm"><span class="tok-kw">const</span> <span class="tok-var">summary</span> <span class="tok-op">=</span> <span class="tok-kw">await</span> <span class="tok-var">agent</span><span class="tok-punct">.</span><span class="tok-var">sandbox</span><span class="tok-punct">.</span><span class="tok-fn">readFile</span><span class="tok-punct">(</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-str">"/workspace/summary.txt"</span><span class="tok-punct">,</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-punct">);</span></span>`,
+      },
+      {
+        keyword: "Snapshot.",
+        desc: "First run installs and checkpoints the CLI. Every run after restores from that snapshot in seconds.",
+        code: `<span class="block whitespace-pre text-sm"><span class="tok-kw">const</span> <span class="tok-var">agent</span> <span class="tok-op">=</span> <span class="tok-kw">await</span> <span class="tok-var">Agent</span><span class="tok-punct">.</span><span class="tok-fn">load</span><span class="tok-punct">(</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-str">"./agents/hello-agent.json"</span><span class="tok-punct">,</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-punct">);</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-var">console</span><span class="tok-punct">.</span><span class="tok-fn">log</span><span class="tok-punct">(</span><span class="tok-var">agent</span><span class="tok-punct">.</span><span class="tok-prop">fromSnapshot</span><span class="tok-punct">);</span> <span class="tok-cmt">// true</span></span>
+<span class="block whitespace-pre text-sm min-h-[1.5em]"> </span>
+<span class="block whitespace-pre text-sm"><span class="tok-cmt">// force a full reinstall</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-kw">await</span> <span class="tok-var">Agent</span><span class="tok-punct">.</span><span class="tok-fn">load</span><span class="tok-punct">(</span><span class="tok-str">"./agents/hello-agent.json"</span><span class="tok-punct">,</span> <span class="tok-punct">&#123;</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-prop">rebuild</span><span class="tok-punct">:</span> <span class="tok-kw">true</span><span class="tok-punct">,</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-punct">&#125;);</span></span>`,
+      },
+    ],
   },
   {
-    index: 3,
-    keyword: "Checkpoint.",
-    desc: "Snapshot the container at any point — filesystem, processes, memory. Resume later from the exact same state. Pay for compute only when you need it.",
-  },
-  {
-    index: 4,
-    keyword: "Fork.",
-    desc: "Branch a running container from any checkpoint. Each fork is an independent Sandbox — run parallel test shards, A/B variants, or speculative executions.",
-  },
-  {
-    index: 5,
-    keyword: "Environments.",
-    desc: "Define a named environment once — image, resources, setup script. drej builds it, snapshots it, and restores from that snapshot on every subsequent call.",
-  },
-  {
-    index: 6,
-    keyword: "Workflow.",
-    desc: "Chain steps into a durable workflow. Each step is logged to the ledger — on failure, replay from the last successful checkpoint without re-running earlier work.",
-  },
-  {
-    index: 7,
-    keyword: "History.",
-    desc: "Every exec is logged to a durable ledger. Query past sessions, inspect exec counts and timing, or delete records — all through a typed API.",
+    id: "cli",
+    label: "CLI",
+    examples: [
+      {
+        keyword: "Init.",
+        desc: "One command starts OpenSandbox locally in Docker and writes your project config — no manual server setup.",
+        filename: "terminal",
+        code: `<span class="block whitespace-pre text-sm"><span class="tok-punct">&#36;</span> <span class="tok-punct">bunx drejx init</span></span>
+<span class="block whitespace-pre text-sm min-h-[1.5em]"> </span>
+<span class="block whitespace-pre text-sm"><span class="tok-cmt">Starting OpenSandbox in Docker...</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-cmt">OpenSandbox running at</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-cmt">http://localhost:8080 — ready.</span></span>`,
+      },
+      {
+        keyword: "Add.",
+        desc: "Fetch an agent spec from any URL, validate it, and save it locally — dependencies resolved recursively.",
+        filename: "terminal",
+        code: `<span class="block whitespace-pre text-sm"><span class="tok-punct">&#36;</span> <span class="tok-punct">bunx drejx add \\</span></span>
+<span class="block whitespace-pre text-sm">    <span class="tok-punct">https://example.com/specs/code-reviewer.json</span></span>
+<span class="block whitespace-pre text-sm min-h-[1.5em]"> </span>
+<span class="block whitespace-pre text-sm"><span class="tok-cmt">Agent spec saved: agents/code-reviewer.json</span></span>`,
+      },
+      {
+        keyword: "Run.",
+        desc: "Load any saved spec with @drej/agent — the CLI only manages specs on disk; the sandbox work happens on load.",
+        filename: "run.ts",
+        code: `<span class="block whitespace-pre text-sm"><span class="tok-kw">import</span> <span class="tok-punct">&#123;</span> <span class="tok-var">Agent</span><span class="tok-punct">,</span> <span class="tok-var">textOnly</span> <span class="tok-punct">&#125;</span> <span class="tok-kw">from</span> <span class="tok-str">"@drej/agent"</span><span class="tok-punct">;</span></span>
+<span class="block whitespace-pre text-sm min-h-[1.5em]"> </span>
+<span class="block whitespace-pre text-sm"><span class="tok-kw">const</span> <span class="tok-var">agent</span> <span class="tok-op">=</span> <span class="tok-kw">await</span> <span class="tok-var">Agent</span><span class="tok-punct">.</span><span class="tok-fn">load</span><span class="tok-punct">(</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-str">"agents/code-reviewer.json"</span><span class="tok-punct">,</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-punct">);</span></span>
+<span class="block whitespace-pre text-sm min-h-[1.5em]"> </span>
+<span class="block whitespace-pre text-sm"><span class="tok-kw">for</span> <span class="tok-kw">await</span> <span class="tok-punct">(</span><span class="tok-kw">const</span> <span class="tok-var">chunk</span> <span class="tok-kw">of</span> <span class="tok-fn">textOnly</span><span class="tok-punct">(</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-var">agent</span><span class="tok-punct">.</span><span class="tok-fn">prompt</span><span class="tok-punct">(</span><span class="tok-str">"Review this repo."</span><span class="tok-punct">),</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-punct">))</span> <span class="tok-punct">&#123;</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-var">process</span><span class="tok-punct">.</span><span class="tok-var">stdout</span><span class="tok-punct">.</span><span class="tok-fn">write</span><span class="tok-punct">(</span><span class="tok-var">chunk</span><span class="tok-punct">);</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-punct">&#125;</span></span>`,
+      },
+    ],
   },
 ];
 ---
 
-<section class="features-section">
-  <div class="features-grid">
-
-    <!-- Left: tabs + description -->
-    <div class="tabs-column">
-      <div class="tabs" role="tablist">
-        {features.map((f) => (
-          <button
-            class:list={["tab", { active: f.index === 0 }]}
-            data-feature={f.index}
-            role="tab"
-          >
-            {f.keyword}
-          </button>
-        ))}
-      </div>
-
-      <div class="tab-descs">
-        {features.map((f) => (
-          <p class:list={["tab-desc", { active: f.index === 0 }]} data-desc={f.index}>
-            {f.desc}
-          </p>
-        ))}
-      </div>
-
-      <div class="ctas">
-        <a href="https://docs.drej.dev" class="btn-primary">Read the docs</a>
-        <a href="https://github.com/DrejT/drej" class="btn-secondary">GitHub →</a>
-      </div>
+<section class="pt-14 min-h-screen flex items-center">
+  <div class="max-w-[var(--max-width)] w-full mx-auto px-8 py-12">
+    <div class="package-tabs flex gap-7 border-b border-[var(--color-border)] mb-10" role="tablist">
+      {packages.map((pkg, i) => (
+        <button
+          class:list={[
+            "package-tab bg-transparent border-0 border-b-2 border-transparent -mb-px cursor-pointer font-mono text-[0.8rem] font-medium tracking-[0.04em] uppercase text-[var(--color-muted)] pb-3 transition-colors duration-200 hover:text-[var(--color-fg)] [&.active]:text-[var(--color-fg)] [&.active]:border-[var(--color-accent)]",
+            { active: i === 0 },
+          ]}
+          data-package={i}
+          role="tab"
+          aria-selected={i === 0}
+        >
+          {pkg.label}
+        </button>
+      ))}
     </div>
 
-    <!-- Right: code -->
-    <div class="code-column">
-      <div class="code-wrapper">
-        <div class="code-header">
-          <div class="dots">
-            <span class="dot red"></span>
-            <span class="dot yellow"></span>
-            <span class="dot green"></span>
+    {packages.map((pkg, pi) => (
+      <div
+        class:list={["package-panel hidden [&.active]:block", { active: pi === 0 }]}
+        data-package-panel={pi}
+      >
+        <div class="grid grid-cols-[2fr_3fr] gap-20 items-center max-[680px]:grid-cols-1 max-[680px]:gap-10">
+
+          <!-- Left: tabs + description -->
+          <div>
+            <div class="tabs flex flex-col border-l-2 border-[var(--color-border)] mb-8 transition-colors duration-300" role="tablist">
+              {pkg.examples.map((ex, i) => (
+                <button
+                  class:list={[
+                    "tab bg-transparent border-0 border-l-2 border-transparent -ml-0.5 cursor-pointer font-mono text-base font-medium text-[var(--color-muted)] text-left py-[0.55rem] pl-4 leading-[1.3] transition-colors duration-200 hover:text-[var(--color-fg)] [&.active]:text-[var(--color-accent)] [&.active]:border-[var(--color-accent)]",
+                    { active: i === 0 },
+                  ]}
+                  data-feature={i}
+                  role="tab"
+                  aria-selected={i === 0}
+                >
+                  {ex.keyword}
+                </button>
+              ))}
+            </div>
+
+            <div class="grid pl-4 mb-10">
+              {pkg.examples.map((ex, i) => (
+                <p
+                  class:list={[
+                    "tab-desc [grid-area:1/1] text-[0.9rem] text-[var(--color-muted)] leading-[1.65] opacity-0 pointer-events-none transition-opacity duration-[250ms] [&.active]:opacity-100 [&.active]:pointer-events-auto",
+                    { active: i === 0 },
+                  ]}
+                  data-desc={i}
+                >
+                  {ex.desc}
+                </p>
+              ))}
+            </div>
+
+            <div class="flex gap-4 items-center pl-4">
+              <a
+                href="https://docs.drej.dev"
+                class="inline-flex items-center px-[1.2rem] py-[0.6rem] bg-[var(--color-accent)] text-white text-sm font-medium rounded-[var(--radius-btn)] transition-colors duration-150 hover:bg-[var(--color-accent-hover)]"
+              >
+                Read the docs
+              </a>
+              <a
+                href="https://github.com/DrejT/drej"
+                class="text-sm text-[var(--color-muted)] border-b border-transparent pb-px transition-colors duration-150 hover:text-[var(--color-accent)] hover:border-[var(--color-accent)]"
+              >
+                GitHub →
+              </a>
+            </div>
           </div>
-          <span class="filename">index.ts</span>
-          <div class="dots-spacer"></div>
-        </div>
-        <div class="code-panels">
 
-          <!-- Panel 0: Spawn -->
-          <pre class="code-panel active" data-panel="0"><code
-><span class="line"><span class="kw">const</span> <span class="var">sb</span> <span class="op">=</span> <span class="kw">await</span> <span class="var">client</span><span class="p">.</span><span class="fn">sandbox</span><span class="p">(&#123;</span></span>
-<span class="line">  <span class="prop">image</span><span class="p">:</span> <span class="str">"node:22"</span><span class="p">,</span></span>
-<span class="line">  <span class="prop">resources</span><span class="p">: &#123;</span></span>
-<span class="line">    <span class="prop">cpu</span><span class="p">:</span>    <span class="str">"500m"</span><span class="p">,</span></span>
-<span class="line">    <span class="prop">memory</span><span class="p">:</span> <span class="str">"256Mi"</span><span class="p">,</span></span>
-<span class="line">  <span class="p">&#125;,</span></span>
-<span class="line"><span class="p">&#125;);</span></span>
-</code></pre>
-
-          <!-- Panel 1: Exec -->
-          <pre class="code-panel" data-panel="1"><code
-><span class="line"><span class="kw">const</span> <span class="p">&#123;</span> <span class="prop">stdout</span> <span class="p">&#125;</span> <span class="op">=</span> <span class="kw">await</span> <span class="var">sb</span><span class="p">.</span><span class="fn">exec</span><span class="p">(</span></span>
-<span class="line">  <span class="str">"node index.js"</span><span class="p">,</span></span>
-<span class="line"><span class="p">);</span></span>
-<span class="line empty"> </span>
-<span class="line"><span class="cmt">// stream live output</span></span>
-<span class="line"><span class="kw">await</span> <span class="var">sb</span><span class="p">.</span><span class="fn">exec</span><span class="p">(</span><span class="str">"npm test"</span><span class="p">)</span></span>
-<span class="line">  <span class="p">.</span><span class="fn">pipe</span><span class="p">(</span><span class="var">process</span><span class="p">.</span><span class="prop">stdout</span><span class="p">);</span></span>
-</code></pre>
-
-          <!-- Panel 2: Files -->
-          <pre class="code-panel" data-panel="2"><code
-><span class="line"><span class="kw">await</span> <span class="var">sb</span><span class="p">.</span><span class="fn">writeFile</span><span class="p">(</span><span class="str">"/app/main.py"</span><span class="p">,</span> <span class="var">src</span><span class="p">);</span></span>
-<span class="line empty"> </span>
-<span class="line"><span class="kw">const</span> <span class="var">logs</span> <span class="op">=</span> <span class="kw">await</span> <span class="var">sb</span><span class="p">.</span><span class="fn">readFile</span><span class="p">(</span></span>
-<span class="line">  <span class="str">"/var/log/app.log"</span><span class="p">,</span></span>
-<span class="line"><span class="p">);</span></span>
-<span class="line empty"> </span>
-<span class="line"><span class="kw">const</span> <span class="var">entries</span> <span class="op">=</span> <span class="kw">await</span> <span class="var">sb</span><span class="p">.</span><span class="fn">listDirectory</span><span class="p">(</span></span>
-<span class="line">  <span class="str">"/app"</span><span class="p">,</span> <span class="p">&#123;</span> <span class="prop">depth</span><span class="p">:</span> <span class="var">1</span> <span class="p">&#125;,</span></span>
-<span class="line"><span class="p">);</span></span>
-</code></pre>
-
-          <!-- Panel 3: Checkpoint -->
-          <pre class="code-panel" data-panel="3"><code
-><span class="line"><span class="kw">await</span> <span class="var">sb</span><span class="p">.</span><span class="fn">checkpoint</span><span class="p">(</span><span class="str">"before-tests"</span><span class="p">);</span></span>
-<span class="line empty"> </span>
-<span class="line"><span class="cmt">// restore exact state later</span></span>
-<span class="line"><span class="kw">const</span> <span class="var">resumed</span> <span class="op">=</span> <span class="kw">await</span> <span class="var">client</span><span class="p">.</span><span class="fn">resume</span><span class="p">(</span></span>
-<span class="line">  <span class="var">sandboxId</span><span class="p">,</span></span>
-<span class="line"><span class="p">);</span></span>
-<span class="line"><span class="kw">await</span> <span class="var">resumed</span><span class="p">.</span><span class="fn">exec</span><span class="p">(</span><span class="str">"npm test"</span><span class="p">);</span></span>
-</code></pre>
-
-          <!-- Panel 4: Fork -->
-          <pre class="code-panel" data-panel="4"><code
-><span class="line"><span class="kw">await</span> <span class="var">sb</span><span class="p">.</span><span class="fn">checkpoint</span><span class="p">();</span></span>
-<span class="line"><span class="kw">const</span> <span class="var">fork</span> <span class="op">=</span> <span class="kw">await</span> <span class="var">sb</span><span class="p">.</span><span class="fn">fork</span><span class="p">();</span></span>
-<span class="line empty"> </span>
-<span class="line"><span class="cmt">// two independent containers, same state</span></span>
-<span class="line"><span class="kw">await</span> <span class="fn">Promise</span><span class="p">.</span><span class="fn">all</span><span class="p">([</span></span>
-<span class="line">  <span class="var">sb</span><span class="p">.</span><span class="fn">exec</span><span class="p">(</span><span class="str">"npm test -- --shard=1/2"</span><span class="p">),</span></span>
-<span class="line">  <span class="var">fork</span><span class="p">.</span><span class="fn">exec</span><span class="p">(</span><span class="str">"npm test -- --shard=2/2"</span><span class="p">),</span></span>
-<span class="line"><span class="p">]);</span></span>
-</code></pre>
-
-          <!-- Panel 5: Environments -->
-          <pre class="code-panel" data-panel="5"><code
-><span class="line"><span class="kw">const</span> <span class="var">env</span> <span class="op">=</span> <span class="var">client</span><span class="p">.</span><span class="fn">environment</span><span class="p">(</span><span class="str">"ci"</span><span class="p">,</span> <span class="p">&#123;</span></span>
-<span class="line">  <span class="prop">image</span><span class="p">:</span> <span class="str">"node:22"</span><span class="p">,</span></span>
-<span class="line">  <span class="prop">resources</span><span class="p">:</span> <span class="p">&#123;</span> <span class="prop">cpu</span><span class="p">:</span> <span class="str">"500m"</span><span class="p">,</span> <span class="prop">memory</span><span class="p">:</span> <span class="str">"512Mi"</span> <span class="p">&#125;,</span></span>
-<span class="line">  <span class="prop">setup</span><span class="p">:</span> <span class="kw">async</span> <span class="p">(</span><span class="var">sb</span><span class="p">)</span> <span class="op">=&gt;</span> <span class="p">&#123;</span></span>
-<span class="line">    <span class="kw">await</span> <span class="var">sb</span><span class="p">.</span><span class="fn">exec</span><span class="p">(</span><span class="str">"npm ci"</span><span class="p">);</span></span>
-<span class="line">  <span class="p">&#125;,</span></span>
-<span class="line"><span class="p">&#125;);</span></span>
-<span class="line empty"> </span>
-<span class="line"><span class="cmt">// builds once, restores from snapshot</span></span>
-<span class="line"><span class="kw">const</span> <span class="var">sb</span> <span class="op">=</span> <span class="kw">await</span> <span class="var">env</span><span class="p">.</span><span class="fn">sandbox</span><span class="p">();</span></span>
-<span class="line"><span class="kw">await</span> <span class="var">sb</span><span class="p">.</span><span class="fn">exec</span><span class="p">(</span><span class="str">"npm test"</span><span class="p">);</span></span>
-</code></pre>
-
-          <!-- Panel 6: Workflow -->
-          <pre class="code-panel" data-panel="6"><code
-><span class="line"><span class="kw">await</span> <span class="fn">workflow</span><span class="p">(</span><span class="var">client</span><span class="p">)</span></span>
-<span class="line">  <span class="p">.</span><span class="fn">sandbox</span><span class="p">(</span></span>
-<span class="line">    <span class="p">&#123;</span> <span class="prop">image</span><span class="p">:</span> <span class="str">"node:22"</span><span class="p">,</span> <span class="prop">resources</span> <span class="p">&#125;,</span></span>
-<span class="line">    <span class="kw">async</span> <span class="p">(</span><span class="var">sb</span><span class="p">)</span> <span class="op">=&gt;</span> <span class="p">&#123;</span></span>
-<span class="line">      <span class="kw">await</span> <span class="var">sb</span><span class="p">.</span><span class="fn">exec</span><span class="p">(</span><span class="str">"npm ci"</span><span class="p">);</span></span>
-<span class="line">      <span class="kw">await</span> <span class="var">sb</span><span class="p">.</span><span class="fn">exec</span><span class="p">(</span><span class="str">"npm test"</span><span class="p">);</span></span>
-<span class="line">    <span class="p">&#125;,</span></span>
-<span class="line">  <span class="p">)</span></span>
-<span class="line">  <span class="p">.</span><span class="fn">result</span><span class="p">();</span></span>
-</code></pre>
-
-          <!-- Panel 7: History -->
-          <pre class="code-panel" data-panel="7"><code
-><span class="line"><span class="kw">const</span> <span class="var">sessions</span> <span class="op">=</span> <span class="kw">await</span> <span class="var">client</span><span class="p">.</span><span class="var">sandboxes</span><span class="p">.</span><span class="fn">list</span><span class="p">(&#123;</span></span>
-<span class="line">  <span class="prop">status</span><span class="p">:</span> <span class="var">SandboxStatus</span><span class="p">.</span><span class="prop">Running</span><span class="p">,</span></span>
-<span class="line">  <span class="prop">limit</span><span class="p">:</span> <span class="var">20</span><span class="p">,</span></span>
-<span class="line"><span class="p">&#125;);</span></span>
-<span class="line empty"> </span>
-<span class="line"><span class="kw">const</span> <span class="var">details</span> <span class="op">=</span> <span class="kw">await</span> <span class="var">client</span><span class="p">.</span><span class="var">sandboxes</span><span class="p">.</span><span class="fn">get</span><span class="p">(</span></span>
-<span class="line">  <span class="str">"ci"</span><span class="p">,</span> <span class="var">sandboxId</span><span class="p">,</span></span>
-<span class="line"><span class="p">);</span></span>
-<span class="line"><span class="cmt">// &#123; status, execCount, startedAt &#125;</span></span>
-</code></pre>
+          <!-- Right: code -->
+          <div>
+            <div class="rounded-xl overflow-hidden border border-[oklch(0.24_0.05_270)] shadow-[0_0_0_1px_oklch(0.17_0.04_266),0_16px_48px_oklch(0.17_0.04_266_/_0.28),0_2px_8px_oklch(0_0_0_/_0.1)]">
+              <div class="flex items-center h-[38px] px-4 bg-[oklch(0.13_0.03_270)] border-b border-[oklch(0.24_0.05_270)]">
+                <div class="flex gap-1.5 items-center flex-1">
+                  <span class="w-[11px] h-[11px] rounded-full bg-[oklch(0.63_0.22_25)]"></span>
+                  <span class="w-[11px] h-[11px] rounded-full bg-[oklch(0.84_0.17_84)]"></span>
+                  <span class="w-[11px] h-[11px] rounded-full bg-[oklch(0.73_0.22_142)]"></span>
+                </div>
+                <span class="filename font-mono text-[0.72rem] text-[oklch(0.41_0_0)] tracking-[0.01em]">
+                  {pkg.examples[0].filename ?? "index.ts"}
+                </span>
+                <div class="flex-1"></div>
+              </div>
+              <div class="grid bg-[oklch(0.17_0.04_266)]">
+                {pkg.examples.map((ex, i) => (
+                  <pre
+                    class:list={[
+                      "code-panel [grid-area:1/1] m-0 px-6 py-5 font-mono text-sm leading-[1.5] whitespace-normal overflow-x-auto opacity-0 pointer-events-none transition-opacity duration-[250ms] [&.active]:opacity-100 [&.active]:pointer-events-auto",
+                      { active: i === 0 },
+                    ]}
+                    data-panel={i}
+                    data-filename={ex.filename ?? "index.ts"}
+                  ><code class="font-mono" set:html={ex.code} /></pre>
+                ))}
+              </div>
+            </div>
+          </div>
 
         </div>
       </div>
-    </div>
-
+    ))}
   </div>
 </section>
 
-<style>
-  .features-section {
-    padding-top: 56px;
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-  }
-
-  .features-grid {
-    max-width: var(--max-width);
-    width: 100%;
-    margin: 0 auto;
-    padding: 3rem 2rem;
-    display: grid;
-    grid-template-columns: 2fr 3fr;
-    gap: 5rem;
-    align-items: center;
-  }
-
-  /* ── Left column ── */
-  .tabs {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-    border-left: 2px solid var(--color-border);
-    margin-bottom: 2rem;
-    transition: border-color 0.3s;
-  }
-
-  .tab {
-    background: none;
-    border: none;
-    border-left: 2px solid transparent;
-    margin-left: -2px;
-    cursor: pointer;
-    font-family: var(--font-mono);
-    font-size: 1rem;
-    font-weight: 500;
-    color: var(--color-muted);
-    text-align: left;
-    padding: 0.55rem 0 0.55rem 1rem;
-    transition: color 0.2s, border-color 0.2s;
-    line-height: 1.3;
-  }
-
-  .tab:hover:not(.active) {
-    color: var(--color-fg);
-  }
-
-  .tab.active {
-    color: var(--color-accent);
-    border-left-color: var(--color-accent);
-  }
-
-  /* Descriptions stacked in same grid cell */
-  .tab-descs {
-    display: grid;
-    padding-left: 1rem;
-    margin-bottom: 2.5rem;
-  }
-
-  .tab-desc {
-    grid-column: 1;
-    grid-row: 1;
-    font-size: 0.9rem;
-    color: var(--color-muted);
-    line-height: 1.65;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.25s;
-  }
-
-  .tab-desc.active {
-    opacity: 1;
-    pointer-events: auto;
-  }
-
-  /* CTAs */
-  .ctas {
-    display: flex;
-    gap: 1rem;
-    align-items: center;
-    padding-left: 1rem;
-  }
-
-  .btn-primary {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.6rem 1.2rem;
-    background: var(--color-accent);
-    color: oklch(1 0 0);
-    font-size: 0.875rem;
-    font-weight: 500;
-    border-radius: var(--radius-btn);
-    transition: background 0.15s;
-  }
-
-  .btn-primary:hover {
-    background: var(--color-accent-hover);
-  }
-
-  .btn-secondary {
-    font-size: 0.875rem;
-    color: var(--color-muted);
-    border-bottom: 1px solid transparent;
-    padding-bottom: 1px;
-    transition: color 0.15s, border-color 0.15s;
-  }
-
-  .btn-secondary:hover {
-    color: var(--color-accent);
-    border-color: var(--color-accent);
-  }
-
-  /* ── Right column ── */
-  .code-wrapper {
-    border: 1px solid oklch(0.24 0.05 270);
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow:
-      0 0 0 1px oklch(0.17 0.04 266),
-      0 16px 48px oklch(0.17 0.04 266 / 0.28),
-      0 2px 8px oklch(0 0 0 / 0.1);
-  }
-
-  .code-header {
-    background: oklch(0.13 0.03 270);
-    padding: 0 1rem;
-    height: 38px;
-    display: flex;
-    align-items: center;
-    border-bottom: 1px solid oklch(0.24 0.05 270);
-  }
-
-  .dots { display: flex; gap: 6px; align-items: center; flex: 1; }
-  .dots-spacer { flex: 1; }
-
-  .dot { width: 11px; height: 11px; border-radius: 50%; }
-  .dot.red    { background: oklch(0.63 0.22 25); }
-  .dot.yellow { background: oklch(0.84 0.17 84); }
-  .dot.green  { background: oklch(0.73 0.22 142); }
-
-  .filename {
-    font-family: var(--font-mono);
-    font-size: 0.72rem;
-    color: oklch(0.41 0 0);
-    letter-spacing: 0.01em;
-  }
-
-  .code-panels {
-    display: grid;
-    background: oklch(0.17 0.04 266);
-  }
-
-  .code-panel {
-    grid-column: 1;
-    grid-row: 1;
-    margin: 0;
-    padding: 1.25rem 1.5rem;
-    font-family: var(--font-mono);
-    font-size: 0.875rem;
-    line-height: 1.5;
-    white-space: normal;
-    overflow-x: auto;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.25s ease;
-  }
-
-  .code-panel.active {
-    opacity: 1;
-    pointer-events: auto;
-  }
-
-  code { font-family: inherit; }
-
-  .line {
-    display: block;
-    font-size: 0.875rem;
-    white-space: pre;
-  }
-
-  .line.empty { min-height: 1.5em; }
-
-  .kw   { color: oklch(0.73 0.18 294); }
-  .var  { color: oklch(0.78 0.07 278); }
-  .fn   { color: oklch(0.67 0.16 255); }
-  .str  { color: oklch(0.79 0.17 135); }
-  .prop { color: oklch(0.83 0.12 186); }
-  .op   { color: oklch(0.78 0.07 278); }
-  .p    { color: oklch(0.68 0.07 262); }
-  .cmt  { color: oklch(0.50 0.05 266); }
-
-  @media (max-width: 680px) {
-    .features-grid {
-      grid-template-columns: 1fr;
-      gap: 2.5rem;
-    }
-  }
-</style>
-
 <script>
-  const tabs  = document.querySelectorAll<HTMLElement>(".tab");
-  const panels = document.querySelectorAll<HTMLElement>(".code-panel");
-  const descs  = document.querySelectorAll<HTMLElement>(".tab-desc");
+  const packageTabs = document.querySelectorAll<HTMLElement>(".package-tab");
+  const packagePanels = document.querySelectorAll<HTMLElement>(".package-panel");
 
   const themes = [
     { accent: "oklch(0.50 0.26 292)", hover: "oklch(0.44 0.24 292)", bg: "oklch(0.985 0.005 292)" },
@@ -411,19 +393,53 @@ const features = [
     { accent: "oklch(0.55 0.14 228)", hover: "oklch(0.49 0.12 228)", bg: "oklch(0.985 0.005 228)" },
   ];
 
-  function activate(index: number) {
-    tabs.forEach((t, i)   => t.classList.toggle("active", i === index));
-    panels.forEach((p, i) => p.classList.toggle("active", i === index));
-    descs.forEach((d, i)  => d.classList.toggle("active", i === index));
-
-    const t = themes[index];
+  function applyTheme(index: number) {
+    const t = themes[index % themes.length];
     const root = document.documentElement;
     root.style.setProperty("--color-accent", t.accent);
     root.style.setProperty("--color-accent-hover", t.hover);
     root.style.setProperty("--color-bg", t.bg);
   }
 
-  tabs.forEach((tab, i) => tab.addEventListener("click", () => activate(i)));
+  function activateFeature(panel: HTMLElement, index: number) {
+    const tabs = panel.querySelectorAll<HTMLElement>(".tab");
+    const panels = panel.querySelectorAll<HTMLElement>(".code-panel");
+    const descs = panel.querySelectorAll<HTMLElement>(".tab-desc");
+    const filename = panel.querySelector<HTMLElement>(".filename");
 
-  activate(0);
+    tabs.forEach((t, i) => {
+      t.classList.toggle("active", i === index);
+      t.setAttribute("aria-selected", String(i === index));
+    });
+    panels.forEach((p, i) => p.classList.toggle("active", i === index));
+    descs.forEach((d, i) => d.classList.toggle("active", i === index));
+
+    if (filename) {
+      const active = panels[index];
+      filename.textContent = active?.dataset.filename ?? "index.ts";
+    }
+
+    applyTheme(index);
+  }
+
+  function activatePackage(index: number) {
+    packageTabs.forEach((t, i) => {
+      t.classList.toggle("active", i === index);
+      t.setAttribute("aria-selected", String(i === index));
+    });
+    packagePanels.forEach((p, i) => p.classList.toggle("active", i === index));
+
+    const active = packagePanels[index];
+    if (active) activateFeature(active, 0);
+  }
+
+  packageTabs.forEach((tab, i) => tab.addEventListener("click", () => activatePackage(i)));
+
+  packagePanels.forEach((panel) => {
+    panel.querySelectorAll<HTMLElement>(".tab").forEach((tab, i) => {
+      tab.addEventListener("click", () => activateFeature(panel, i));
+    });
+  });
+
+  activatePackage(0);
 </script>

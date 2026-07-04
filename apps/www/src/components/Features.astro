@@ -189,6 +189,21 @@ const packages: Pkg[] = [
 <span class="block whitespace-pre text-sm"><span class="tok-punct">&#125;</span></span>`,
       },
       {
+        keyword: "Steer.",
+        desc: "Redirect the agent mid-response — it adjusts course immediately, without waiting for the current turn to finish.",
+        code: `<span class="block whitespace-pre text-sm"><span class="tok-kw">const</span> <span class="tok-var">stream</span> <span class="tok-op">=</span> <span class="tok-fn">textOnly</span><span class="tok-punct">(</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-var">agent</span><span class="tok-punct">.</span><span class="tok-fn">prompt</span><span class="tok-punct">(</span><span class="tok-str">"Write a very long essay..."</span><span class="tok-punct">),</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-punct">);</span></span>
+<span class="block whitespace-pre text-sm min-h-[1.5em]"> </span>
+<span class="block whitespace-pre text-sm"><span class="tok-fn">setTimeout</span><span class="tok-punct">(()</span> <span class="tok-op">=&gt;</span> <span class="tok-punct">&#123;</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-var">agent</span><span class="tok-punct">.</span><span class="tok-fn">steer</span><span class="tok-punct">(</span><span class="tok-str">"Stop — give me 3 bullets instead."</span><span class="tok-punct">);</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-punct">&#125;,</span> <span class="tok-var">1500</span><span class="tok-punct">);</span></span>
+<span class="block whitespace-pre text-sm min-h-[1.5em]"> </span>
+<span class="block whitespace-pre text-sm"><span class="tok-kw">for</span> <span class="tok-kw">await</span> <span class="tok-punct">(</span><span class="tok-kw">const</span> <span class="tok-var">chunk</span> <span class="tok-kw">of</span> <span class="tok-var">stream</span><span class="tok-punct">)</span> <span class="tok-punct">&#123;</span></span>
+<span class="block whitespace-pre text-sm">  <span class="tok-var">process</span><span class="tok-punct">.</span><span class="tok-var">stdout</span><span class="tok-punct">.</span><span class="tok-fn">write</span><span class="tok-punct">(</span><span class="tok-var">chunk</span><span class="tok-punct">);</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-punct">&#125;</span></span>`,
+      },
+      {
         keyword: "Tool events.",
         desc: "Watch Pi's tool calls as they happen — not just the final text — for full visibility into what the agent is doing.",
         code: `<span class="block whitespace-pre text-sm"><span class="tok-kw">for</span> <span class="tok-kw">await</span> <span class="tok-punct">(</span><span class="tok-kw">const</span> <span class="tok-var">ev</span> <span class="tok-kw">of</span> <span class="tok-var">agent</span><span class="tok-punct">.</span><span class="tok-fn">prompt</span><span class="tok-punct">(</span></span>
@@ -201,15 +216,14 @@ const packages: Pkg[] = [
 <span class="block whitespace-pre text-sm"><span class="tok-punct">&#125;</span></span>`,
       },
       {
-        keyword: "Files.",
-        desc: "Read and write files directly inside the agent's sandbox, alongside its own edits — no extra tooling needed.",
-        code: `<span class="block whitespace-pre text-sm"><span class="tok-kw">await</span> <span class="tok-var">agent</span><span class="tok-punct">.</span><span class="tok-var">sandbox</span><span class="tok-punct">.</span><span class="tok-fn">writeFile</span><span class="tok-punct">(</span></span>
-<span class="block whitespace-pre text-sm">  <span class="tok-str">"/workspace/data.csv"</span><span class="tok-punct">,</span> <span class="tok-var">csv</span><span class="tok-punct">,</span></span>
-<span class="block whitespace-pre text-sm"><span class="tok-punct">);</span></span>
+        keyword: "Sessions.",
+        desc: "Branch from any earlier message in the conversation, or wipe the slate clean — the sandbox filesystem stays untouched either way.",
+        code: `<span class="block whitespace-pre text-sm"><span class="tok-kw">const</span> <span class="tok-var">points</span> <span class="tok-op">=</span> <span class="tok-kw">await</span> <span class="tok-var">agent</span><span class="tok-punct">.</span><span class="tok-fn">getForkMessages</span><span class="tok-punct">();</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-kw">const</span> <span class="tok-var">forked</span> <span class="tok-op">=</span> <span class="tok-kw">await</span> <span class="tok-var">agent</span><span class="tok-punct">.</span><span class="tok-fn">fork</span><span class="tok-punct">(</span><span class="tok-var">points</span><span class="tok-punct">[</span><span class="tok-var">0</span><span class="tok-punct">].</span><span class="tok-prop">entryId</span><span class="tok-punct">);</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-var">console</span><span class="tok-punct">.</span><span class="tok-fn">log</span><span class="tok-punct">(</span><span class="tok-var">forked</span><span class="tok-punct">.</span><span class="tok-prop">text</span><span class="tok-punct">.</span><span class="tok-fn">slice</span><span class="tok-punct">(</span><span class="tok-var">0</span><span class="tok-punct">,</span> <span class="tok-var">40</span><span class="tok-punct">));</span></span>
 <span class="block whitespace-pre text-sm min-h-[1.5em]"> </span>
-<span class="block whitespace-pre text-sm"><span class="tok-kw">const</span> <span class="tok-var">summary</span> <span class="tok-op">=</span> <span class="tok-kw">await</span> <span class="tok-var">agent</span><span class="tok-punct">.</span><span class="tok-var">sandbox</span><span class="tok-punct">.</span><span class="tok-fn">readFile</span><span class="tok-punct">(</span></span>
-<span class="block whitespace-pre text-sm">  <span class="tok-str">"/workspace/summary.txt"</span><span class="tok-punct">,</span></span>
-<span class="block whitespace-pre text-sm"><span class="tok-punct">);</span></span>`,
+<span class="block whitespace-pre text-sm"><span class="tok-cmt">// or wipe the slate clean</span></span>
+<span class="block whitespace-pre text-sm"><span class="tok-kw">await</span> <span class="tok-var">agent</span><span class="tok-punct">.</span><span class="tok-fn">newSession</span><span class="tok-punct">();</span></span>`,
       },
       {
         keyword: "Snapshot.",
@@ -293,11 +307,11 @@ const packages: Pkg[] = [
         class:list={["package-panel hidden [&.active]:block", { active: pi === 0 }]}
         data-package-panel={pi}
       >
-        <div class="grid grid-cols-[2fr_3fr] gap-20 items-center max-[680px]:grid-cols-1 max-[680px]:gap-10">
+        <div class="grid grid-cols-[2fr_3fr] gap-20 items-start max-[680px]:grid-cols-1 max-[680px]:gap-10">
 
           <!-- Left: tabs + description -->
           <div>
-            <div class="tabs flex flex-col border-l-2 border-[var(--color-border)] mb-8 transition-colors duration-300" role="tablist">
+            <div class="tabs flex flex-col min-h-[17rem] border-l-2 border-[var(--color-border)] mb-8 transition-colors duration-300" role="tablist">
               {pkg.examples.map((ex, i) => (
                 <button
                   class:list={[
@@ -313,7 +327,7 @@ const packages: Pkg[] = [
               ))}
             </div>
 
-            <div class="grid pl-4 mb-10">
+            <div class="grid min-h-[4.95rem] pl-4 mb-10">
               {pkg.examples.map((ex, i) => (
                 <p
                   class:list={[
@@ -357,7 +371,7 @@ const packages: Pkg[] = [
                 </span>
                 <div class="flex-1"></div>
               </div>
-              <div class="grid bg-[oklch(0.17_0.04_266)]">
+              <div class="grid min-h-[19rem] bg-[oklch(0.17_0.04_266)]">
                 {pkg.examples.map((ex, i) => (
                   <pre
                     class:list={[

@@ -2,7 +2,7 @@ import { existsSync } from "fs";
 
 /** Shape of `drej.config.json` in the project root, merged with built-in defaults. */
 export interface DrejAgentConfig {
-  /** OpenSandbox server URL. Default: `http://localhost:8080`. */
+  /** OpenSandbox server URL. Default: `http://127.0.0.1:8080`. */
   serverUrl: string;
   /** OpenSandbox API key. Pass an empty string for local dev with no auth. */
   apiKey: string;
@@ -31,7 +31,9 @@ export interface DrejAgentConfig {
 const CONFIG_FILE = "drej.config.json";
 
 const DEFAULT_CONFIG: DrejAgentConfig = {
-  serverUrl: "http://localhost:8080",
+  // 127.0.0.1, not "localhost" — some hosts resolve "localhost" to ::1 first,
+  // and OpenSandbox typically only listens on IPv4.
+  serverUrl: "http://127.0.0.1:8080",
   apiKey: "",
   adapterPath: "./.drej/ledger.db",
   useServerProxy: true,

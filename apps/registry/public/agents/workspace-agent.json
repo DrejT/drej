@@ -1,5 +1,5 @@
 {
-  "$schema": "https://registry.drej.dev/schema/agent-item.json",
+  "$schema": "https://registry.drej.dev/spec/agent.json",
   "name": "workspace-agent",
   "title": "Workspace Agent",
   "description": "Demonstrates setup steps: a small Node.js project is created before the snapshot.",

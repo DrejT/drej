@@ -1,5 +1,5 @@
 {
-  "$schema": "https://registry.drej.dev/schema/agent-item.json",
+  "$schema": "https://registry.drej.dev/spec/agent.json",
   "name": "hello-agent",
   "title": "Hello Agent",
   "description": "A minimal Pi agent on node:22. Demonstrates the @drej/agent API.",

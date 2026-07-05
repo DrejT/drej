@@ -7,7 +7,7 @@ import { join } from "node:path";
 // process.cwd() is the app root (apps/registry) regardless of where Astro
 // bundles this frontmatter's chunk during the build — a relative import.meta.url
 // path breaks once prerendering moves chunks under dist/.prerender/.
-const itemsDir = join(process.cwd(), "public", "items");
+const itemsDir = join(process.cwd(), "public", "agents");
 
 const items = readdirSync(itemsDir)
   .filter((f) => f.endsWith(".json"))
@@ -17,7 +17,7 @@ const items = readdirSync(itemsDir)
       name: spec.name,
       title: spec.title ?? spec.name,
       description: spec.description ?? "",
-      path: `/items/${f}`,
+      path: `/agents/${f}`,
       spec,
     };
   })
@@ -33,7 +33,7 @@ const items = readdirSync(itemsDir)
         Example <code>AgentSpec</code> files for <code>bunx drejx add</code>. Any URL works with <code
           >drejx add</code
         > — GitHub raw, a Gist, your own server — these are just a curated starting point. See the
-        <a class="underline underline-offset-2 hover:text-[var(--color-fg)]" href="/schema/agent-item.json"
+        <a class="underline underline-offset-2 hover:text-[var(--color-fg)]" href="/spec/agent.json"
           >JSON Schema</a
         >.
       </p>

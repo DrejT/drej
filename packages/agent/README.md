@@ -16,7 +16,7 @@ Create an agent spec (`agents/my-agent.json`):
 
 ```json
 {
-  "$schema": "https://registry.drej.dev/schema/agent-item.json",
+  "$schema": "https://registry.drej.dev/spec/agent.json",
   "name": "my-agent",
   "cli": "pi",
   "model": "gemini-flash-latest",

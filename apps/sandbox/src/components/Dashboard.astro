@@ -1,0 +1,40 @@
+---
+// Kept in sync by hand with server/config.ts's ALLOWED_AGENT_SPECS — small, fixed list.
+const ALLOWED_AGENT_SPECS = ["hello-agent", "python-data"] as const;
+---
+
+<section id="dashboard" class="mx-auto max-w-[var(--max-width)] px-6 pt-[96px] pb-16">
+  <p class="mb-8 max-w-[60ch] text-sm text-[var(--color-muted)]">
+    A live showcase of <code class="mono">drej</code> — every sandbox and agent here is a real
+    container running on this box. Hard capped at 3 sandboxes and 2 agents; no login, so be kind.
+  </p>
+
+  <div class="grid gap-10 md:grid-cols-2">
+    <div>
+      <div class="mb-3 flex items-center justify-between">
+        <h2 class="text-lg font-semibold">
+          Sandboxes <span id="sandbox-count" class="mono text-sm text-[var(--color-muted)]"></span>
+        </h2>
+        <button id="new-sandbox-btn" class="btn btn-primary">+ New sandbox</button>
+      </div>
+      <ul id="sandbox-list" class="flex flex-col gap-2"></ul>
+      <p id="sandbox-empty" class="text-sm text-[var(--color-muted)]" hidden>No sandboxes running.</p>
+    </div>
+
+    <div>
+      <div class="mb-3 flex items-center justify-between">
+        <h2 class="text-lg font-semibold">
+          Agents <span id="agent-count" class="mono text-sm text-[var(--color-muted)]"></span>
+        </h2>
+        <div class="flex items-center gap-2">
+          <select id="agent-spec-select" class="btn">
+            {ALLOWED_AGENT_SPECS.map((name) => <option value={name}>{name}</option>)}
+          </select>
+          <button id="new-agent-btn" class="btn btn-primary">+ New agent</button>
+        </div>
+      </div>
+      <ul id="agent-list" class="flex flex-col gap-2"></ul>
+      <p id="agent-empty" class="text-sm text-[var(--color-muted)]" hidden>No agents running.</p>
+    </div>
+  </div>
+</section>

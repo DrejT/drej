@@ -1,0 +1,15 @@
+{
+  "$schema": "https://registry.drej.dev/spec/agent.json",
+  "name": "hello-agent",
+  "title": "Hello Agent",
+  "description": "A minimal Pi agent on node:22. Demonstrates the @drej/agent API.",
+  "author": "drej",
+  "categories": ["agent", "starter"],
+  "cli": "pi",
+  "model": "gemini-flash-latest",
+  "packages": ["git", "python3"],
+  "env": {
+    "GEMINI_API_KEY": "${GEMINI_API_KEY}"
+  },
+  "resources": { "cpu": "500m", "memory": "1Gi" }
+}

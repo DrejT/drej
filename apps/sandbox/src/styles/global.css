@@ -1,0 +1,117 @@
+@import "tailwindcss";
+@import "@xterm/xterm/css/xterm.css";
+
+/*
+ * Tailwind emits its own rules inside `@layer theme, base, components, utilities`.
+ * Per the CSS cascade-layers spec, unlayered rules always beat layered ones
+ * regardless of specificity or source order — so anything here that should be
+ * overridable by a Tailwind utility class MUST live in `@layer base`, matching
+ * Tailwind's own Preflight, or utilities like `mx-auto`/`text-white`/`px-4`
+ * silently lose to whatever's declared below.
+ */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  :root {
+    --color-bg: oklch(0.985 0 0);
+    --color-fg: oklch(0.16 0.005 286);
+    --color-muted: oklch(0.52 0.013 286);
+    --color-border: oklch(0.92 0.005 286);
+    --color-accent: oklch(0.5 0.26 292);
+    --color-accent-hover: oklch(0.44 0.24 292);
+    --color-danger: oklch(0.55 0.22 25);
+    --color-ok: oklch(0.6 0.17 145);
+    --font-sans: "Geist Variable", "Inter", system-ui, sans-serif;
+    --font-mono: "Geist Mono Variable", "Fira Code", ui-monospace, monospace;
+    --max-width: 1080px;
+    --radius-btn: 6px;
+  }
+
+  html {
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    min-height: 100vh;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  button {
+    font: inherit;
+    cursor: pointer;
+  }
+}
+
+@utility btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: var(--radius-btn);
+  border: 1px solid var(--color-border);
+  padding: 0.4rem 0.8rem;
+  font-size: 0.875rem;
+  background: white;
+  transition: border-color 0.15s;
+}
+@utility btn-primary {
+  background: var(--color-accent);
+  color: white;
+  border-color: var(--color-accent);
+}
+@utility btn-danger {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+/* Pseudo-class states can't be expressed inside `@utility` names — plain rules instead. */
+@layer components {
+  .btn:hover:not(:disabled) {
+    border-color: var(--color-accent);
+  }
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--color-accent-hover);
+    border-color: var(--color-accent-hover);
+  }
+}
+
+@utility card {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0.9rem 1rem;
+  background: white;
+}
+
+@utility status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-ok);
+}
+
+@utility mono {
+  font-family: var(--font-mono);
+}
+
+.xterm {
+  padding: 0.5rem;
+}

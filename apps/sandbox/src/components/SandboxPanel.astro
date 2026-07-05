@@ -1,0 +1,71 @@
+---
+---
+
+<section id="sandbox-panel" class="mx-auto max-w-[var(--max-width)] px-6 pt-[96px] pb-16" hidden>
+  <button id="sandbox-panel-back" class="btn mb-4">&larr; Back</button>
+  <h2 id="sandbox-panel-title" class="mono mb-4 text-lg font-semibold"></h2>
+
+  <div class="mb-4 flex gap-1 border-b border-[var(--color-border)]">
+    <button class="tab-btn" data-tab="terminal">Terminal</button>
+    <button class="tab-btn" data-tab="files">Files</button>
+    <button class="tab-btn" data-tab="preview">Preview</button>
+    <button class="tab-btn" data-tab="metrics">Metrics</button>
+    <button class="tab-btn" data-tab="checkpoints">Checkpoints</button>
+  </div>
+
+  <div class="tab-content" data-tab-content="terminal">
+    <div id="terminal-container" class="h-[420px] overflow-hidden rounded-lg bg-[#111]"></div>
+  </div>
+
+  <div class="tab-content" data-tab-content="files" hidden>
+    <div class="grid gap-4 md:grid-cols-[220px_1fr]">
+      <div>
+        <div class="mb-2 flex gap-2">
+          <input id="file-path-input" class="btn mono flex-1" value="/" />
+          <button id="file-list-btn" class="btn">List</button>
+        </div>
+        <ul id="file-tree" class="mono flex flex-col gap-1 text-sm"></ul>
+      </div>
+      <div>
+        <textarea
+          id="file-editor"
+          class="mono h-[360px] w-full resize-none rounded-lg border border-[var(--color-border)] p-3 text-sm"
+          placeholder="Select a file to view/edit its contents…"></textarea>
+        <button id="file-save-btn" class="btn btn-primary mt-2">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-content" data-tab-content="preview" hidden>
+    <div class="mb-2 flex gap-2">
+      <input id="preview-port-input" class="btn mono w-32" placeholder="port" />
+      <button id="preview-load-btn" class="btn">Load</button>
+    </div>
+    <iframe id="preview-frame" class="h-[420px] w-full rounded-lg border border-[var(--color-border)]"
+    ></iframe>
+  </div>
+
+  <div class="tab-content" data-tab-content="metrics" hidden>
+    <div id="metrics-readout" class="mono mb-3 text-sm text-[var(--color-muted)]"></div>
+    <canvas id="metrics-chart" class="h-[240px] w-full rounded-lg border border-[var(--color-border)]"
+    ></canvas>
+  </div>
+
+  <div class="tab-content" data-tab-content="checkpoints" hidden>
+    <button id="checkpoint-create-btn" class="btn btn-primary mb-3">Create checkpoint</button>
+    <ul id="checkpoint-list" class="mono flex flex-col gap-1 text-sm"></ul>
+  </div>
+</section>
+
+<style>
+  .tab-btn {
+    padding: 0.5rem 0.9rem;
+    font-size: 0.875rem;
+    color: var(--color-muted);
+    border-bottom: 2px solid transparent;
+  }
+  .tab-btn.active {
+    color: var(--color-fg);
+    border-bottom-color: var(--color-accent);
+  }
+</style>

@@ -14,8 +14,16 @@ export interface FileEntry {
   size: number;
 }
 
+/**
+ * Base URL for the API/WS backend. Empty string means same-origin (local dev,
+ * where the Bun backend serves both the API and the built frontend). Set to
+ * e.g. "https://sandbox-api.drej.dev" for the Cloudflare Pages deployment,
+ * where the frontend and backend are on different origins.
+ */
+const API_BASE = import.meta.env.PUBLIC_API_BASE_URL ?? "";
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, init);
+  const res = await fetch(`${API_BASE}${path}`, init);
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error((body as { error?: string }).error ?? `${res.status} ${res.statusText}`);
@@ -71,6 +79,11 @@ export const api = {
 };
 
 export function wsUrl(path: string): string {
+  if (API_BASE) {
+    const base = new URL(API_BASE);
+    const protocol = base.protocol === "https:" ? "wss:" : "ws:";
+    return `${protocol}//${base.host}${path}`;
+  }
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
   return `${protocol}//${location.host}${path}`;
 }

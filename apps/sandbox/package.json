@@ -6,7 +6,8 @@
     "build": "astro build",
     "preview": "astro preview",
     "start": "bun server/index.ts",
-    "typecheck": "astro check && tsc --noEmit --project tsconfig.server.json"
+    "typecheck": "astro check && tsc --noEmit --project tsconfig.server.json",
+    "deploy": "astro build && wrangler pages deploy"
   },
   "dependencies": {
     "@drej/agent": "workspace:*",

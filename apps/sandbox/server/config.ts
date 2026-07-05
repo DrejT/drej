@@ -22,4 +22,10 @@ export const ALLOWED_AGENT_SPECS = ["hello-agent", "python-data"] as const;
 export type AllowedAgentSpec = (typeof ALLOWED_AGENT_SPECS)[number];
 
 export const PORT = Number(process.env.PORT ?? 3000);
-export const DIST_DIR = "./dist";
+
+/**
+ * The frontend is deployed separately to Cloudflare Pages (a different origin
+ * from this API), so CORS is required. Override for local dev against
+ * `astro dev` (typically http://localhost:4321).
+ */
+export const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN ?? "https://sandbox.drej.dev";

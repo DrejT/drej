@@ -1,36 +1,31 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# docs
 
-## Getting Started
+Documentation site for drej, deployed to [docs.drej.dev](https://docs.drej.dev).
 
-First, run the development server:
+Next.js + [Fumadocs](https://fumadocs.dev), content authored as MDX.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Structure
+
+```
+content/docs/
+  core/       — Sandbox primitive, exec, ledger
+  workflow/   — @drej/workflow lazy pipeline builder
+  agent/      — @drej/agent (Pi coding agents in sandboxes)
+  drejx/      — drejx CLI, sandbox usage, registry
+src/
+  app/            — Next.js App Router routes, layout, sitemap
+  components/     — package-switcher, search-dialog
+  lib/source.ts   — Fumadocs content source config
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Each top-level folder under `content/docs/` has its own `meta.json` controlling sidebar order; page routing follows the file path (e.g. `content/docs/drejx/registry/schema.mdx` → `/docs/drejx/registry/schema`).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Commands
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+bun run dev      # next dev
+bun run build    # next build -> static export in out/
+bun run start    # next start (serve a build)
+bun run lint     # eslint
+bun run deploy   # next build + wrangler pages deploy (project: drej-docs)
+```

@@ -1,0 +1,47 @@
+---
+---
+
+<section id="agent-panel" class="mx-auto max-w-[var(--max-width)] px-6 pt-[96px] pb-16" hidden>
+  <button id="agent-panel-back" class="btn mb-4">&larr; Back</button>
+  <h2 id="agent-panel-title" class="mono mb-4 text-lg font-semibold"></h2>
+
+  <div class="mb-4 flex gap-1 border-b border-[var(--color-border)]">
+    <button class="tab-btn" data-tab="chat">Chat</button>
+    <button class="tab-btn" data-tab="shell">Shell</button>
+  </div>
+
+  <div class="tab-content" data-tab-content="chat">
+    <div
+      id="chat-messages"
+      class="mb-3 flex h-[380px] flex-col gap-3 overflow-y-auto rounded-lg border border-[var(--color-border)] p-3 text-sm"
+    ></div>
+    <form id="chat-form" class="flex gap-2">
+      <input
+        id="chat-input"
+        class="btn flex-1"
+        placeholder="Ask the agent something…"
+        autocomplete="off"
+      />
+      <button type="submit" class="btn btn-primary">Send</button>
+      <button type="button" id="chat-steer-btn" class="btn" disabled>Steer</button>
+      <button type="button" id="chat-abort-btn" class="btn btn-danger" disabled>Abort</button>
+    </form>
+  </div>
+
+  <div class="tab-content" data-tab-content="shell" hidden>
+    <div id="agent-terminal-container" class="h-[420px] overflow-hidden rounded-lg bg-[#111]"></div>
+  </div>
+</section>
+
+<style>
+  .tab-btn {
+    padding: 0.5rem 0.9rem;
+    font-size: 0.875rem;
+    color: var(--color-muted);
+    border-bottom: 2px solid transparent;
+  }
+  .tab-btn.active {
+    color: var(--color-fg);
+    border-bottom-color: var(--color-accent);
+  }
+</style>

@@ -16,7 +16,8 @@
     "tests/integration",
     "apps/docs",
     "apps/www",
-    "apps/registry"
+    "apps/registry",
+    "apps/sandbox"
   ],
   "scripts": {
     "setup": "bash scripts/setup.sh",

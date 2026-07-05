@@ -10,3 +10,4 @@ plans/
 .drej
 apps/www/.astro/
 apps/registry/.astro/
+apps/sandbox/.astro/

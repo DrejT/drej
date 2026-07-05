@@ -1,0 +1,10 @@
+{
+  "serverUrl": "http://localhost:8080",
+  "apiKey": "",
+  "adapterPath": "./data/ledger.db",
+  "useServerProxy": true,
+  "agentsDir": "./agents",
+  "defaults": {
+    "resources": { "cpu": "500m", "memory": "1Gi" }
+  }
+}

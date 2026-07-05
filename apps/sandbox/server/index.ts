@@ -10,6 +10,9 @@ import type { WSData } from "./ws/types";
 
 const server = Bun.serve({
   port: config.PORT,
+  // Bun's default is 10s. Sandbox/agent creation (image pulls, package installs)
+  // routinely takes longer, so use Bun's max to avoid killing the connection mid-request.
+  idleTimeout: 255,
   routes: {
     "/health": new Response("ok"),
     "/api/sandboxes": cors({

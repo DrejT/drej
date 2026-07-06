@@ -6,6 +6,7 @@ import type {
   CompactResult,
   PiMessage,
   PiModel,
+  PiSessionState,
   PiSlashCommand,
   SessionStats,
   ThinkingLevel,
@@ -362,6 +363,7 @@ http.createServer(function(req, res) {
     if (req.url === "/logs")   { res.writeHead(200, { "Content-Type": "text/plain" }); res.end(logBuf.join("\\n")); return; }
     if (req.url === "/messages") { rpcWithAck({ id: "gm" + Date.now(), type: "get_messages" }, res); return; }
     if (req.url === "/available-models") { rpcWithAck({ id: "gam" + Date.now(), type: "get_available_models" }, res); return; }
+    if (req.url === "/state") { rpcWithAck({ id: "gs" + Date.now(), type: "get_state" }, res); return; }
     res.writeHead(404); res.end();
     return;
   }
@@ -744,6 +746,10 @@ export class PiAdapter {
   async getAvailableModels(): Promise<PiModel[]> {
     const data = await rpcGet<{ models: PiModel[] }>(this.bridgeUrl, "/available-models");
     return data.models;
+  }
+
+  async getState(): Promise<PiSessionState> {
+    return rpcGet<PiSessionState>(this.bridgeUrl, "/state");
   }
 
   // --- misc ---

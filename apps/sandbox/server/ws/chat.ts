@@ -1,5 +1,5 @@
+import type { Agent, AgentStream, ThinkingLevel } from "@drej/agent";
 import type { Server, ServerWebSocket } from "bun";
-import type { AgentStream } from "@drej/agent";
 import * as registry from "../registry";
 import type { WSData } from "./types";
 
@@ -7,7 +7,85 @@ type ChatCommand =
   | { type: "prompt"; text: string }
   | { type: "steer"; text: string }
   | { type: "followUp"; text: string }
-  | { type: "abort" };
+  | { type: "abort" }
+  | { type: "newSession" }
+  | { type: "setSessionName"; name: string }
+  | { type: "clone" }
+  | { type: "fork"; entryId: string }
+  | { type: "switchSession"; path: string }
+  | { type: "exportHtml" }
+  | { type: "setModel"; provider: string; modelId: string }
+  | { type: "cycleModel" }
+  | { type: "setThinkingLevel"; level: ThinkingLevel }
+  | { type: "cycleThinkingLevel" }
+  | { type: "setAutoCompaction"; enabled: boolean }
+  | { type: "compact"; customInstructions?: string }
+  | { type: "setAutoRetry"; enabled: boolean }
+  | { type: "abortRetry" };
+
+type DataCommand = Exclude<ChatCommand, { type: "prompt" | "steer" | "followUp" | "abort" }>;
+
+/**
+ * Dispatch a one-shot agent command that isn't part of the prompt stream. Commands whose
+ * `Agent` method returns data are echoed back as `command_result` so the UI can update without
+ * a separate fetch; void ones just succeed silently.
+ */
+async function runCommand(
+  ws: ServerWebSocket<WSData>,
+  agent: Agent,
+  cmd: DataCommand,
+): Promise<void> {
+  try {
+    let result: unknown;
+    switch (cmd.type) {
+      case "newSession":
+        await agent.newSession();
+        break;
+      case "setSessionName":
+        await agent.setSessionName(cmd.name);
+        break;
+      case "clone":
+        result = await agent.clone();
+        break;
+      case "fork":
+        result = await agent.fork(cmd.entryId);
+        break;
+      case "switchSession":
+        result = await agent.switchSession(cmd.path);
+        break;
+      case "exportHtml":
+        result = await agent.exportHtml();
+        break;
+      case "setModel":
+        result = await agent.setModel(cmd.provider, cmd.modelId);
+        break;
+      case "cycleModel":
+        result = await agent.cycleModel();
+        break;
+      case "setThinkingLevel":
+        await agent.setThinkingLevel(cmd.level);
+        break;
+      case "cycleThinkingLevel":
+        result = await agent.cycleThinkingLevel();
+        break;
+      case "setAutoCompaction":
+        await agent.setAutoCompaction(cmd.enabled);
+        break;
+      case "compact":
+        result = await agent.compact(cmd.customInstructions);
+        break;
+      case "setAutoRetry":
+        await agent.setAutoRetry(cmd.enabled);
+        break;
+      case "abortRetry":
+        await agent.abortRetry();
+        break;
+    }
+    ws.send(JSON.stringify({ type: "command_result", command: cmd.type, result: result ?? null }));
+  } catch (err) {
+    ws.send(JSON.stringify({ type: "bridge_error", message: String(err) }));
+  }
+}
 
 /** Route handler for `/ws/agents/:id/chat` — call from the routes table. */
 export function upgradeChat(
@@ -67,6 +145,8 @@ export function onMessage(
     void agent.followUp(cmd.text);
   } else if (cmd.type === "abort") {
     void agent.abort();
+  } else {
+    void runCommand(ws, agent, cmd);
   }
 }
 

@@ -49,3 +49,62 @@ export async function getMessages(id: string): Promise<Response> {
     return errorResponse(err);
   }
 }
+
+export async function getState(id: string): Promise<Response> {
+  try {
+    const agent = registry.agents.get(id);
+    if (!agent) throw new NotFoundError(`Unknown agent ${id}`);
+    return Response.json(await agent.getState());
+  } catch (err) {
+    return errorResponse(err);
+  }
+}
+
+export async function getStats(id: string): Promise<Response> {
+  try {
+    const agent = registry.agents.get(id);
+    if (!agent) throw new NotFoundError(`Unknown agent ${id}`);
+    return Response.json(await agent.getSessionStats());
+  } catch (err) {
+    return errorResponse(err);
+  }
+}
+
+export async function getModels(id: string): Promise<Response> {
+  try {
+    const agent = registry.agents.get(id);
+    if (!agent) throw new NotFoundError(`Unknown agent ${id}`);
+    const models = await agent.getAvailableModels();
+    return Response.json({ models });
+  } catch (err) {
+    return errorResponse(err);
+  }
+}
+
+export async function getForkPoints(id: string): Promise<Response> {
+  try {
+    const agent = registry.agents.get(id);
+    if (!agent) throw new NotFoundError(`Unknown agent ${id}`);
+    const forkPoints = await agent.getForkMessages();
+    return Response.json({ forkPoints });
+  } catch (err) {
+    return errorResponse(err);
+  }
+}
+
+/** Download a session export previously written by `exportHtml()` (path lives in the sandbox). */
+export async function getExport(id: string, path: string): Promise<Response> {
+  try {
+    const agent = registry.agents.get(id);
+    if (!agent) throw new NotFoundError(`Unknown agent ${id}`);
+    const html = await agent.sandbox.readFile(path);
+    return new Response(html, {
+      headers: {
+        "Content-Type": "text/html",
+        "Content-Disposition": `attachment; filename="${path.split("/").pop()}"`,
+      },
+    });
+  } catch (err) {
+    return errorResponse(err);
+  }
+}

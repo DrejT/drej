@@ -24,4 +24,4 @@ bun start
 
 ## Notes
 
-With `useServerProxy: true` (the default), `sb.proxy()` returns a URL that routes through the OpenSandbox server (`http://localhost:8080/sandboxes/{id}/proxy/3000`). This works regardless of Docker networking because the server relays the request to the container on your behalf.
+With `useServerProxy: true` (the default), `sb.proxy()` returns a URL that routes through the OpenSandbox server (`http://127.0.0.1:8080/sandboxes/{id}/proxy/3000`). This works regardless of Docker networking because the server relays the request to the container on your behalf.

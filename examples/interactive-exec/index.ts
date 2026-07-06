@@ -27,7 +27,7 @@ function assertEqual(actual: string, expected: string, label: string) {
 }
 
 const client = new Drej({
-  baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://localhost:8080",
+  baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://127.0.0.1:8080",
   apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",
   adapter: new SQLiteAdapter("./ledger.db"),
   useServerProxy: process.env.USE_SERVER_PROXY !== "false",

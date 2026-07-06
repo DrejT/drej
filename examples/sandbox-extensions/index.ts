@@ -15,7 +15,7 @@ import { Agent } from "@drej/agent";
 
 const adapter = new SQLiteAdapter("./.drej/test-extensions.db");
 const client = new Drej({
-  baseUrl: "http://localhost:8080",
+  baseUrl: "http://127.0.0.1:8080",
   apiKey: "",
   adapter,
 });

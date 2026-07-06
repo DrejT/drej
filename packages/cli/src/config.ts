@@ -26,7 +26,7 @@ export async function readConfig(): Promise<DrejxConfig> {
   if (!(await file.exists())) throw new Error("No drej.config.json found — run 'drejx init' first");
   const data = (await file.json()) as Partial<DrejxConfig>;
   return {
-    serverUrl: data.serverUrl ?? "http://localhost:8080",
+    serverUrl: data.serverUrl ?? "http://127.0.0.1:8080",
     useServerProxy: data.useServerProxy ?? true,
     apiKey: data.apiKey ?? "",
     adapterPath: data.adapterPath ?? "./.drej/ledger.db",
@@ -57,7 +57,7 @@ export function serverConfigContent(): string {
   return `[server]
 host = "0.0.0.0"
 port = 8080
-eip = "http://localhost:8080"
+eip = "http://127.0.0.1:8080"
 
 [runtime]
 type = "docker"

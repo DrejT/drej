@@ -8,8 +8,20 @@ import * as chat from "./ws/chat";
 import { cors } from "./cors";
 import type { WSData } from "./ws/types";
 
+// A single bad/racy session (e.g. a WS exec resolving against a sandbox deleted
+// mid-connection) must never take down the whole process for every other user.
+process.on("uncaughtException", (err) => {
+  console.error("[sandbox] uncaught exception", err);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("[sandbox] unhandled rejection", reason);
+});
+
 const server = Bun.serve({
   port: config.PORT,
+  // Bun's default is 10s. Sandbox/agent creation (image pulls, package installs)
+  // routinely takes longer, so use Bun's max to avoid killing the connection mid-request.
+  idleTimeout: 255,
   routes: {
     "/health": new Response("ok"),
     "/api/sandboxes": cors({

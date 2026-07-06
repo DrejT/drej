@@ -16,7 +16,9 @@ import {
 } from "../config.js";
 
 const CONTAINER_NAME = "drejx-opensandbox";
-const SERVER_URL = "http://localhost:8080";
+// 127.0.0.1, not "localhost" — some hosts resolve "localhost" to ::1 first,
+// and OpenSandbox only listens on IPv4.
+const SERVER_URL = "http://127.0.0.1:8080";
 
 export async function init(): Promise<void> {
   console.log("Checking Docker...");

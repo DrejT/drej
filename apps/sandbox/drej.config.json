@@ -1,5 +1,5 @@
 {
-  "serverUrl": "http://localhost:8080",
+  "serverUrl": "http://127.0.0.1:8080",
   "apiKey": "",
   "adapterPath": "./data/ledger.db",
   "useServerProxy": true,

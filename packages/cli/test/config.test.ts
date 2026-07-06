@@ -14,8 +14,8 @@ describe("serverConfigContent", () => {
     expect(serverConfigContent()).toContain("[docker]");
   });
 
-  it('contains eip = "http://localhost:8080"', () => {
-    expect(serverConfigContent()).toContain(`eip = "http://localhost:8080"`);
+  it('contains eip = "http://127.0.0.1:8080"', () => {
+    expect(serverConfigContent()).toContain(`eip = "http://127.0.0.1:8080"`);
   });
 
   it('contains type = "docker"', () => {

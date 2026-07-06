@@ -4,7 +4,9 @@
  * ("Hard limits") for why.
  */
 
-export const OPENSANDBOX_URL = process.env.OPENSANDBOX_URL ?? "http://localhost:8080";
+// 127.0.0.1, not "localhost" — some hosts resolve "localhost" to ::1 first, and
+// OpenSandbox (and its proxied execd endpoints, via eip) only listen on IPv4.
+export const OPENSANDBOX_URL = process.env.OPENSANDBOX_URL ?? "http://127.0.0.1:8080";
 export const OPENSANDBOX_API_KEY = process.env.OPENSANDBOX_API_KEY ?? "";
 export const USE_SERVER_PROXY = true;
 export const LEDGER_PATH = process.env.LEDGER_PATH ?? "./data/ledger.db";

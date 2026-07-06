@@ -86,6 +86,26 @@ const server = Bun.serve({
       GET: (req: Bun.BunRequest<"/api/agents/:id/messages">) =>
         agentRoutes.getMessages(req.params.id),
     }),
+    "/api/agents/:id/state": cors({
+      GET: (req: Bun.BunRequest<"/api/agents/:id/state">) => agentRoutes.getState(req.params.id),
+    }),
+    "/api/agents/:id/stats": cors({
+      GET: (req: Bun.BunRequest<"/api/agents/:id/stats">) => agentRoutes.getStats(req.params.id),
+    }),
+    "/api/agents/:id/models": cors({
+      GET: (req: Bun.BunRequest<"/api/agents/:id/models">) => agentRoutes.getModels(req.params.id),
+    }),
+    "/api/agents/:id/fork-points": cors({
+      GET: (req: Bun.BunRequest<"/api/agents/:id/fork-points">) =>
+        agentRoutes.getForkPoints(req.params.id),
+    }),
+    "/api/agents/:id/export": cors({
+      GET: (req: Bun.BunRequest<"/api/agents/:id/export">) => {
+        const path = new URL(req.url).searchParams.get("path");
+        if (!path) return Response.json({ error: "missing ?path=" }, { status: 400 });
+        return agentRoutes.getExport(req.params.id, path);
+      },
+    }),
     "/ws/sandboxes/:id/terminal": (req, srv) => terminal.upgradeTerminal(req, srv, req.params.id),
     "/ws/sandboxes/:id/metrics": (req, srv) => metrics.upgradeMetrics(req, srv, req.params.id),
     "/ws/agents/:id/chat": (req, srv) => chat.upgradeChat(req, srv, req.params.id),

@@ -160,3 +160,19 @@ export interface PiSlashCommand {
   source: "extension" | "prompt" | "skill";
   sourceInfo: unknown;
 }
+
+/** Pi's current session state, as returned by `agent.getState()`. */
+export interface PiSessionState {
+  model?: PiModel;
+  thinkingLevel: ThinkingLevel;
+  isStreaming: boolean;
+  isCompacting: boolean;
+  steeringMode: "all" | "one-at-a-time";
+  followUpMode: "all" | "one-at-a-time";
+  sessionFile?: string;
+  sessionId: string;
+  sessionName?: string;
+  autoCompactionEnabled: boolean;
+  messageCount: number;
+  pendingMessageCount: number;
+}

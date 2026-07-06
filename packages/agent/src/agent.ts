@@ -14,6 +14,7 @@ import type {
   CompactResult,
   PiMessage,
   PiModel,
+  PiSessionState,
   PiSlashCommand,
   SessionStats,
   ThinkingLevel,
@@ -441,6 +442,15 @@ export class Agent {
   /** List all models available to Pi under the current provider configuration. */
   async getAvailableModels(): Promise<PiModel[]> {
     return this._adapter.getAvailableModels();
+  }
+
+  /**
+   * Retrieve Pi's current session state: active model, thinking level, streaming/compaction
+   * status, queue modes, and session identity. The only piece of Pi's RPC surface with no
+   * other way to observe the *current* model or thinking level (as opposed to the full list).
+   */
+  async getState(): Promise<PiSessionState> {
+    return this._adapter.getState();
   }
 
   // --- env & lifecycle ---

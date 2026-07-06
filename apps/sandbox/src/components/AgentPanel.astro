@@ -12,6 +12,90 @@
 
   <div class="tab-content" data-tab-content="chat">
     <div
+      class="mono mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-muted)]"
+    >
+      <div class="flex flex-wrap items-center gap-3">
+        <details id="model-popover" class="relative">
+          <summary class="list-none cursor-pointer hover:text-[var(--color-fg)]">
+            <span id="stat-model">model —</span>
+          </summary>
+          <div
+            class="absolute z-20 mt-2 max-h-64 w-56 overflow-auto rounded-lg border border-[var(--color-border)] bg-white p-1 text-[var(--color-fg)] shadow-md"
+          >
+            <div id="model-list" class="flex flex-col"></div>
+          </div>
+        </details>
+
+        <details id="thinking-popover" class="relative">
+          <summary class="list-none cursor-pointer hover:text-[var(--color-fg)]">
+            <span id="stat-thinking">thinking —</span>
+          </summary>
+          <div
+            class="absolute z-20 mt-2 w-32 rounded-lg border border-[var(--color-border)] bg-white p-1 text-[var(--color-fg)] shadow-md"
+          >
+            <div id="thinking-list" class="flex flex-col"></div>
+          </div>
+        </details>
+
+        <details id="context-popover" class="relative">
+          <summary class="list-none cursor-pointer hover:text-[var(--color-fg)]">
+            <span id="stat-context">ctx —</span> · <span id="stat-cost">$—</span>
+          </summary>
+          <div
+            class="absolute z-20 mt-2 w-56 rounded-lg border border-[var(--color-border)] bg-white p-2 text-[var(--color-fg)] shadow-md"
+          >
+            <label class="mb-2 flex items-center gap-2">
+              <input type="checkbox" id="auto-compaction-toggle" />
+              Auto-compaction
+            </label>
+            <button type="button" id="compact-now-btn" class="btn w-full">Compact now</button>
+          </div>
+        </details>
+      </div>
+
+      <details id="session-menu" class="relative">
+        <summary class="btn list-none cursor-pointer">Session ▾</summary>
+        <div
+          class="absolute right-0 z-20 mt-2 w-64 rounded-lg border border-[var(--color-border)] bg-white p-2 text-[var(--color-fg)] shadow-md"
+        >
+          <div class="flex flex-col gap-1">
+            <button type="button" id="session-new-btn" class="btn">New session</button>
+            <button type="button" id="session-clone-btn" class="btn">Clone</button>
+            <button type="button" id="session-export-btn" class="btn">Export HTML</button>
+          </div>
+          <form id="session-rename-form" class="mt-2 flex gap-1">
+            <input
+              id="session-rename-input"
+              class="btn flex-1"
+              placeholder="Session name…"
+              autocomplete="off"
+            />
+            <button type="submit" class="btn">Set</button>
+          </form>
+          <form id="session-switch-form" class="mt-1 flex gap-1">
+            <input
+              id="session-switch-input"
+              class="btn flex-1"
+              placeholder="Switch to path…"
+              autocomplete="off"
+            />
+            <button type="submit" class="btn">Go</button>
+          </form>
+          <details id="fork-submenu" class="mt-2">
+            <summary class="list-none cursor-pointer text-[var(--color-muted)] hover:text-[var(--color-fg)]">
+              Fork from…
+            </summary>
+            <div id="fork-list" class="mt-1 flex max-h-40 flex-col gap-1 overflow-auto"></div>
+          </details>
+          <label class="mt-2 flex items-center gap-2 border-t border-[var(--color-border)] pt-2">
+            <input type="checkbox" id="auto-retry-toggle" checked />
+            Auto-retry
+          </label>
+        </div>
+      </details>
+    </div>
+
+    <div
       id="chat-messages"
       class="mb-3 flex h-[380px] flex-col gap-3 overflow-y-auto rounded-lg border border-[var(--color-border)] p-3 text-sm"
     ></div>
@@ -25,7 +109,10 @@
       <button type="submit" class="btn btn-primary">Send</button>
       <span class="relative">
         <button type="button" id="chat-steer-btn" class="btn" disabled>Steer</button>
-        <span id="chat-queue-badge" class="queue-badge mono"></span>
+        <span
+          id="chat-queue-badge"
+          class="mono absolute -top-2.5 -right-2 rounded-full border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 leading-tight text-[0.65rem] text-[var(--color-muted)] empty:hidden"
+        ></span>
       </span>
       <button type="button" id="chat-abort-btn" class="btn btn-danger" disabled>Abort</button>
     </form>
@@ -46,110 +133,5 @@
   .tab-btn.active {
     color: var(--color-fg);
     border-bottom-color: var(--color-accent);
-  }
-
-  .queue-badge {
-    position: absolute;
-    top: -0.6rem;
-    right: -0.5rem;
-    font-size: 0.65rem;
-    color: var(--color-muted);
-    background: var(--color-bg);
-    border: 1px solid var(--color-border);
-    border-radius: 999px;
-    padding: 0.05rem 0.4rem;
-    line-height: 1.3;
-  }
-  .queue-badge:empty {
-    display: none;
-  }
-
-  .system-note {
-    padding-left: 0.25rem;
-  }
-
-  .tool-call summary {
-    list-style: none;
-  }
-  .tool-call summary::-webkit-details-marker {
-    display: none;
-  }
-  .tool-call pre {
-    max-height: 260px;
-    overflow: auto;
-  }
-
-  .chat-markdown :global(p) {
-    margin-bottom: 0.6rem;
-  }
-  .chat-markdown :global(p:last-child) {
-    margin-bottom: 0;
-  }
-  .chat-markdown :global(ul),
-  .chat-markdown :global(ol) {
-    margin: 0.4rem 0 0.6rem 1.25rem;
-  }
-  .chat-markdown :global(li) {
-    margin-bottom: 0.2rem;
-  }
-  .chat-markdown :global(a) {
-    color: var(--color-accent);
-    text-decoration: underline;
-  }
-  .chat-markdown :global(code) {
-    font-family: var(--font-mono);
-    font-size: 0.85em;
-    background: var(--color-bg);
-    border: 1px solid var(--color-border);
-    border-radius: 4px;
-    padding: 0.1rem 0.3rem;
-  }
-  .chat-markdown :global(pre) {
-    position: relative;
-    font-family: var(--font-mono);
-    font-size: 0.8rem;
-    background: var(--color-bg);
-    border: 1px solid var(--color-border);
-    border-radius: 6px;
-    padding: 0.6rem 0.7rem;
-    margin: 0.5rem 0;
-    overflow-x: auto;
-  }
-  .chat-markdown :global(pre code) {
-    background: none;
-    border: none;
-    padding: 0;
-  }
-  .chat-markdown :global(table) {
-    border-collapse: collapse;
-    margin: 0.5rem 0;
-    font-size: 0.85em;
-  }
-  .chat-markdown :global(th),
-  .chat-markdown :global(td) {
-    border: 1px solid var(--color-border);
-    padding: 0.3rem 0.5rem;
-  }
-  .chat-markdown :global(blockquote) {
-    border-left: 2px solid var(--color-border);
-    padding-left: 0.6rem;
-    color: var(--color-muted);
-    margin: 0.5rem 0;
-  }
-
-  .copy-btn {
-    position: absolute;
-    top: 0.3rem;
-    right: 0.4rem;
-    font-size: 0.65rem;
-    color: var(--color-muted);
-    background: var(--color-bg);
-    border: 1px solid var(--color-border);
-    border-radius: 4px;
-    padding: 0.1rem 0.4rem;
-  }
-  .copy-btn:hover {
-    border-color: var(--color-accent);
-    color: var(--color-fg);
   }
 </style>

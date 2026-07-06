@@ -11,6 +11,7 @@ export type {
   CompactResult,
   SessionStats,
   PiSlashCommand,
+  PiSessionState,
 } from "./types";
 export { textOnly } from "./types";
 export type { AgentSnapshotRecord } from "./snapshots";

@@ -14,6 +14,14 @@ export interface FileEntry {
   size: number;
 }
 
+import type { PiModel, PiSessionState, SessionStats } from "@drej/agent";
+export type { PiModel, PiSessionState, SessionStats, ThinkingLevel } from "@drej/agent";
+
+export interface ForkPoint {
+  entryId: string;
+  text: string;
+}
+
 /**
  * Base URL for the API/WS backend. Empty string means same-origin (local dev,
  * where the Bun backend serves both the API and the built frontend). Set to
@@ -76,6 +84,14 @@ export const api = {
     }),
   deleteAgent: (id: string) => request<void>(`/api/agents/${id}`, { method: "DELETE" }),
   getMessages: (id: string) => request<{ messages: unknown[] }>(`/api/agents/${id}/messages`),
+
+  getAgentState: (id: string) => request<PiSessionState>(`/api/agents/${id}/state`),
+  getAgentStats: (id: string) => request<SessionStats>(`/api/agents/${id}/stats`),
+  getAgentModels: (id: string) => request<{ models: PiModel[] }>(`/api/agents/${id}/models`),
+  getAgentForkPoints: (id: string) =>
+    request<{ forkPoints: ForkPoint[] }>(`/api/agents/${id}/fork-points`),
+  agentExportUrl: (id: string, path: string) =>
+    `${API_BASE}/api/agents/${id}/export?path=${encodeURIComponent(path)}`,
 };
 
 export function wsUrl(path: string): string {

@@ -51,6 +51,10 @@ jobs:
         run: bunx tsc --noEmit --strict
         working-directory: packages/adapters/otel
 
+      - name: Typecheck sandbox
+        run: bun run typecheck
+        working-directory: apps/sandbox
+
       - name: Lint
         run: bun run lint
 

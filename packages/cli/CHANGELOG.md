@@ -1,5 +1,24 @@
 # drejx
 
+## 0.3.0
+
+### Minor Changes
+
+- 2adcea6: Add tmux-style session commands: `drejx run <spec> [--detach] [--rebuild]`, `drejx ps`, `drejx attach <name>`, `drejx kill <name>`, `drejx logs <name>`. Bare `drejx` in a terminal now launches an interactive TUI (built on `@opentui/core`) with a dashboard of running sessions and a chat view. Existing `init`/`add`/`list`/`remove` commands are unchanged.
+
+### Patch Changes
+
+- Updated dependencies [b7aaa2f]
+- Updated dependencies [5055755]
+- Updated dependencies [9cc6b08]
+- Updated dependencies [13b826b]
+- Updated dependencies [fa18120]
+- Updated dependencies [b2d7096]
+  - @drej/agent@0.4.0
+  - drej@0.10.0
+  - @drej/opensandbox@0.3.0
+  - @drej/sqlite@0.3.5
+
 ## 0.2.4
 
 ### Patch Changes

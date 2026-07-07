@@ -1,5 +1,13 @@
 # @drej/flue
 
+## 3.0.0
+
+### Patch Changes
+
+- Updated dependencies [13b826b]
+- Updated dependencies [fa18120]
+  - drej@0.10.0
+
 ## 2.0.3
 
 ### Patch Changes

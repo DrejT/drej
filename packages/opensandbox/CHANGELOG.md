@@ -1,5 +1,19 @@
 # @drej/opensandbox
 
+## 0.3.0
+
+### Minor Changes
+
+- fa18120: Add `sb.exec(cmd, { interactive: true })` for live, bidirectional PTY sessions — human-in-the-loop CLI access inside a sandbox. Returns an `InteractiveExecHandle` with `write()`, `resize()`, `signal()`, `close()`, and `attach()` in addition to the usual `stdout()`/`pipe()`/`result()`/`await` surface.
+
+  Every `write()` is logged to the ledger alongside output, so a session still open at the last checkpoint is reconstructed on resume by replaying its recorded stdin for real against the freshly restored filesystem (OpenSandbox snapshots are rootfs-only — the original process is gone after resume, so this is the only way to re-derive shell state like exported vars or `cd`s).
+
+  `@drej/opensandbox` gains a `PtyClient` wrapping execd's `/pty` REST + WebSocket protocol.
+
+### Patch Changes
+
+- b2d7096: Fix `ControlClient.listSandboxes()` and `listSnapshots()` returning the raw `{ items: [...] }` pagination envelope instead of a bare array — the declared return type was `Sandbox[]`/`Snapshot[]` but the methods never unwrapped `.items`, so `result.length` was `undefined` and array methods threw. Neither method had a caller anywhere else in the codebase, so this was previously untested dead code; surfaced by `examples/pi-agent/test-spawn-child.ts`, which uses `listSandboxes()` directly against the live OpenSandbox API.
+
 ## 0.2.3
 
 ### Patch Changes

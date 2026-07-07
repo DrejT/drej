@@ -1,5 +1,20 @@
 # @drej/agent
 
+## 0.4.0
+
+### Minor Changes
+
+- b7aaa2f: Add `agent.getState()`, wrapping Pi's `get_state` RPC command. Returns the current model, thinking level, streaming/compaction status, queue modes, and session identity — the only piece of Pi's RPC surface that wasn't already exposed (every other method already had an `Agent` wrapper). Needed to show live agent status (current model, thinking level, auto-compaction) without guessing from side effects of other calls.
+
+### Patch Changes
+
+- 5055755: `AgentSpec.cliVersion` now actually pins the installed Pi CLI version. Previously it was only used as a setup-hash cache-key input — `install()` always ran `npm install -g @earendil-works/pi-coding-agent` with no version qualifier, so setting `cliVersion` had no effect on which version got installed. `install()` now runs `npm install -g @earendil-works/pi-coding-agent@<cliVersion>` when `cliVersion` is set (accepts an exact version, a semver range, or a dist-tag like `"latest"`), and falls back to the bare package name when omitted.
+- 9cc6b08: Default `serverUrl` (in `drej.config.json` / `readProjectConfig`) is now `http://127.0.0.1:8080` instead of `http://localhost:8080`. On hosts where `localhost` resolves to `::1` first but OpenSandbox only listens on IPv4, the old default caused every request — including `Agent.load()`'s sandbox creation — to fail with a socket error instead of connecting.
+- Updated dependencies [13b826b]
+- Updated dependencies [fa18120]
+  - drej@0.10.0
+  - @drej/core@0.6.0
+
 ## 0.3.2
 
 ### Patch Changes

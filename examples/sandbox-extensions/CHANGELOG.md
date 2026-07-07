@@ -1,5 +1,18 @@
 # drej-example-sandbox-extensions
 
+## 0.0.6
+
+### Patch Changes
+
+- Updated dependencies [b7aaa2f]
+- Updated dependencies [5055755]
+- Updated dependencies [9cc6b08]
+- Updated dependencies [13b826b]
+- Updated dependencies [fa18120]
+  - @drej/agent@0.4.0
+  - drej@0.10.0
+  - @drej/sqlite@0.3.5
+
 ## 0.0.5
 
 ### Patch Changes

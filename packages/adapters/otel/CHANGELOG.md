@@ -1,5 +1,12 @@
 # @drej/otel
 
+## 0.2.5
+
+### Patch Changes
+
+- Updated dependencies [fa18120]
+  - @drej/core@0.6.0
+
 ## 0.2.4
 
 ### Patch Changes

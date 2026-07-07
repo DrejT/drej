@@ -1,0 +1,19 @@
+{
+  "$schema": "https://registry.drej.dev/spec/agent.json",
+  "name": "master-agent",
+  "title": "Master Agent",
+  "description": "A Pi agent with OpenSandbox's own osb CLI installed, demonstrating an agent spawning and driving its own child sandboxes.",
+  "author": "drej",
+  "cli": "pi",
+  "model": "gemini-flash-latest",
+  "packages": ["python3", "python3-pip"],
+  "env": {
+    "GEMINI_API_KEY": "${GEMINI_API_KEY}",
+    "OPEN_SANDBOX_DOMAIN": "${MASTER_AGENT_OPENSANDBOX_DOMAIN}"
+  },
+  "resources": { "cpu": "1000m", "memory": "2Gi" },
+  "setup": [
+    { "name": "Install osb CLI", "run": "pip install --break-system-packages opensandbox-cli" },
+    { "name": "Verify osb", "run": "osb --version" }
+  ]
+}

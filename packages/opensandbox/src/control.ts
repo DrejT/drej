@@ -76,13 +76,17 @@ export class ControlClient {
     return this.request("POST", "/v1/sandboxes", options);
   }
 
-  listSandboxes(options: ListSandboxesOptions = {}): Promise<Sandbox[]> {
+  async listSandboxes(options: ListSandboxesOptions = {}): Promise<Sandbox[]> {
     const params = new URLSearchParams();
     if (options.state) params.set("state", options.state);
     if (options.limit !== undefined) params.set("limit", String(options.limit));
     if (options.offset !== undefined) params.set("offset", String(options.offset));
     const qs = params.toString();
-    return this.request("GET", `/v1/sandboxes${qs ? `?${qs}` : ""}`);
+    const res = await this.request<{ items: Sandbox[] }>(
+      "GET",
+      `/v1/sandboxes${qs ? `?${qs}` : ""}`,
+    );
+    return res.items;
   }
 
   getSandbox(id: string): Promise<Sandbox> {
@@ -124,13 +128,17 @@ export class ControlClient {
     return flattenSnapshot(raw);
   }
 
-  listSnapshots(options: ListSnapshotsOptions = {}): Promise<Snapshot[]> {
+  async listSnapshots(options: ListSnapshotsOptions = {}): Promise<Snapshot[]> {
     const params = new URLSearchParams();
     if (options.sandboxId) params.set("sandboxId", options.sandboxId);
     if (options.limit !== undefined) params.set("limit", String(options.limit));
     if (options.offset !== undefined) params.set("offset", String(options.offset));
     const qs = params.toString();
-    return this.request("GET", `/v1/snapshots${qs ? `?${qs}` : ""}`);
+    const res = await this.request<{ items: RawSnapshot[] }>(
+      "GET",
+      `/v1/snapshots${qs ? `?${qs}` : ""}`,
+    );
+    return res.items.map(flattenSnapshot);
   }
 
   async getSnapshot(id: string): Promise<Snapshot> {

@@ -163,6 +163,7 @@
       "version": "0.0.6",
       "dependencies": {
         "@drej/agent": "workspace:*",
+        "@drej/opensandbox": "workspace:*",
         "@drej/sqlite": "workspace:*",
         "drej": "workspace:*",
       },

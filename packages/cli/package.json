@@ -29,7 +29,9 @@
   },
   "dependencies": {
     "@drej/agent": "workspace:*",
+    "@drej/opensandbox": "workspace:*",
     "@drej/sqlite": "workspace:*",
+    "@opentui/core": "^0.4.3",
     "drej": "workspace:*"
   },
   "devDependencies": {

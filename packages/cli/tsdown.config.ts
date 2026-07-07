@@ -7,5 +7,7 @@ export default defineConfig({
   outDir: "dist",
   platform: "node",
   clean: true,
-  deps: { neverBundle: ["drej", "@drej/agent", "@drej/sqlite"] },
+  deps: {
+    neverBundle: ["drej", "@drej/agent", "@drej/sqlite", "@drej/opensandbox", "@opentui/core"],
+  },
 });

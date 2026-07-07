@@ -21,10 +21,11 @@ export function configPath(): string {
   return CONFIG_FILE;
 }
 
-export async function readConfig(): Promise<DrejxConfig> {
-  const file = Bun.file(configPath());
-  if (!(await file.exists())) throw new Error("No drej.config.json found — run 'drejx init' first");
-  const data = (await file.json()) as Partial<DrejxConfig>;
+export function globalConfigPath(): string {
+  return join(serverConfigDir(), "config.json");
+}
+
+function fillDefaults(data: Partial<DrejxConfig>): DrejxConfig {
   return {
     serverUrl: data.serverUrl ?? "http://127.0.0.1:8080",
     useServerProxy: data.useServerProxy ?? true,
@@ -38,6 +39,38 @@ export async function readConfig(): Promise<DrejxConfig> {
       },
     },
   };
+}
+
+/**
+ * Resolves, in order: a project-local `drej.config.json` (written by `drejx init`
+ * for repos that want their own agents dir / ledger), then a global
+ * `~/.config/drejx/config.json`. If neither exists yet, bootstraps the global
+ * one so a fresh `bunx drejx` works without requiring `init` in every directory.
+ */
+export async function readConfig(): Promise<DrejxConfig> {
+  const localFile = Bun.file(configPath());
+  if (await localFile.exists()) {
+    return fillDefaults((await localFile.json()) as Partial<DrejxConfig>);
+  }
+
+  const globalPath = globalConfigPath();
+  const globalFile = Bun.file(globalPath);
+  if (await globalFile.exists()) {
+    return fillDefaults((await globalFile.json()) as Partial<DrejxConfig>);
+  }
+
+  const dir = serverConfigDir();
+  if (!existsSync(dir)) await mkdir(dir, { recursive: true });
+  const config: DrejxConfig = {
+    serverUrl: "http://127.0.0.1:8080",
+    useServerProxy: true,
+    apiKey: "",
+    adapterPath: join(dir, "ledger.db"),
+    agentsDir: join(dir, "agents"),
+    defaults: { resources: { cpu: "1000m", memory: "1Gi" } },
+  };
+  await Bun.write(globalPath, JSON.stringify(config, null, 2) + "\n");
+  return config;
 }
 
 export async function writeConfig(config: DrejxConfig): Promise<void> {

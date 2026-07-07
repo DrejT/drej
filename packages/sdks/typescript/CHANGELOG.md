@@ -1,5 +1,23 @@
 # drej
 
+## 0.10.0
+
+### Minor Changes
+
+- fa18120: Add `sb.exec(cmd, { interactive: true })` for live, bidirectional PTY sessions — human-in-the-loop CLI access inside a sandbox. Returns an `InteractiveExecHandle` with `write()`, `resize()`, `signal()`, `close()`, and `attach()` in addition to the usual `stdout()`/`pipe()`/`result()`/`await` surface.
+
+  Every `write()` is logged to the ledger alongside output, so a session still open at the last checkpoint is reconstructed on resume by replaying its recorded stdin for real against the freshly restored filesystem (OpenSandbox snapshots are rootfs-only — the original process is gone after resume, so this is the only way to re-derive shell state like exported vars or `cd`s).
+
+  `@drej/opensandbox` gains a `PtyClient` wrapping execd's `/pty` REST + WebSocket protocol.
+
+### Patch Changes
+
+- 13b826b: Fix `drej`'s public entry point (`src/index.ts`) silently omitting several types that were already re-exported from `client.ts` — `BashSession`, `InteractiveExecHandle`, `PendingInteractiveExec`, `CheckpointInfo`, `EnvironmentRecord`, `FileInfo`, `DiagnosticLog`, `DiagnosticEvent`, `Metrics`, `ResumeOptions`, `Environment`, `EnvironmentOptions`, and `EnvironmentSandboxOptions` never reached the built package because `index.ts` re-declared `client.ts`'s exports one by one instead of forwarding them, and had drifted out of sync across several past features (most recently the `interactive: true` PTY exec support). `index.ts` now does `export * from "./client"`, so this class of drift can't recur.
+- Updated dependencies [fa18120]
+- Updated dependencies [b2d7096]
+  - @drej/core@0.6.0
+  - @drej/opensandbox@0.3.0
+
 ## 0.9.3
 
 ### Patch Changes

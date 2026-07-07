@@ -1,5 +1,12 @@
 # @drej/postgres
 
+## 0.3.5
+
+### Patch Changes
+
+- Updated dependencies [fa18120]
+  - @drej/core@0.6.0
+
 ## 0.3.4
 
 ### Patch Changes

@@ -25,6 +25,7 @@
 import { Agent } from "@drej/agent";
 import { Drej, SandboxStatus } from "drej";
 import { SQLiteAdapter } from "@drej/sqlite";
+import { randomBytes } from "crypto";
 
 // Relative paths below (agent specs, ledger) are resolved against this
 // directory regardless of the invoking shell's CWD — `Bun.file()` resolves
@@ -33,7 +34,7 @@ import { SQLiteAdapter } from "@drej/sqlite";
 process.chdir(import.meta.dir);
 
 process.env.MASTER_AGENT_OPENSANDBOX_DOMAIN ??= "172.17.0.1:8080";
-const SECRET = `rlm-fanout-secret-${Math.random().toString(36).slice(2, 10)}`;
+const SECRET = `rlm-fanout-secret-${randomBytes(8).toString("hex")}`;
 process.env.RLM_FANOUT_SECRET = SECRET;
 
 const MASTER_SPEC = "./agents/master.json";

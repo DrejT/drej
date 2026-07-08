@@ -5,15 +5,19 @@ import { SQLiteAdapter } from "@drej/sqlite";
 import { readConfig } from "../config.js";
 import { createDashboardView, type DashboardView } from "./dashboard.js";
 import { createChatView, type ChatView } from "./chat.js";
+import { createNewSessionView, type NewSessionView } from "./new-session.js";
+import { createLogsView, type LogsView } from "./logs.js";
+
+type View = DashboardView | ChatView | NewSessionView | LogsView;
 
 export async function launchTui(): Promise<void> {
   const renderer = await createCliRenderer({ exitOnCtrlC: true });
   const root = new BoxRenderable(renderer, { id: "tui-root", width: "100%", height: "100%" });
   renderer.root.add(root);
 
-  let current: DashboardView | ChatView | null = null;
+  let current: View | null = null;
 
-  function mount(view: DashboardView | ChatView): void {
+  function mount(view: View): void {
     if (current) {
       root.remove(current.box);
       current.dispose();
@@ -28,9 +32,25 @@ export async function launchTui(): Promise<void> {
   }
 
   function showDashboard(initialStatus?: string): void {
-    const view = createDashboardView(renderer, (session) => void openSession(session), quit);
+    const view = createDashboardView(
+      renderer,
+      (session) => void openSession(session),
+      quit,
+      showNewSession,
+      (session) => mount(createLogsView(renderer, session, () => showDashboard())),
+    );
     mount(view);
     if (initialStatus) view.setStatus(initialStatus);
+  }
+
+  function showNewSession(): void {
+    mount(
+      createNewSessionView(
+        renderer,
+        (specPath) => void launchNewAgent(specPath),
+        () => showDashboard(),
+      ),
+    );
   }
 
   async function openSession(session: SandboxDetails): Promise<void> {
@@ -45,6 +65,19 @@ export async function launchTui(): Promise<void> {
     } catch (err) {
       showDashboard(
         `failed to open '${session.name}': ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  async function launchNewAgent(specPath: string): Promise<void> {
+    const config = await readConfig();
+    const adapter = new SQLiteAdapter(config.adapterPath);
+    try {
+      const agent = await Agent.load(specPath, { adapter });
+      mount(createChatView(renderer, agent, () => showDashboard()));
+    } catch (err) {
+      showDashboard(
+        `failed to start '${specPath}': ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }

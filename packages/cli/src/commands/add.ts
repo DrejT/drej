@@ -4,15 +4,19 @@ import { join } from "path";
 import { readConfig } from "../config.js";
 import { validateAgentSpec, type AgentSpec } from "../schema.js";
 
-export async function add(url: string, opts: { name?: string } = {}): Promise<void> {
+export async function add(
+  url: string,
+  opts: { name?: string; log?: (message: string) => void } = {},
+): Promise<void> {
+  const log = opts.log ?? console.log;
   if (!url) throw new Error("Usage: drejx add <url>");
 
   const config = await readConfig();
   const spec = await fetchSpec(url);
 
   for (const depUrl of spec.registryDependencies ?? []) {
-    console.log(`Resolving dependency: ${depUrl}`);
-    await add(depUrl);
+    log(`Resolving dependency: ${depUrl}`);
+    await add(depUrl, { log });
   }
 
   const name = opts.name ?? spec.name;
@@ -23,8 +27,8 @@ export async function add(url: string, opts: { name?: string } = {}): Promise<vo
   const dest = join(agentsDir, `${name}.json`);
   await Bun.write(dest, JSON.stringify(spec, null, 2) + "\n");
 
-  console.log(`Agent spec saved: ${dest}`);
-  console.log(`Load it with: Agent.load("${dest}") from @drej/agent`);
+  log(`Agent spec saved: ${dest}`);
+  log(`Load it with: Agent.load("${dest}") from @drej/agent`);
 }
 
 async function fetchSpec(url: string): Promise<AgentSpec> {

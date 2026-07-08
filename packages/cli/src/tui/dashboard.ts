@@ -6,7 +6,10 @@ import {
   type CliRenderer,
   type SelectOption,
 } from "@opentui/core";
+import { Drej } from "drej";
 import type { SandboxDetails } from "drej";
+import { SQLiteAdapter } from "@drej/sqlite";
+import { readConfig } from "../config.js";
 import { getSessions, formatAge } from "../sessions-data.js";
 
 export interface DashboardView {
@@ -19,6 +22,8 @@ export function createDashboardView(
   renderer: CliRenderer,
   onOpen: (session: SandboxDetails) => void,
   onQuit: () => void,
+  onNew: () => void,
+  onLogs: (session: SandboxDetails) => void,
 ): DashboardView {
   const box = new BoxRenderable(renderer, {
     id: "dashboard",
@@ -31,7 +36,8 @@ export function createDashboardView(
   box.add(
     new TextRenderable(renderer, {
       id: "dashboard-title",
-      content: "drejx — sessions   (↑/↓ move · enter open · r refresh · q quit)",
+      content:
+        "drejx — sessions   (↑/↓ move · enter chat · n new · l logs · k kill · r refresh · q quit)",
     }),
   );
 
@@ -62,7 +68,7 @@ export function createDashboardView(
         : [
             {
               name: "(no running sessions)",
-              description: "run 'drejx run <spec>' to start one",
+              description: "press 'n' to start one",
               value: null,
             },
           ];
@@ -73,6 +79,26 @@ export function createDashboardView(
         : `${tracked.length} tracked session(s) running`;
   }
 
+  async function killSelected(): Promise<void> {
+    const session = select.getSelectedOption()?.value as SandboxDetails | null;
+    if (!session) return;
+    status.content = `killing ${session.name}...`;
+    try {
+      const config = await readConfig();
+      const client = new Drej({
+        baseUrl: config.serverUrl,
+        apiKey: config.apiKey,
+        adapter: new SQLiteAdapter(config.adapterPath),
+        useServerProxy: config.useServerProxy,
+      });
+      const sb = await client.connect(session.sandboxId, session.name);
+      await sb.close();
+      await refresh();
+    } catch (err) {
+      status.content = `failed to kill '${session.name}': ${err instanceof Error ? err.message : String(err)}`;
+    }
+  }
+
   select.on(SelectRenderableEvents.ITEM_SELECTED, (_index: number, option: SelectOption) => {
     if (option.value) onOpen(option.value as SandboxDetails);
   });
@@ -80,6 +106,12 @@ export function createDashboardView(
   const onKeypress = (event: { name: string }) => {
     if (event.name === "q") onQuit();
     else if (event.name === "r") void refresh();
+    else if (event.name === "n") onNew();
+    else if (event.name === "k") void killSelected();
+    else if (event.name === "l") {
+      const session = select.getSelectedOption()?.value as SandboxDetails | null;
+      if (session) onLogs(session);
+    }
   };
   renderer.keyInput.on("keypress", onKeypress);
 

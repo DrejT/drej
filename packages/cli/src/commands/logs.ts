@@ -2,8 +2,8 @@ import { Drej } from "drej";
 import { SQLiteAdapter } from "@drej/sqlite";
 import { readConfig } from "../config.js";
 
-export async function logs(name: string): Promise<void> {
-  if (!name) throw new Error("Usage: drejx logs <name>");
+export async function logs(name: string, opts: { json?: boolean } = {}): Promise<void> {
+  if (!name) throw new Error("Usage: drejx logs <name> [--json]");
 
   const config = await readConfig();
   const adapter = new SQLiteAdapter(config.adapterPath);
@@ -23,6 +23,12 @@ export async function logs(name: string): Promise<void> {
   }
 
   const entries = await adapter.readAll(name, session.sandboxId);
+
+  if (opts.json) {
+    console.log(JSON.stringify(entries, null, 2));
+    return;
+  }
+
   console.log(`${entries.length} events for '${name}' (${session.sandboxId}):\n`);
   for (const entry of entries) {
     const ts = new Date(entry.ts).toISOString();

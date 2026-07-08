@@ -10,6 +10,7 @@ function fakeSandbox() {
       commands.push(cmd);
       return Promise.resolve({ stdout: "", stderr: "", exitCode: 0 });
     },
+    proxy: (_port: number) => Promise.resolve({ url: "http://fake-proxy", headers: {} }),
   } as unknown as Sandbox;
   return { sb, commands };
 }
@@ -47,5 +48,25 @@ describe("PiAdapter.install", () => {
     expect(commands).toContain(
       "npm install -g --ignore-scripts @earendil-works/pi-coding-agent@latest",
     );
+  });
+});
+
+describe("PiAdapter.startBridge", () => {
+  it("starts the bridge with no prefix when unsetVars is omitted", async () => {
+    const { sb, commands } = fakeSandbox();
+    await new PiAdapter().startBridge(sb);
+    expect(commands).toContain("node /drej-bridge.js &");
+  });
+
+  it("starts the bridge with no prefix when unsetVars is empty", async () => {
+    const { sb, commands } = fakeSandbox();
+    await new PiAdapter().startBridge(sb, []);
+    expect(commands).toContain("node /drej-bridge.js &");
+  });
+
+  it("prefixes an explicit unset of every named var in the same command", async () => {
+    const { sb, commands } = fakeSandbox();
+    await new PiAdapter().startBridge(sb, ["GEMINI_API_KEY", "SECRET_TEST_VALUE"]);
+    expect(commands).toContain("unset GEMINI_API_KEY SECRET_TEST_VALUE; node /drej-bridge.js &");
   });
 });

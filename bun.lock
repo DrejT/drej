@@ -184,6 +184,15 @@
         "drej": "workspace:*",
       },
     },
+    "examples/rlm-repo-fanout": {
+      "name": "drej-example-rlm-repo-fanout",
+      "version": "0.0.1",
+      "dependencies": {
+        "@drej/agent": "workspace:*",
+        "@drej/sqlite": "workspace:*",
+        "drej": "workspace:*",
+      },
+    },
     "examples/run-bash-script": {
       "name": "drej-example-run-bash-script",
       "version": "0.0.7",
@@ -288,7 +297,7 @@
     },
     "packages/cli": {
       "name": "drejx",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "bin": {
         "drejx": "./dist/index.mjs",
       },
@@ -1620,6 +1629,8 @@
     "drej-example-ports": ["drej-example-ports@workspace:examples/ports"],
 
     "drej-example-read-file": ["drej-example-read-file@workspace:examples/read-file"],
+
+    "drej-example-rlm-repo-fanout": ["drej-example-rlm-repo-fanout@workspace:examples/rlm-repo-fanout"],
 
     "drej-example-run-bash-script": ["drej-example-run-bash-script@workspace:examples/run-bash-script"],
 

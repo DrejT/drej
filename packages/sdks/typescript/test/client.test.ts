@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { Drej } from "../src/client.ts";
 import { Environment } from "../src/environment.ts";
+import { SandboxState } from "@drej/opensandbox";
 import { SandboxStatus, type IStorageAdapter, type SandboxDetails } from "@drej/core";
 
 function makeAdapter(overrides: Partial<IStorageAdapter> = {}): IStorageAdapter {
@@ -289,5 +290,61 @@ describe("Drej._getOrBuildEnvironment concurrency guard", () => {
     await (client as any)._getOrBuildEnvironment("py", opts);
 
     expect(buildSpy).toHaveBeenCalledTimes(2);
+  });
+});
+
+// ── fork() wiring ──────────────────────────────────────────────────────────
+//
+// `Sandbox.fork()` throws unless the deps object it was constructed with
+// includes a `fork` closure — `client.sandbox()` and `client.resume()` always
+// wire one up, but `restoreSnapshot()` and `connect()` each had their own gap
+// (found live: `Agent.spawn()`, built on top of `sb.fork()`, threw "fork() is
+// not supported on this sandbox" for any agent loaded via its snapshot fast
+// path, or attached to via `Agent.attach()`). Regression coverage for both.
+
+function makeFakeControl(overrides: Record<string, unknown> = {}) {
+  return {
+    createSandbox: vi.fn().mockResolvedValue({ id: "new-id" }),
+    getSandbox: vi.fn().mockResolvedValue({ status: { state: SandboxState.Running } }),
+    ...overrides,
+  };
+}
+
+describe("Drej.restoreSnapshot() fork wiring", () => {
+  it("wires a working fork() closure onto the restored Sandbox", async () => {
+    const adapter = makeAdapter();
+    const client = makeClient(adapter);
+    (client as any)._control = makeFakeControl();
+
+    const sb = await client.restoreSnapshot("snap-1", "my-agent", {
+      cpu: "500m",
+      memory: "256Mi",
+    });
+
+    expect(typeof (sb as any)._deps.fork).toBe("function");
+  });
+});
+
+describe("Drej.connect() fork wiring", () => {
+  it("does not wire fork() when no resources are given", async () => {
+    const adapter = makeAdapter();
+    const client = makeClient(adapter);
+    (client as any)._control = makeFakeControl();
+
+    const sb = await client.connect("sandbox-1", "my-agent");
+
+    expect((sb as any)._deps.fork).toBeUndefined();
+  });
+
+  it("wires a working fork() closure when resources are given", async () => {
+    const adapter = makeAdapter();
+    const client = makeClient(adapter);
+    (client as any)._control = makeFakeControl();
+
+    const sb = await client.connect("sandbox-1", "my-agent", {
+      resources: { cpu: "500m", memory: "256Mi" },
+    });
+
+    expect(typeof (sb as any)._deps.fork).toBe("function");
   });
 });

@@ -2,7 +2,7 @@ import { Drej } from "drej";
 import type { IStorageAdapter, Sandbox } from "@drej/core";
 import { readProjectConfig } from "./config";
 import { validateAgentSpec, type AgentSpec } from "./schema";
-import { PiAdapter, resolveEnv, toShellExports } from "./adapters/pi";
+import { PiAdapter, resolveEnv, toShellExports, parseShellExports } from "./adapters/pi";
 import {
   AgentSnapshotStore,
   computeSetupHash,
@@ -22,6 +22,30 @@ import type {
 
 function elapsed(t: number) {
   return `${Date.now() - t}ms`;
+}
+
+function assertValidSpawnDepth(value: number, context: string): void {
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error(`${context}: spawnDepth must be a non-negative integer (got ${value})`);
+  }
+}
+
+/**
+ * Resolves and validates the spawn-depth budget available to `Agent.spawn()` —
+ * `override` (a `--spawn-depth` CLI flag) wins if given, else whatever value was
+ * materialised into `DREJX_SPAWN_DEPTH` by `Agent.load()`/`Agent.resume()`. Throws
+ * unless the result is a positive integer: `0` means "no budget left", not "spawn
+ * one more time" — spawning stops one level before the counter would go negative.
+ */
+export function resolveParentSpawnDepth(envValue: string | undefined, override?: number): number {
+  const raw = override ?? (envValue !== undefined ? Number(envValue) : undefined);
+  if (raw === undefined || !Number.isInteger(raw) || raw <= 0) {
+    throw new Error(
+      `Agent.spawn() refused: spawn depth must be a positive integer (got ${envValue ?? "unset"}). ` +
+        `Set "spawnDepth" in this agent's spec, or pass { spawnDepth } explicitly.`,
+    );
+  }
+  return raw;
 }
 
 /**
@@ -94,16 +118,24 @@ export class Agent {
    * Pass `{ rebuild: true }` to force a full reinstall (e.g. after changing
    * the spec's `packages` or `cliVersion`).
    *
+   * Pass `{ spawnDepth }` to override the spec's own `spawnDepth` (e.g. a
+   * `--spawn-depth` CLI flag) — standard flag-beats-config precedence.
+   *
    * Logs timing for each phase to stdout via `[agent]` prefixed lines.
    */
   static async load(
     specPath: string,
-    opts: { adapter: IStorageAdapter; rebuild?: boolean },
+    opts: { adapter: IStorageAdapter; rebuild?: boolean; spawnDepth?: number },
   ): Promise<Agent> {
     const t0 = Date.now();
     const spec = validateAgentSpec(await Bun.file(specPath).json());
     const config = await readProjectConfig();
     const resolvedEnv = resolveEnv(spec.env ?? {});
+    const effectiveSpawnDepth = opts.spawnDepth ?? spec.spawnDepth;
+    if (effectiveSpawnDepth !== undefined) {
+      assertValidSpawnDepth(effectiveSpawnDepth, "Agent.load()");
+      resolvedEnv.DREJX_SPAWN_DEPTH = String(effectiveSpawnDepth);
+    }
     const resources = { ...config.defaults.resources, ...(spec.resources ?? {}) };
 
     const client = new Drej({
@@ -242,6 +274,10 @@ export class Agent {
     }
 
     const resolvedEnv = resolveEnv(spec.env ?? {});
+    if (spec.spawnDepth !== undefined) {
+      assertValidSpawnDepth(spec.spawnDepth, "Agent.resume()");
+      resolvedEnv.DREJX_SPAWN_DEPTH = String(spec.spawnDepth);
+    }
 
     console.log(`[agent] reconnecting to ${sandboxId}...`);
     const t1 = Date.now();
@@ -264,6 +300,105 @@ export class Agent {
     console.log(`[agent] total           ${elapsed(t0)}`);
 
     return new Agent(sb, spec, resolvedEnv, adapter, false);
+  }
+
+  /**
+   * Connect to an already-running sandbox WITHOUT touching its Pi bridge — unlike
+   * `resume()`, which kills and restarts the bridge process. Use this when you only
+   * need `.spawn()`/`.sandbox`, not `.prompt()`/`.bash()`.
+   *
+   * The main caller is `drejx spawn`: it runs as a fresh CLI process started BY the
+   * very Pi bash-tool call it's attaching to (a master agent spawning a child from
+   * inside its own turn). Going through `resume()` there would `pkill` the bridge
+   * that's currently running the Pi process making the call — self-destructive.
+   *
+   * The returned `Agent` has no bridge, so `.prompt()`/`.bash()`/etc. all throw.
+   * Its env is read back from `/etc/drej-env` on the sandbox itself (the ground
+   * truth for what's actually running there) rather than re-derived from a spec
+   * file, which may not even exist inside this particular sandbox.
+   *
+   * `opts.resources` sizes a subsequent `.spawn()`'s forked container — the
+   * control API doesn't echo back a running sandbox's own resource limits, so
+   * there's no way to discover this agent's *actual* footprint here. Defaults to
+   * `drej.config.json`'s `defaults.resources`, same fallback `Agent.load()` uses
+   * for a spec that doesn't set its own.
+   */
+  static async attach(
+    sandboxId: string,
+    opts: {
+      adapter: IStorageAdapter;
+      name: string;
+      resources?: { cpu: string; memory: string; gpu?: string };
+    },
+  ): Promise<Agent> {
+    const config = await readProjectConfig();
+    const client = new Drej({
+      baseUrl: config.serverUrl,
+      apiKey: config.apiKey,
+      adapter: opts.adapter,
+      useServerProxy: config.useServerProxy,
+    });
+    const resources = opts.resources ?? config.defaults.resources;
+    const sb = await client.connect(sandboxId, opts.name, { resources });
+    const envFile = await sb.readFile("/etc/drej-env").catch(() => "");
+    const env = parseShellExports(envFile);
+    const stubSpec: AgentSpec = { name: opts.name, cli: "pi" };
+    return new Agent(sb, stubSpec, env, new PiAdapter(), false);
+  }
+
+  /**
+   * Fork this agent's live sandbox — filesystem, installed packages, checked-out
+   * state, everything currently on disk — into a brand-new independent sandbox
+   * running its own Pi bridge, per `childSpecPath`. Unlike `Agent.load()` (always
+   * starts from a spec's own snapshot) or `fork()`/`clone()` above (Pi's own
+   * conversation-branching — same container, same bridge, new session branch),
+   * this is sandbox-level forking: the child sees exactly what this agent's
+   * sandbox sees right now, including any uncommitted work.
+   *
+   * The child's environment is resolved fresh from its OWN spec — nothing is
+   * inherited from this agent except the spawn-depth counter, which is
+   * force-computed (`current - 1`) regardless of what the child's spec or
+   * `opts.spawnDepth` says. Every name this agent's own env declares is also
+   * explicitly `unset` in the shell command that starts the child's bridge, since
+   * the forked container's OS-level env still carries whatever was baked in at
+   * snapshot time independent of what gets written to `/etc/drej-env`.
+   *
+   * Refuses immediately unless this agent's own spawn-depth budget
+   * (`DREJX_SPAWN_DEPTH`, or `opts.spawnDepth` to override it) is a positive
+   * integer — `0` means no budget left, `undefined` means spawning was never
+   * enabled for this agent.
+   *
+   * No install/setup steps run — the child inherits Pi (and anything else)
+   * already installed on this agent's sandbox. If the child needs packages this
+   * agent's own sandbox doesn't have, add them to a setup step on the spec THIS
+   * agent was loaded from, not on the child's spec.
+   */
+  async spawn(childSpecPath: string, opts: { spawnDepth?: number } = {}): Promise<Agent> {
+    const parentDepth = resolveParentSpawnDepth(process.env.DREJX_SPAWN_DEPTH, opts.spawnDepth);
+
+    const childSpec = validateAgentSpec(await Bun.file(childSpecPath).json());
+    const childEnv = resolveEnv(childSpec.env ?? {});
+    childEnv.DREJX_SPAWN_DEPTH = String(parentDepth - 1);
+
+    console.log(`[agent] forking sandbox for spawn (${childSpec.name})...`);
+    const t0 = Date.now();
+    const forkedSb = await this.sandbox.fork(childSpec.name);
+    console.log(`[agent] fork ready      ${elapsed(t0)} (${forkedSb.sandboxId})`);
+
+    const adapter = new PiAdapter();
+    await adapter.configure(forkedSb, childSpec, childEnv);
+
+    console.log(`[agent] starting bridge...`);
+    const t1 = Date.now();
+    await adapter.startBridge(forkedSb, Object.keys(this._env));
+    await adapter.waitReady();
+    console.log(`[agent] bridge ready    ${elapsed(t1)}`);
+
+    // The forked sandbox's actual ledger name (auto-generated by fork, not
+    // childSpec.name) is what `drejx prompt`/`drejx agents`/`drejx kill` look
+    // sessions up by — report that as this Agent's name, not the spec's own.
+    const namedChildSpec: AgentSpec = { ...childSpec, name: forkedSb.name };
+    return new Agent(forkedSb, namedChildSpec, childEnv, adapter, false);
   }
 
   // --- streaming ---

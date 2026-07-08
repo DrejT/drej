@@ -1,0 +1,36 @@
+{
+  "$schema": "https://registry.drej.dev/spec/agent.json",
+  "name": "rlm-fanout-master",
+  "title": "RLM Fan-out Master",
+  "description": "Clones a repo, decides how to split a task across it, and spawns child agents (via drejx spawn) that each work on one slice from the exact same checked-out commit.",
+  "author": "drej",
+  "cli": "pi",
+  "model": "gemini-flash-latest",
+  "packages": ["git"],
+  "env": {
+    "GEMINI_API_KEY": "${GEMINI_API_KEY}",
+    "MASTER_AGENT_OPENSANDBOX_DOMAIN": "${MASTER_AGENT_OPENSANDBOX_DOMAIN}",
+    "RLM_FANOUT_SECRET": "${RLM_FANOUT_SECRET}"
+  },
+  "spawnDepth": 1,
+  "resources": { "cpu": "1000m", "memory": "2Gi" },
+  "setup": [
+    {
+      "name": "Clone the repo",
+      "run": "git clone --depth 1 https://github.com/DrejT/drej.git repo"
+    },
+    { "name": "Install drejx", "run": "npm install -g drejx" },
+    {
+      "name": "Configure drejx",
+      "run": "printf '{\"serverUrl\":\"http://%s\",\"useServerProxy\":false,\"apiKey\":\"\",\"adapterPath\":\"./.drej/ledger.db\",\"agentsDir\":\"./agents\",\"defaults\":{\"resources\":{\"cpu\":\"500m\",\"memory\":\"1Gi\"}}}' \"$MASTER_AGENT_OPENSANDBOX_DOMAIN\" > drej.config.json"
+    },
+    {
+      "name": "Add the worker spec",
+      "run": "mkdir -p agents && printf '{\"name\":\"rlm-fanout-worker\",\"cli\":\"pi\",\"model\":\"gemini-flash-latest\",\"env\":{\"GEMINI_API_KEY\":\"%s\"},\"resources\":{\"cpu\":\"500m\",\"memory\":\"1Gi\"}}' \"$GEMINI_API_KEY\" > agents/worker.json"
+    },
+    {
+      "name": "Write TASK.md",
+      "run": "printf '# Task: backfill missing example READMEs\\n\\nThe repo is cloned at ./repo (drej, a sandbox execution substrate). Every folder under ./repo/examples/ should have a README.md describing, in one short paragraph, what capability that example demonstrates (base it on the index.ts file in that folder).\\n\\nSome folders are missing one. Find out which ones, decide how to split the work among spawned child agents (you have the drejx CLI and a spawn budget of 1 -- run \"drejx spawn --help\" if unsure of exact syntax), and have each child write the missing README.md for ONE example inside its own copy of the repo (children start from your exact checked-out commit, so their edits apply to the same tree).\\n\\nEach child should:\\n- Write repo/examples/<name>/README.md (a short paragraph, no more).\\n- Run \"cd repo && git diff\" and report the full diff as its final answer.\\n- NOT commit or push anything.\\n\\nWhen all children report back, combine their diffs and report the combined patch set as your OWN final answer, in a fenced code block. Do not apply, commit, or push anything yourself either -- this task is about producing a reviewable patch set, not merging it.\\n' > TASK.md"
+    }
+  ]
+}

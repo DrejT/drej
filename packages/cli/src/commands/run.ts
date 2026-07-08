@@ -1,26 +1,25 @@
 import { Agent } from "@drej/agent";
 import { SQLiteAdapter } from "@drej/sqlite";
 import { readConfig } from "../config.js";
-import { runInteractive } from "../interactive.js";
+import { collectReply } from "../agent-prompt.js";
 
 export async function run(
   specPath: string,
-  opts: { detach?: boolean; rebuild?: boolean } = {},
+  opts: { prompt?: string; rebuild?: boolean; json?: boolean } = {},
 ): Promise<void> {
-  if (!specPath) throw new Error("Usage: drejx run <spec> [--detach] [--rebuild]");
+  if (!specPath) throw new Error("Usage: drejx run <spec> [--prompt <msg>] [--rebuild] [--json]");
 
   const config = await readConfig();
   const adapter = new SQLiteAdapter(config.adapterPath);
   const agent = await Agent.load(specPath, { adapter, rebuild: opts.rebuild });
 
-  console.log(`\n[drejx] session: ${agent.name}  sandbox: ${agent.sandboxId}`);
+  const reply = opts.prompt ? await collectReply(agent, opts.prompt) : undefined;
 
-  // Agents invoking `run` through a non-interactive bash tool have no TTY —
-  // never drop them into a REPL that reads stdin they can't supply.
-  if (opts.detach || !process.stdout.isTTY) {
-    console.log(`[drejx] running detached. Attach with: drejx attach ${agent.name}`);
+  if (opts.json) {
+    console.log(JSON.stringify({ name: agent.name, sandboxId: agent.sandboxId, reply }, null, 2));
     return;
   }
 
-  await runInteractive(agent);
+  console.log(`\n[drejx] session: ${agent.name}  sandbox: ${agent.sandboxId}`);
+  if (reply !== undefined) console.log(`\n${reply}`);
 }

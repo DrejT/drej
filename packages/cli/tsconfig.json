@@ -9,5 +9,5 @@
     "allowImportingTsExtensions": true,
     "types": ["bun-types"]
   },
-  "include": ["src", "test"]
+  "include": ["src", "test", "pi-extension"]
 }

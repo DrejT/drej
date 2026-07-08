@@ -2,10 +2,14 @@ import { Drej, SandboxStatus } from "drej";
 import { Agent } from "@drej/agent";
 import { SQLiteAdapter } from "@drej/sqlite";
 import { readConfig } from "../config.js";
-import { runInteractive } from "../interactive.js";
+import { collectReply } from "../agent-prompt.js";
 
-export async function attach(name: string): Promise<void> {
-  if (!name) throw new Error("Usage: drejx attach <name>");
+export async function prompt(
+  name: string,
+  message: string,
+  opts: { json?: boolean } = {},
+): Promise<void> {
+  if (!name || !message) throw new Error("Usage: drejx prompt <name> <message> [--json]");
 
   const config = await readConfig();
   const adapter = new SQLiteAdapter(config.adapterPath);
@@ -19,14 +23,9 @@ export async function attach(name: string): Promise<void> {
   const sessions = await client.sandboxes.list({ status: SandboxStatus.Running });
   const session = sessions.find((s) => s.name === name);
   if (!session) {
-    throw new Error(`No running session named '${name}'. Run 'drejx ps' to see running sessions.`);
-  }
-
-  if (!process.stdout.isTTY) {
-    console.log(
-      `[drejx] session '${name}' is running (${session.sandboxId}) — not attaching (no TTY).`,
+    throw new Error(
+      `No running session named '${name}'. Run 'drejx agents' to see running sessions.`,
     );
-    return;
   }
 
   const agent = await Agent.resume(session.sandboxId, {
@@ -34,5 +33,11 @@ export async function attach(name: string): Promise<void> {
     specPath: `${config.agentsDir}/${name}.json`,
   });
 
-  await runInteractive(agent);
+  const reply = await collectReply(agent, message);
+
+  if (opts.json) {
+    console.log(JSON.stringify({ name: agent.name, sandboxId: agent.sandboxId, reply }, null, 2));
+    return;
+  }
+  console.log(reply);
 }

@@ -1,7 +1,12 @@
 import { getSessions, formatAge } from "../sessions-data.js";
 
-export async function ps(): Promise<void> {
+export async function agents(opts: { json?: boolean } = {}): Promise<void> {
   const { tracked, untracked } = await getSessions();
+
+  if (opts.json) {
+    console.log(JSON.stringify(tracked, null, 2));
+    return;
+  }
 
   const cols = [20, 38, 10, 10] as const;
   const header = ["NAME", "SANDBOX ID", "STARTED", "EXECS"];

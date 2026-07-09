@@ -50,4 +50,35 @@ describe("validateAgentSpec", () => {
     expect(() => validateAgentSpec(42)).toThrow();
     expect(() => validateAgentSpec([])).toThrow();
   });
+
+  it("accepts a valid spawnDepth", () => {
+    const spec = validateAgentSpec({ name: "master", cli: "pi", spawnDepth: 1 });
+    expect(spec.spawnDepth).toBe(1);
+  });
+
+  it("accepts spawnDepth of 0", () => {
+    const spec = validateAgentSpec({ name: "worker", cli: "pi", spawnDepth: 0 });
+    expect(spec.spawnDepth).toBe(0);
+  });
+
+  it("omits spawnDepth when not set", () => {
+    const spec = validateAgentSpec({ name: "plain", cli: "pi" });
+    expect(spec.spawnDepth).toBeUndefined();
+  });
+
+  it("throws for a negative spawnDepth", () => {
+    expect(() => validateAgentSpec({ name: "x", cli: "pi", spawnDepth: -1 })).toThrow(/spawnDepth/);
+  });
+
+  it("throws for a non-integer spawnDepth", () => {
+    expect(() => validateAgentSpec({ name: "x", cli: "pi", spawnDepth: 1.5 })).toThrow(
+      /spawnDepth/,
+    );
+  });
+
+  it("throws for a non-numeric spawnDepth", () => {
+    expect(() => validateAgentSpec({ name: "x", cli: "pi", spawnDepth: "1" })).toThrow(
+      /spawnDepth/,
+    );
+  });
 });

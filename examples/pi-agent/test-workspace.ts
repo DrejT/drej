@@ -3,7 +3,7 @@
  * are baked into the snapshot, and survive a second load without re-running.
  *
  * Run:  bun examples/pi-agent/test-workspace.ts
- * Needs: OpenSandbox running (uvx opensandbox-server) and GEMINI_API_KEY in .env
+ * Needs: OpenSandbox running (uvx opensandbox-server) and NVIDIA_API_KEY in .env
  *
  * Expected output:
  *   Load 1: fromSnapshot=false, setup steps logged, workspace files present

@@ -3,7 +3,7 @@
  * tool_start / tool_update / tool_end events when Pi uses bash or file tools.
  *
  * Run:  bun examples/pi-agent/test-tool-calls.ts
- * Needs: OpenSandbox running (uvx opensandbox-server) and GEMINI_API_KEY in .env
+ * Needs: OpenSandbox running (uvx opensandbox-server) and NVIDIA_API_KEY in .env
  *
  * Expected output:
  *   - At least one tool_start event (Pi will run bash to execute the script)

@@ -536,6 +536,17 @@ export function resolveEnv(env: Record<string, string>): Record<string, string> 
   return result;
 }
 
+/** Inverse of `toShellExports` — parses `/etc/drej-env`'s content back into a plain object. */
+export function parseShellExports(content: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  const re = /^export ([A-Za-z_][A-Za-z0-9_]*)="((?:[^"\\]|\\.)*)"$/gm;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content))) {
+    result[m[1]] = m[2].replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+  }
+  return result;
+}
+
 export class PiAdapter {
   private _bridgeUrl: string | null = null;
 
@@ -580,8 +591,20 @@ export class PiAdapter {
     await sb.writeFile("/drej-bridge.js", BRIDGE_SCRIPT);
   }
 
-  async startBridge(sb: Sandbox): Promise<void> {
-    await sb.exec("node /drej-bridge.js &");
+  /**
+   * Start the bridge. `unsetVars`, when given, is prefixed as `unset A B C; ` on the
+   * *same* exec command that starts `node` — required for `Agent.spawn()`'s forked
+   * sandboxes, where the container's OS-level env still carries whatever the parent
+   * had baked into it at snapshot time (`env` passed to `createSandbox` at fork time
+   * has no effect on this — verified live, see `plans/drejx-rlm-substrate.md`). A
+   * plain `sb.exec("unset ...")` beforehand would not work: `unset` only clears the
+   * shell session it runs in, and each `exec()` call is its own session — it has to
+   * be part of the exact command that spawns the bridge process so the bridge (and
+   * everything it in turn spawns, including Pi itself) inherits the already-clean env.
+   */
+  async startBridge(sb: Sandbox, unsetVars?: string[]): Promise<void> {
+    const prefix = unsetVars && unsetVars.length > 0 ? `unset ${unsetVars.join(" ")}; ` : "";
+    await sb.exec(`${prefix}node /drej-bridge.js &`);
     const { url } = await sb.proxy(3001);
     this._bridgeUrl = url;
   }

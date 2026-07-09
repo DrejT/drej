@@ -5,10 +5,11 @@
   "description": "A minimal Pi agent on node:22. Demonstrates the @drej/agent API.",
   "author": "drej",
   "cli": "pi",
-  "model": "gemini-flash-latest",
+  "provider": "nvidia",
+  "model": "nvidia/nemotron-3-super-120b-a12b:free",
   "packages": ["git", "python3"],
   "env": {
-    "GEMINI_API_KEY": "${GEMINI_API_KEY}"
+    "NVIDIA_API_KEY": "${NVIDIA_API_KEY}"
   },
   "resources": { "cpu": "1000m", "memory": "2Gi" }
 }

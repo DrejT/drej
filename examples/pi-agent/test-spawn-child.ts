@@ -23,7 +23,7 @@
  *
  * Run:  bun examples/pi-agent/test-spawn-child.ts
  * Needs: OpenSandbox running + reachable from containers (see above),
- *        GEMINI_API_KEY in .env
+ *        NVIDIA_API_KEY in .env
  *
  * Expected output:
  *   - Pi runs `osb sandbox create`, `osb command run`, `osb sandbox kill`

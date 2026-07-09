@@ -344,6 +344,12 @@ export class Drej {
    *
    * @throws `DrejError` (409) if the sandbox is not in Running state.
    *
+   * @param opts.resources  CPU/memory/GPU to use if `.fork()` is later called on the
+   *   returned `Sandbox`. The control API doesn't echo back a running sandbox's own
+   *   resource limits, so there's no way to discover them automatically here — omit
+   *   this and `.fork()` will throw. Pass it (e.g. from `drej.config.json`'s
+   *   defaults) when the caller needs fork support on a merely-connected sandbox.
+   *
    * @example
    * ```ts
    * // In a new process, reconnect to a sandbox started earlier:
@@ -352,7 +358,11 @@ export class Drej {
    * await sb.close();
    * ```
    */
-  async connect(sandboxId: string, name: string): Promise<Sandbox> {
+  async connect(
+    sandboxId: string,
+    name: string,
+    opts?: { resources?: { cpu: string; memory: string; gpu?: string } },
+  ): Promise<Sandbox> {
     await this._ensureConnected();
     const info = await this._control.getSandbox(sandboxId);
     if (info.status.state !== SandboxState.Running) {
@@ -362,10 +372,14 @@ export class Drej {
       );
     }
     await this._acquireSlot();
+    const resources = opts?.resources;
     return new Sandbox(sandboxId, name, {
       control: this._control,
       adapter: this._adapter,
       onClose: () => this._releaseSlot(),
+      fork: resources
+        ? (snapshotId, tag) => this._forkFromSnapshot(snapshotId, name, resources, undefined)
+        : undefined,
       useServerProxy: this._useServerProxy,
     });
   }
@@ -415,6 +429,7 @@ export class Drej {
         control: this._control,
         adapter: this._adapter,
         onClose: () => this._releaseSlot(),
+        fork: (snapshotId, tag) => this._forkFromSnapshot(snapshotId, name, resources, undefined),
         useServerProxy: this._useServerProxy,
       });
     } catch (err) {

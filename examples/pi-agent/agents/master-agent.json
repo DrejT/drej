@@ -5,10 +5,11 @@
   "description": "A Pi agent with the drejx CLI + Pi extension installed, demonstrating an agent orchestrating its own child agent sessions via typed drejx_* tools instead of raw osb bash commands.",
   "author": "drej",
   "cli": "pi",
-  "model": "gemini-flash-latest",
+  "provider": "nvidia",
+  "model": "nvidia/nemotron-3-super-120b-a12b:free",
   "packages": ["nodejs_22"],
   "env": {
-    "GEMINI_API_KEY": "${GEMINI_API_KEY}",
+    "NVIDIA_API_KEY": "${NVIDIA_API_KEY}",
     "MASTER_AGENT_OPENSANDBOX_DOMAIN": "${MASTER_AGENT_OPENSANDBOX_DOMAIN}"
   },
   "resources": { "cpu": "1000m", "memory": "2Gi" },
@@ -24,7 +25,7 @@
     },
     {
       "name": "Add a child spec for drejx_run to launch",
-      "run": "printf '{\"name\":\"hello-agent\",\"cli\":\"pi\",\"model\":\"gemini-flash-latest\",\"env\":{\"GEMINI_API_KEY\":\"%s\"},\"resources\":{\"cpu\":\"500m\",\"memory\":\"1Gi\"}}' \"$GEMINI_API_KEY\" > agents/hello-agent.json"
+      "run": "printf '{\"name\":\"hello-agent\",\"cli\":\"pi\",\"provider\":\"nvidia\",\"model\":\"nvidia/nemotron-3-super-120b-a12b:free\",\"env\":{\"NVIDIA_API_KEY\":\"%s\"},\"resources\":{\"cpu\":\"500m\",\"memory\":\"1Gi\"}}' \"$NVIDIA_API_KEY\" > agents/hello-agent.json"
     }
   ]
 }

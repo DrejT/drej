@@ -78,6 +78,15 @@ export interface AgentSpec {
    * Example: create directories, write seed files, install project dependencies.
    */
   setup?: SetupStep[];
+  /**
+   * Remaining budget for `Agent.spawn()` calls made from inside this agent's sandbox.
+   * Translated by `Agent.load()`/`Agent.resume()` into the `DREJX_SPAWN_DEPTH` env var.
+   * `Agent.spawn()` reads that value, refuses unless it's a positive integer, and
+   * force-injects `value - 1` into the spawned child — a tamper-resistant counter,
+   * not something a spec or the model can hand-propagate. Omit to disable spawning
+   * entirely (the default — most agents never need it).
+   */
+  spawnDepth?: number;
 }
 
 export function validateAgentSpec(data: unknown): AgentSpec {
@@ -87,5 +96,13 @@ export function validateAgentSpec(data: unknown): AgentSpec {
     throw new Error("Agent spec must have a 'name' string");
   if (item.cli !== "pi")
     throw new Error(`Unsupported CLI: '${String(item.cli ?? "(missing)")}'. Supported values: pi`);
+  if (
+    item.spawnDepth !== undefined &&
+    (typeof item.spawnDepth !== "number" ||
+      !Number.isInteger(item.spawnDepth) ||
+      item.spawnDepth < 0)
+  ) {
+    throw new Error("Agent spec 'spawnDepth' must be a non-negative integer if set");
+  }
   return item as unknown as AgentSpec;
 }

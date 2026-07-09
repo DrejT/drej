@@ -20,7 +20,7 @@
  * Run: bun examples/rlm-repo-fanout/index.ts
  * Needs: OpenSandbox running + reachable from containers (see
  *        examples/pi-agent/test-spawn-child.ts for the two things that have
- *        to be true for that), GEMINI_API_KEY in .env.
+ *        to be true for that), NVIDIA_API_KEY in .env.
  */
 import { Agent } from "@drej/agent";
 import { Drej, SandboxStatus } from "drej";

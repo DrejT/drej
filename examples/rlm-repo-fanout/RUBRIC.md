@@ -10,9 +10,10 @@ full design rationale this example implements.
 ## Run shape
 
 - **Entry point**: `bun examples/rlm-repo-fanout/index.ts`.
-- **Master spec**: `agents/master.json` — Pi CLI, `gemini-flash-latest`,
-  `spawnDepth: 1`. No `drejx_*` Pi tools registered (PR #124's extension is
-  deliberately absent — see "Why no Pi tools" below).
+- **Master spec**: `agents/master.json` — Pi CLI, NVIDIA NIM's
+  `nvidia/nemotron-3-super-120b-a12b:free`, `spawnDepth: 1`. No `drejx_*` Pi
+  tools registered (PR #124's extension is deliberately absent — see "Why no
+  Pi tools" below).
 - **Master's actual prompt**: one sentence — "Read ./TASK.md in your working
   directory and complete the task described there. Report a summary...". The
   task itself lives in `TASK.md`, written by a setup step baked into the
@@ -109,9 +110,13 @@ While validating this example, `master.prompt(...)` reliably failed with a
 on this environment's OpenSandbox instance. Isolated, not assumed:
 
 - `master.bash(...)` — same sandbox, same SSE-streaming shape, same proxy —
-  succeeds instantly. Only `.prompt()`, which waits on an actual Gemini
+  succeeds instantly. Only `.prompt()`, which waits on an actual model
   response before the first streamed byte, fails, and fails consistently
-  (two back-to-back retries, same result).
+  (two back-to-back retries, same result). Observed with Gemini during the
+  original testing of this example; the example has since switched to
+  NVIDIA NIM (see below) specifically to avoid Gemini's separate free-tier
+  quota — this failure mode is a proxy-timing issue independent of which
+  provider is behind it.
 - Bypassing the proxy (`useServerProxy: false`, connecting to the container's
   IP directly, per CLAUDE.md's documented `uvx` setup) doesn't work around
   it either — it just times out, meaning this particular environment's

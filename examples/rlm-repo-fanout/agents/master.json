@@ -5,10 +5,11 @@
   "description": "Clones a repo, decides how to split a task across it, and spawns child agents (via drejx spawn) that each work on one slice from the exact same checked-out commit.",
   "author": "drej",
   "cli": "pi",
-  "model": "gemini-flash-latest",
+  "provider": "nvidia",
+  "model": "nvidia/nemotron-3-super-120b-a12b:free",
   "packages": ["git"],
   "env": {
-    "GEMINI_API_KEY": "${GEMINI_API_KEY}",
+    "NVIDIA_API_KEY": "${NVIDIA_API_KEY}",
     "MASTER_AGENT_OPENSANDBOX_DOMAIN": "${MASTER_AGENT_OPENSANDBOX_DOMAIN}",
     "RLM_FANOUT_SECRET": "${RLM_FANOUT_SECRET}"
   },
@@ -26,7 +27,7 @@
     },
     {
       "name": "Add the worker spec",
-      "run": "mkdir -p agents && printf '{\"name\":\"rlm-fanout-worker\",\"cli\":\"pi\",\"model\":\"gemini-flash-latest\",\"env\":{\"GEMINI_API_KEY\":\"%s\"},\"resources\":{\"cpu\":\"500m\",\"memory\":\"1Gi\"}}' \"$GEMINI_API_KEY\" > agents/worker.json"
+      "run": "mkdir -p agents && printf '{\"name\":\"rlm-fanout-worker\",\"cli\":\"pi\",\"provider\":\"nvidia\",\"model\":\"nvidia/nemotron-3-super-120b-a12b:free\",\"env\":{\"NVIDIA_API_KEY\":\"%s\"},\"resources\":{\"cpu\":\"500m\",\"memory\":\"1Gi\"}}' \"$NVIDIA_API_KEY\" > agents/worker.json"
     },
     {
       "name": "Write TASK.md",

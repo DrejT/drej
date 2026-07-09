@@ -17,8 +17,9 @@ See `RUBRIC.md` for the full gate-by-gate evidence packet against the
 bunx drejx init   # starts OpenSandbox in Docker (one-time setup)
 ```
 
-Needs `GEMINI_API_KEY` in the repo root `.env` (Pi's model provider for both
-the master and its children).
+Needs `NVIDIA_API_KEY` in the repo root `.env` (Pi's model provider for both
+the master and its children — NVIDIA NIM's free-tier `nvidia/nemotron-3-super-120b-a12b:free`
+model, chosen to avoid competing with Gemini's separate free-tier quota).
 
 If your OpenSandbox server isn't reachable from inside containers at
 `172.17.0.1:8080` (the default Docker bridge gateway), override it:

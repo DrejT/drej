@@ -13,7 +13,7 @@
  *   sandbox.exec, sandbox.writeFile, sandbox.readFile
  *
  * Run:  cd examples/pi-agent && bun index.ts
- * Needs: OpenSandbox running (drejx init) and GEMINI_API_KEY in .env
+ * Needs: OpenSandbox running (drejx init) and NVIDIA_API_KEY in .env
  */
 import { Agent, textOnly } from "@drej/agent";
 import { SQLiteAdapter } from "@drej/sqlite";

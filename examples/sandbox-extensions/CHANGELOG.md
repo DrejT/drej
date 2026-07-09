@@ -1,5 +1,13 @@
 # drej-example-sandbox-extensions
 
+## 0.0.7
+
+### Patch Changes
+
+- Updated dependencies [dd89d67]
+  - drej@0.10.1
+  - @drej/agent@0.5.0
+
 ## 0.0.6
 
 ### Patch Changes

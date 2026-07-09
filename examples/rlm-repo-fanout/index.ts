@@ -54,7 +54,7 @@ function check(name: string, pass: boolean, detail?: string) {
 
 const testStart = Date.now();
 console.log("=== Loading master (spawnDepth: 1) ===\n");
-const master = await Agent.load(MASTER_SPEC, { adapter });
+const master = await Agent.load(MASTER_SPEC, { adapter, rebuild: process.env.REBUILD === "1" });
 console.log(
   `\nmaster: ${master.name}  sandbox: ${master.sandboxId}  fromSnapshot: ${master.fromSnapshot}\n`,
 );
@@ -97,12 +97,15 @@ try {
   const masterHead = masterHeadOut.trim();
   console.log(`master repo HEAD: ${masterHead}`);
 
-  const { stdout: masterDirtyOut } = await master.sandbox.exec(
-    "cd repo && git rev-parse HEAD && git log --oneline -1",
-  );
+  // A separate exec() call, not a "&&"-chained one — sb.exec() doesn't insert a
+  // newline between chained commands' outputs, so comparing against a second
+  // command's output in the same call is unreliable. Re-running the same
+  // command standalone and comparing HEAD before/after is what "no new commit
+  // was made" actually means anyway.
+  const { stdout: masterHeadAfterOut } = await master.sandbox.exec("cd repo && git rev-parse HEAD");
   check(
     "master never committed to its own repo (report-only)",
-    masterDirtyOut.trim().split("\n")[0] === masterHead,
+    masterHeadAfterOut.trim() === masterHead,
   );
 
   const allSessions = await client.sandboxes.list({ status: SandboxStatus.Running });

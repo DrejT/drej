@@ -18,7 +18,7 @@ bunx drejx init   # starts OpenSandbox in Docker (one-time setup)
 ```
 
 Needs `NVIDIA_API_KEY` in the repo root `.env` (Pi's model provider for both
-the master and its children — NVIDIA NIM's free-tier `nvidia/nemotron-3-super-120b-a12b:free`
+the master and its children — NVIDIA NIM's free-tier `nvidia/nemotron-3-super-120b-a12b`
 model, chosen to avoid competing with Gemini's separate free-tier quota).
 
 If your OpenSandbox server isn't reachable from inside containers at

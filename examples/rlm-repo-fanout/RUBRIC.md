@@ -11,7 +11,7 @@ full design rationale this example implements.
 
 - **Entry point**: `bun examples/rlm-repo-fanout/index.ts`.
 - **Master spec**: `agents/master.json` — Pi CLI, NVIDIA NIM's
-  `nvidia/nemotron-3-super-120b-a12b:free`, `spawnDepth: 1`. No `drejx_*` Pi
+  `nvidia/nemotron-3-super-120b-a12b`, `spawnDepth: 1`. No `drejx_*` Pi
   tools registered (PR #124's extension is deliberately absent — see "Why no
   Pi tools" below).
 - **Master's actual prompt**: one sentence — "Read ./TASK.md in your working
@@ -104,34 +104,52 @@ nothing else the model _could_ have used.
 
 ## Known limitation: full live run blocked by an OpenSandbox proxy issue, not a drejx bug
 
-While validating this example, `master.prompt(...)` reliably failed with a
-`500` from OpenSandbox's own server proxy (`{"code":"GENERAL::UNKNOWN_ERROR",
-"message":"An internal error occurred in the proxy: "}`, `server: uvicorn`)
-on this environment's OpenSandbox instance. Isolated, not assumed:
+Two real, separate bugs were found and fixed while getting this example to run
+for real: the example's spec originally used `nvidia/nemotron-3-super-120b-a12b:free`,
+an OpenRouter-style ID that doesn't exist on NVIDIA's own native API (the
+correct ID, confirmed via `pi --list-models nvidia` and a working local `pi -p`
+call, is just `nvidia/nemotron-3-super-120b-a12b`, no `:free` suffix); and the
+example's setup step does `npm install -g drejx`, which always installs
+whatever's currently published — so it silently ran against `drejx@0.5.0`
+(pre-`spawn`) until the `chore: version packages` release PR was merged and
+`drejx@0.6.0` published. Both are fixed now (correct model ID in every spec;
+re-verify with `REBUILD=1 bun examples/rlm-repo-fanout/index.ts` after any
+future `drejx` release to force past a stale cached snapshot).
 
-- `master.bash(...)` — same sandbox, same SSE-streaming shape, same proxy —
-  succeeds instantly. Only `.prompt()`, which waits on an actual model
-  response before the first streamed byte, fails, and fails consistently
-  (two back-to-back retries, same result). Observed with Gemini during the
-  original testing of this example; the example has since switched to
-  NVIDIA NIM (see below) specifically to avoid Gemini's separate free-tier
-  quota — this failure mode is a proxy-timing issue independent of which
-  provider is behind it.
-- Bypassing the proxy (`useServerProxy: false`, connecting to the container's
-  IP directly, per CLAUDE.md's documented `uvx` setup) doesn't work around
-  it either — it just times out, meaning this particular environment's
-  containers aren't directly reachable from the host at all, only through
-  the proxy.
+With both of those fixed, one real infrastructure issue remains, isolated
+carefully rather than assumed: `master.prompt(...)` — with the _correct_
+model, a _fresh_ `drejx@0.6.0` install, no wrong-model or version-skew
+confound — still fails intermittently on the full multi-turn `TASK.md`
+prompt (a run that involves many tool calls over several minutes). The
+failure isn't consistent in shape:
 
-This points to the OpenSandbox server's proxy having a first-byte/idle
-timeout shorter than an LLM's real response latency for long-streaming
-`/prompt`-shaped requests — plausibly the same underlying cause behind the
-"empty completions" behavior noted from earlier `@drej/agent` testing in
-this repo's history, manifesting differently here (an explicit 500 instead
-of a silently-empty response). It sits in OpenSandbox's proxy layer, not in
-`Agent.spawn()`, `drejx spawn`, or anything else touched by this change —
-`Agent.spawn()` itself was independently, thoroughly verified live against
-a real sandbox fork (env-leak fix, depth injection, depth-zero refusal, the
-`restoreSnapshot()`/`connect()` fork-wiring bugs this work found and fixed)
-using `.bash()`, which is unaffected. Re-attempt a full live run of this
-example once that OpenSandbox-side issue is resolved or worked around.
+- Sometimes an explicit `500` from OpenSandbox's own server proxy
+  (`{"code":"GENERAL::UNKNOWN_ERROR","message":"An internal error occurred
+in the proxy: "}`, `server: uvicorn`).
+- Sometimes the call "succeeds" (no thrown error) but the streamed response
+  is empty — no text, no tool calls at all.
+
+Both only show up on the _long_, multi-turn prompt. Quick one-shot prompts
+(`"say hi"`, `master.bash(...)`) succeed reliably and quickly, every time,
+through the exact same proxy. That strongly points to instability specific
+to _sustained_ SSE streaming through OpenSandbox's proxy — plausibly a
+connection reset or idle-timeout that happens to land differently depending
+on how far into the stream it occurs (before any bytes → 500; after some →
+a stream that just ends early, read by `sseStream()`'s loop as a clean but
+empty completion). Bypassing the proxy (`useServerProxy: false`, connecting
+to the container's IP directly, per CLAUDE.md's documented `uvx` setup)
+doesn't work around it either — it just times out in this environment,
+meaning containers aren't directly reachable from the host here at all.
+
+This sits in OpenSandbox's proxy layer, not in `Agent.spawn()`, `drejx
+spawn`, or anything else touched by this change — `Agent.spawn()` itself was
+independently, thoroughly verified live against a real sandbox fork
+(env-leak fix, depth injection, depth-zero refusal, the
+`restoreSnapshot()`/`connect()` fork-wiring bugs this work found and fixed),
+and the master's actual tool-use behavior _has_ been observed working
+correctly end-to-end for several minutes at a stretch (real repo inspection,
+real troubleshooting of a missing `bun` runtime, real attempts at `drejx
+spawn`) in at least one run — it's the sustained connection itself that's
+unreliable in this environment, not the model, the spec, or drejx's own
+code. Re-attempt once that OpenSandbox-side issue is resolved or worked
+around (or against a different OpenSandbox deployment).

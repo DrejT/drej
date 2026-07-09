@@ -6,7 +6,7 @@
   "author": "drej",
   "cli": "pi",
   "provider": "nvidia",
-  "model": "nvidia/nemotron-3-super-120b-a12b:free",
+  "model": "nvidia/nemotron-3-super-120b-a12b",
   "packages": ["git"],
   "env": {
     "NVIDIA_API_KEY": "${NVIDIA_API_KEY}",
@@ -27,7 +27,7 @@
     },
     {
       "name": "Add the worker spec",
-      "run": "mkdir -p agents && printf '{\"name\":\"rlm-fanout-worker\",\"cli\":\"pi\",\"provider\":\"nvidia\",\"model\":\"nvidia/nemotron-3-super-120b-a12b:free\",\"env\":{\"NVIDIA_API_KEY\":\"%s\"},\"resources\":{\"cpu\":\"500m\",\"memory\":\"1Gi\"}}' \"$NVIDIA_API_KEY\" > agents/worker.json"
+      "run": "mkdir -p agents && printf '{\"name\":\"rlm-fanout-worker\",\"cli\":\"pi\",\"provider\":\"nvidia\",\"model\":\"nvidia/nemotron-3-super-120b-a12b\",\"env\":{\"NVIDIA_API_KEY\":\"%s\"},\"resources\":{\"cpu\":\"500m\",\"memory\":\"1Gi\"}}' \"$NVIDIA_API_KEY\" > agents/worker.json"
     },
     {
       "name": "Write TASK.md",

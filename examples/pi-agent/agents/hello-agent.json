@@ -6,7 +6,7 @@
   "author": "drej",
   "cli": "pi",
   "provider": "nvidia",
-  "model": "nvidia/nemotron-3-super-120b-a12b:free",
+  "model": "nvidia/nemotron-3-super-120b-a12b",
   "packages": ["git", "python3"],
   "env": {
     "NVIDIA_API_KEY": "${NVIDIA_API_KEY}"

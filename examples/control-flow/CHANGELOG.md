@@ -1,5 +1,13 @@
 # drej-example-control-flow
 
+## 0.0.8
+
+### Patch Changes
+
+- Updated dependencies [dd89d67]
+  - drej@0.10.1
+  - @drej/workflow@1.1.6
+
 ## 0.0.7
 
 ### Patch Changes

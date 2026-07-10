@@ -64,6 +64,22 @@ function log(msg) {
   process.stderr.write(entry + "\\n");
 }
 
+// OpenSandbox's generic port-proxy (what sb.proxy() routes through) proxies via an
+// httpx client with no read timeout configured, which falls back to httpx's 5s
+// default — so any gap that long between bytes written to an SSE response (model
+// "thinking" time, a slow tool call) gets the proxy's connection to us killed,
+// surfacing to the caller as either a 500 or a stream that just ends early with
+// nothing. A ": ping" comment line is valid SSE (clients ignore lines starting
+// with ":") and resets that idle timer without affecting real event data.
+function startHeartbeat(res) {
+  return setInterval(function() {
+    try { res.write(": ping\\n\\n"); } catch (e) {}
+  }, 3000);
+}
+function stopHeartbeat(iv) {
+  if (iv) clearInterval(iv);
+}
+
 // --- Pi process state ---
 // All mutable state lives in one object so it's easy to see what changes on restart.
 var state = {
@@ -81,6 +97,7 @@ function cleanupPendingCmds(reason) {
   Object.keys(state.pendingCmds).forEach(function(id) {
     var p = state.pendingCmds[id];
     clearTimeout(p.timer);
+    stopHeartbeat(p.heartbeat);
     if (p.bash) {
       try { p.res.write("data: " + JSON.stringify({ error: reason }) + "\\n\\n"); p.res.end(); } catch (e) {}
     } else {
@@ -93,6 +110,7 @@ function cleanupPendingCmds(reason) {
 function startPi() {
   // End any in-flight SSE stream so the client isn't left hanging.
   if (state.active) {
+    stopHeartbeat(state.active.heartbeat);
     state.active.res.write("data: " + JSON.stringify({ error: "pi restarted" }) + "\\n\\n");
     state.active.res.end();
     state.active = null;
@@ -133,6 +151,7 @@ function startPi() {
     state.ready = false;
     cleanupPendingCmds("pi exited");
     if (state.active) {
+      stopHeartbeat(state.active.heartbeat);
       state.active.res.write("data: " + JSON.stringify({ error: "pi exited" }) + "\\n\\n");
       state.active.res.end();
       state.active = null;
@@ -184,6 +203,7 @@ function handleLine(line) {
   if (ev.type === "response" && ev.id && state.pendingCmds[ev.id]) {
     var pending = state.pendingCmds[ev.id];
     clearTimeout(pending.timer);
+    stopHeartbeat(pending.heartbeat);
     delete state.pendingCmds[ev.id];
     if (pending.bash) {
       var output = (ev.data && ev.data.output) || "";
@@ -315,6 +335,7 @@ function handleLine(line) {
   }
   if (ev.type === "agent_end") {
     if (!state.active) return;
+    stopHeartbeat(state.active.heartbeat);
     state.active.res.write("data: " + JSON.stringify({ type: "agent_end", messages: ev.messages || [] }) + "\\n\\n");
     log("agent_end: " + state.active.text.length + " chars in " + (Date.now() - state.active.t0) + "ms");
     state.active.res.write("data: [DONE]\\n\\n");
@@ -337,6 +358,7 @@ function flush() {
   if (item.streamingBehavior) rpcMsg.streamingBehavior = item.streamingBehavior;
   rpc(rpcMsg);
   item.res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "Connection": "keep-alive" });
+  if (!item.streamingBehavior) item.heartbeat = startHeartbeat(item.res);
   // Injections don't produce their own SSE body — their output arrives via the active prompt's stream.
   if (item.streamingBehavior) {
     item.res.write("data: [DONE]\\n\\n");
@@ -388,12 +410,13 @@ http.createServer(function(req, res) {
         var bashId = "b" + Date.now();
         var bashTimer = setTimeout(function() {
           if (state.pendingCmds[bashId]) {
+            stopHeartbeat(state.pendingCmds[bashId].heartbeat);
             delete state.pendingCmds[bashId];
             try { res.write("data: " + JSON.stringify({ error: "bash timeout" }) + "\\n\\n"); res.end(); } catch (e) {}
           }
         }, 30000);
-        state.pendingCmds[bashId] = { res: res, timer: bashTimer, bash: true };
         res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "Connection": "keep-alive" });
+        state.pendingCmds[bashId] = { res: res, timer: bashTimer, bash: true, heartbeat: startHeartbeat(res) };
         rpc({ id: bashId, type: "bash", command: data.command || "" });
         return;
       }
@@ -402,6 +425,7 @@ http.createServer(function(req, res) {
         // End the active SSE stream immediately, drain the queue, then wait for Pi's ack.
         state.queue.length = 0;
         if (state.active) {
+          stopHeartbeat(state.active.heartbeat);
           state.active.res.write("data: [DONE]\\n\\n");
           state.active.res.end();
           state.active = null;

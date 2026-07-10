@@ -11,9 +11,10 @@ full design rationale this example implements.
 
 - **Entry point**: `bun examples/rlm-repo-fanout/index.ts`.
 - **Master spec**: `agents/master.json` — Pi CLI, NVIDIA NIM's
-  `nvidia/nemotron-3-super-120b-a12b`, `spawnDepth: 1`. No `drejx_*` Pi
-  tools registered (PR #124's extension is deliberately absent — see "Why no
-  Pi tools" below).
+  `openai/gpt-oss-20b` (chosen after benchmarking several NVIDIA NIM models
+  for speed/reliability — see "Why this model" below), `spawnDepth: 1`. No
+  `drejx_*` Pi tools registered (PR #124's extension is deliberately absent
+  — see "Why no Pi tools" below).
 - **Master's actual prompt**: one sentence — "Read ./TASK.md in your working
   directory and complete the task described there. Report a summary...". The
   task itself lives in `TASK.md`, written by a setup step baked into the
@@ -64,6 +65,27 @@ a one-off "spawn a helper" UX, but structurally a parent _verbally_ deciding
 those tools out of `master.json` entirely means every spawn in a real run of
 this example is provably a bash/script invocation, not a tool call — there's
 nothing else the model _could_ have used.
+
+## Why this model
+
+Benchmarked several NVIDIA NIM models locally (`pi -p --provider nvidia
+--model <id> ...`, outside any sandbox — a plain text prompt and a
+bash-tool-calling prompt, timed) before picking one to trust for this
+example:
+
+| Model                                                 | Text        | Tool call                                  | Verdict                                                                                                                                                                                         |
+| ----------------------------------------------------- | ----------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `openai/gpt-oss-20b`                                  | 3.5s        | 2.5s (2.1–2.3s over 3 repeats)             | **Used — fastest and most consistent**                                                                                                                                                          |
+| `nvidia/nemotron-3-nano-30b-a3b`                      | 8.3s        | 3.6s                                       | Good                                                                                                                                                                                            |
+| `meta/llama-3.1-8b-instruct`                          | 2.8s        | 6.9s                                       | Good                                                                                                                                                                                            |
+| `nvidia/nvidia-nemotron-nano-9b-v2`                   | 4.5s        | 11.7s                                      | OK, slower tool calls                                                                                                                                                                           |
+| `nvidia/nemotron-3-super-120b-a12b` (previously used) | 5.7s        | 8.6s                                       | Works, but separately stalled 700s+ in a live sandboxed run — NVCF (NVIDIA Cloud Functions) async-job-queue infra, evidenced by an `NVCF-POLL-SECONDS: 3600` header on the model's own metadata |
+| `qwen/qwen3.5-122b-a10b`                              | 1.9s        | **error** — "Unexpected end of JSON input" | Broken tool calling through NVIDIA's endpoint — avoid                                                                                                                                           |
+| `meta/llama-3.3-70b-instruct`                         | **timeout** | **timeout**                                | Unreliable — avoid                                                                                                                                                                              |
+
+`openai/gpt-oss-20b`'s smaller footprint likely also means lower demand on
+NVIDIA's shared free-tier serving infrastructure, which should reduce (not
+guarantee against) the odds of hitting the same NVCF queueing stall.
 
 ## Strongest case against
 

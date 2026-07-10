@@ -6,7 +6,7 @@
   "author": "drej",
   "cli": "pi",
   "provider": "nvidia",
-  "model": "nvidia/nemotron-3-super-120b-a12b",
+  "model": "openai/gpt-oss-20b",
   "packages": ["nodejs_22"],
   "env": {
     "NVIDIA_API_KEY": "${NVIDIA_API_KEY}",
@@ -25,7 +25,7 @@
     },
     {
       "name": "Add a child spec for drejx_run to launch",
-      "run": "printf '{\"name\":\"hello-agent\",\"cli\":\"pi\",\"provider\":\"nvidia\",\"model\":\"nvidia/nemotron-3-super-120b-a12b\",\"env\":{\"NVIDIA_API_KEY\":\"%s\"},\"resources\":{\"cpu\":\"500m\",\"memory\":\"1Gi\"}}' \"$NVIDIA_API_KEY\" > agents/hello-agent.json"
+      "run": "printf '{\"name\":\"hello-agent\",\"cli\":\"pi\",\"provider\":\"nvidia\",\"model\":\"openai/gpt-oss-20b\",\"env\":{\"NVIDIA_API_KEY\":\"%s\"},\"resources\":{\"cpu\":\"500m\",\"memory\":\"1Gi\"}}' \"$NVIDIA_API_KEY\" > agents/hello-agent.json"
     }
   ]
 }

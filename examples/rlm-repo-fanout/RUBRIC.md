@@ -11,16 +11,18 @@ full design rationale this example implements.
 
 - **Entry point**: `bun examples/rlm-repo-fanout/index.ts`.
 - **Master spec**: `agents/master.json` — Pi CLI, NVIDIA NIM's
-  `openai/gpt-oss-20b` (chosen after benchmarking several NVIDIA NIM models
-  for speed/reliability — see "Why this model" below), `spawnDepth: 1`. No
-  `drejx_*` Pi tools registered (PR #124's extension is deliberately absent
-  — see "Why no Pi tools" below).
+  `nvidia/nemotron-3-super-120b-a12b` (chosen after benchmarking several
+  NVIDIA NIM models for speed/reliability/tenacity — see "Why this model"
+  below), `spawnDepth: 1`. No `drejx_*` Pi tools registered (PR #124's
+  extension is deliberately absent — see "Why no Pi tools" below).
 - **Master's actual prompt**: one sentence — "Read ./TASK.md in your working
   directory and complete the task described there. Report a summary...". The
   task itself lives in `TASK.md`, written by a setup step baked into the
   snapshot, never pasted into the prompt string.
-- **Worker spec**: `agents/worker.json` — Pi CLI only. No `drejx` install, no
-  `drej.config.json`, no spawn tools of any kind reachable.
+- **Worker spec**: `agents/worker.json` — Pi CLI only, `nvidia/nemotron-3-nano-30b-a3b`
+  (faster than the master's model — a worker's task is a single bounded edit,
+  not multi-step decomposition, so speed matters more than tenacity here). No
+  `drejx` install, no `drej.config.json`, no spawn tools of any kind reachable.
 - **Tools enabled for the master**: Pi's built-in bash tool only. `drejx` is
   a CLI on `$PATH` inside the sandbox, invoked the same way `ls` or `git`
   would be — not a registered tool the model calls by name.
@@ -68,24 +70,47 @@ nothing else the model _could_ have used.
 
 ## Why this model
 
-Benchmarked several NVIDIA NIM models locally (`pi -p --provider nvidia
---model <id> ...`, outside any sandbox — a plain text prompt and a
-bash-tool-calling prompt, timed) before picking one to trust for this
-example:
+Benchmarked several NVIDIA NIM models locally first (`pi -p --provider
+nvidia --model <id> ...`, outside any sandbox — a plain text prompt and a
+single bash-tool-calling prompt, timed):
 
-| Model                                                 | Text        | Tool call                                  | Verdict                                                                                                                                                                                         |
-| ----------------------------------------------------- | ----------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `openai/gpt-oss-20b`                                  | 3.5s        | 2.5s (2.1–2.3s over 3 repeats)             | **Used — fastest and most consistent**                                                                                                                                                          |
-| `nvidia/nemotron-3-nano-30b-a3b`                      | 8.3s        | 3.6s                                       | Good                                                                                                                                                                                            |
-| `meta/llama-3.1-8b-instruct`                          | 2.8s        | 6.9s                                       | Good                                                                                                                                                                                            |
-| `nvidia/nvidia-nemotron-nano-9b-v2`                   | 4.5s        | 11.7s                                      | OK, slower tool calls                                                                                                                                                                           |
-| `nvidia/nemotron-3-super-120b-a12b` (previously used) | 5.7s        | 8.6s                                       | Works, but separately stalled 700s+ in a live sandboxed run — NVCF (NVIDIA Cloud Functions) async-job-queue infra, evidenced by an `NVCF-POLL-SECONDS: 3600` header on the model's own metadata |
-| `qwen/qwen3.5-122b-a10b`                              | 1.9s        | **error** — "Unexpected end of JSON input" | Broken tool calling through NVIDIA's endpoint — avoid                                                                                                                                           |
-| `meta/llama-3.3-70b-instruct`                         | **timeout** | **timeout**                                | Unreliable — avoid                                                                                                                                                                              |
+| Model                               | Text        | Tool call                                  | Verdict                                                  |
+| ----------------------------------- | ----------- | ------------------------------------------ | -------------------------------------------------------- |
+| `openai/gpt-oss-20b`                | 3.5s        | 2.5s (2.1–2.3s over 3 repeats)             | Fastest single-call — but see below                      |
+| `nvidia/nemotron-3-nano-30b-a3b`    | 8.3s        | 3.6s                                       | Good, clean tool calls                                   |
+| `meta/llama-3.1-8b-instruct`        | 2.8s        | 6.9s                                       | Good                                                     |
+| `nvidia/nvidia-nemotron-nano-9b-v2` | 4.5s        | 11.7s                                      | OK, slower tool calls                                    |
+| `nvidia/nemotron-3-super-120b-a12b` | 5.7s        | 8.6s                                       | Slower per call, but see below — **used for the master** |
+| `qwen/qwen3.5-122b-a10b`            | 1.9s        | **error** — "Unexpected end of JSON input" | Broken tool calling through NVIDIA's endpoint — avoid    |
+| `meta/llama-3.3-70b-instruct`       | **timeout** | **timeout**                                | Unreliable — avoid                                       |
 
-`openai/gpt-oss-20b`'s smaller footprint likely also means lower demand on
-NVIDIA's shared free-tier serving infrastructure, which should reduce (not
-guarantee against) the odds of hitting the same NVCF queueing stall.
+That single-call benchmark turned out to be an incomplete signal for what
+this example actually needs — a model that stays on-task across a _long_,
+multi-tool-call session (find missing files, decide a split, spawn children,
+collect results), not just answer one prompt quickly. Two things only showed
+up in real sandboxed multi-turn runs:
+
+- **`openai/gpt-oss-20b` leaks its own "harmony" chat-template channel
+  tokens into tool names** (`bash<|channel|>commentary`, `bashcommentary`)
+  on roughly half its tool calls when served through NVIDIA — every one of
+  those calls fails before the tool even runs, since the mangled name
+  doesn't match anything registered. Fastest per-call, but unusable for a
+  sustained session. Likely a template mismatch specific to NVIDIA serving
+  an OpenAI-family model, not something wrong with gpt-oss itself.
+- **`nvidia/nemotron-3-nano-30b-a3b`** (a native NVIDIA model, so no
+  cross-vendor template mismatch) had completely clean tool calls, but
+  showed real run-to-run variance in _tenacity_ — some runs explored the
+  repo thoroughly and attempted a real `drejx spawn` call, others gave up
+  after two tool calls without trying. Good for the worker's single bounded
+  edit; not reliable enough for the master's longer decomposition work.
+- **`nvidia/nemotron-3-super-120b-a12b`**, tried again after fixing two
+  unrelated bugs that had been muddying every earlier read on this model
+  (see "Known limitation" below), showed the most persistent, thorough
+  multi-turn behavior of anything tested — including self-recovering from a
+  missing `bun` runtime by installing it unprompted. Slower per call, but
+  actually finishes the reasoning chain. Used for the master; the worker
+  keeps the faster `nemotron-3-nano-30b-a3b` since its job is one bounded
+  edit, not open-ended decomposition.
 
 ## Strongest case against
 
@@ -124,54 +149,98 @@ guarantee against) the odds of hitting the same NVCF queueing stall.
   `plans/drejx-rlm-substrate.md` — deliberately left for exactly this kind of
   observation).
 
-## Known limitation: full live run blocked by an OpenSandbox proxy issue, not a drejx bug
+## Debugging history: every real bug found getting this to run live
 
-Two real, separate bugs were found and fixed while getting this example to run
-for real: the example's spec originally used `nvidia/nemotron-3-super-120b-a12b:free`,
-an OpenRouter-style ID that doesn't exist on NVIDIA's own native API (the
-correct ID, confirmed via `pi --list-models nvidia` and a working local `pi -p`
-call, is just `nvidia/nemotron-3-super-120b-a12b`, no `:free` suffix); and the
-example's setup step does `npm install -g drejx`, which always installs
-whatever's currently published — so it silently ran against `drejx@0.5.0`
-(pre-`spawn`) until the `chore: version packages` release PR was merged and
-`drejx@0.6.0` published. Both are fixed now (correct model ID in every spec;
-re-verify with `REBUILD=1 bun examples/rlm-repo-fanout/index.ts` after any
-future `drejx` release to force past a stale cached snapshot).
+Getting a live run of this example working surfaced a chain of real, distinct
+bugs — worth recording in full since several looked like something else
+entirely until isolated:
 
-With both of those fixed, one real infrastructure issue remains, isolated
-carefully rather than assumed: `master.prompt(...)` — with the _correct_
-model, a _fresh_ `drejx@0.6.0` install, no wrong-model or version-skew
-confound — still fails intermittently on the full multi-turn `TASK.md`
-prompt (a run that involves many tool calls over several minutes). The
-failure isn't consistent in shape:
+1. **Wrong model ID.** The spec originally used
+   `nvidia/nemotron-3-super-120b-a12b:free` — an OpenRouter-style suffix that
+   doesn't exist on NVIDIA's own native API. Found via `pi --list-models
+nvidia` and a working local `pi -p` call with the correct ID (no `:free`).
+2. **Stale published `drejx`.** The setup step's `npm install -g drejx`
+   always installs whatever's currently on npm — it silently ran against
+   `drejx@0.5.0` (pre-`spawn`) until the `chore: version packages` PR merged
+   and `0.6.0` published. (`examples/rlm-repo-fanout/index.ts` has a
+   `REBUILD=1` escape hatch to force past a stale cached snapshot after any
+   future `drejx` release.)
+3. **A genuine OpenSandbox proxy bug.** Confirmed via DeepWiki against
+   `opensandbox-group/OpenSandbox`: the generic `/sandboxes/{id}/proxy/{port}`
+   endpoint (what `sb.proxy()` routes through) proxies via an `httpx` client
+   with no configured read timeout, which falls back to httpx's 5s default.
+   Any gap that long between bytes written to the bridge's SSE response
+   (model thinking time, a slow tool call) got the proxy's connection to the
+   bridge killed — a `500`, or a stream that silently ended early. Fixed in
+   `packages/agent/src/adapters/pi.ts`: the bridge now writes a `: ping` SSE
+   comment (spec-legal, ignored by clients) every 3s while a `/prompt` or
+   `/bash` call is in flight, keeping that idle timer from ever firing.
+4. **The bridge silently dropped a failed prompt.** Even with the heartbeat
+   fix, a run could still hang forever: if Pi rejected a prompt outright
+   (`{"success":false,"error":"..."}`), that ack isn't tracked the way
+   `/bash` results are, so the bridge just... didn't forward it. The client
+   sat behind the heartbeat indefinitely instead of seeing a clean error.
+   Fixed in the same file: a rejected prompt now ends the SSE stream with the
+   real error immediately.
+5. **What #4 was actually masking.** Once errors surfaced instead of hanging,
+   Pi reported `"No API key found for nvidia"` — even though the key was
+   right there in `.env`. Root cause: Bun only loads `.env` from the shell's
+   CWD at invocation, it does not walk up to the repo root — running this
+   example from inside `examples/rlm-repo-fanout` (which has no `.env` of
+   its own) silently resolved `NVIDIA_API_KEY` to an empty string. The
+   example builds a sandbox fine either way; only the _live model call_
+   fails. `index.ts` now checks `NVIDIA_API_KEY` up front and refuses with a
+   clear message instead of building a doomed sandbox.
+6. **Missing `bun` runtime.** `drejx`'s own npm package ships with a
+   `#!/usr/bin/env bun` shebang — the `node:22` base image has no `bun` at
+   all, so `drejx` couldn't run regardless of everything else being correct.
+   `master.json`'s setup now installs bun and symlinks it onto `/usr/local/bin`
+   (already on `$PATH` by default), rather than relying on a per-exec-session
+   `PATH` export that wouldn't persist anyway.
+7. **`openai/gpt-oss-20b` mangles tool names via NVIDIA.** Fastest in
+   single-call benchmarks, but leaks its own "harmony" chat-template channel
+   tokens into tool names (`bash<|channel|>commentary`) on roughly half its
+   calls when served through NVIDIA — every one of those fails before the
+   tool even runs.
+8. **A structural Pi+NVIDIA tool-calling issue, found across three separate
+   models, not fixed.** After #1–7, `index.ts` was updated to log a failed
+   tool call's actual result content (not just `isError`), which is what
+   surfaced this clearly instead of leaving it as an unexplained hang. Three
+   different models, driven the same way through Pi's `openai-completions`
+   API path against NVIDIA, each corrupted tool calls in a _different_
+   shape:
+   - `openai/gpt-oss-20b` — its harmony-format channel tokens leak into the
+     tool _name_ (item 7, above).
+   - `nvidia/nemotron-3-nano-30b-a3b` — occasionally emits a raw
+     `<function=bash><parameter=command>...` XML-ish string as plain text
+     instead of a real tool call.
+   - `nvidia/nemotron-3-super-120b-a12b` — its own reasoning text and a
+     _second_, nested tool-call attempt bled into the _first_ call's command
+     argument (`"ls.\n\nWe need to use drejx spawn command...<tool_call>\n
+<function=bash>\n<parameter=command>\nls -la"`), producing an
+     unparseable shell string and a `127` exit — the master's turn ended
+     right after, without retrying.
 
-- Sometimes an explicit `500` from OpenSandbox's own server proxy
-  (`{"code":"GENERAL::UNKNOWN_ERROR","message":"An internal error occurred
-in the proxy: "}`, `server: uvicorn`).
-- Sometimes the call "succeeds" (no thrown error) but the streamed response
-  is empty — no text, no tool calls at all.
+   Three models, three different corruption shapes, through one integration
+   path — that's a pattern pointing at Pi's streaming tool-call parser for
+   NVIDIA's API specifically, not any one model's competence. Not something
+   fixable by trying yet another NVIDIA model. The two real next steps are:
+   report this upstream to Pi as a parsing bug against NVIDIA's
+   `openai-completions` implementation, or switch this example to a provider
+   Pi's tool-call parser is presumably better exercised against (Anthropic's
+   or OpenAI's own APIs — which reintroduces the cost/quota question this
+   whole NVIDIA detour was meant to avoid, just for a different, more
+   fundamental reason this time: correctness, not price).
 
-Both only show up on the _long_, multi-turn prompt. Quick one-shot prompts
-(`"say hi"`, `master.bash(...)`) succeed reliably and quickly, every time,
-through the exact same proxy. That strongly points to instability specific
-to _sustained_ SSE streaming through OpenSandbox's proxy — plausibly a
-connection reset or idle-timeout that happens to land differently depending
-on how far into the stream it occurs (before any bytes → 500; after some →
-a stream that just ends early, read by `sseStream()`'s loop as a clean but
-empty completion). Bypassing the proxy (`useServerProxy: false`, connecting
-to the container's IP directly, per CLAUDE.md's documented `uvx` setup)
-doesn't work around it either — it just times out in this environment,
-meaning containers aren't directly reachable from the host here at all.
-
-This sits in OpenSandbox's proxy layer, not in `Agent.spawn()`, `drejx
-spawn`, or anything else touched by this change — `Agent.spawn()` itself was
-independently, thoroughly verified live against a real sandbox fork
-(env-leak fix, depth injection, depth-zero refusal, the
-`restoreSnapshot()`/`connect()` fork-wiring bugs this work found and fixed),
-and the master's actual tool-use behavior _has_ been observed working
-correctly end-to-end for several minutes at a stretch (real repo inspection,
-real troubleshooting of a missing `bun` runtime, real attempts at `drejx
-spawn`) in at least one run — it's the sustained connection itself that's
-unreliable in this environment, not the model, the spec, or drejx's own
-code. Re-attempt once that OpenSandbox-side issue is resolved or worked
-around (or against a different OpenSandbox deployment).
+With #1–7 fixed, live runs do show the master doing genuine, sustained,
+multi-minute tool use when a corrupted call doesn't derail it early — real
+repo inspection, a precomputed `MISSING_READMES.txt` (cuts exploratory tool
+calls, see "Why this model"), and in one run the exact correct `drejx spawn`
+syntax. #8 is the reason no run has yet completed a full spawn-and-collect
+cycle end to end. `Agent.spawn()` itself remains independently, thoroughly
+verified via `.bash()` and direct SDK calls (env-leak fix, depth injection,
+depth-zero refusal, the `restoreSnapshot()`/`connect()` fork-wiring bugs
+found along the way) — the mechanism this example exists to showcase is
+correct; #8 is a provider-integration issue sitting one layer up, in how the
+model's own tool calls get generated and parsed, not in anything `drejx`
+does with them once they arrive clean.

@@ -33,6 +33,20 @@ import { randomBytes } from "crypto";
 // `bun examples/rlm-repo-fanout/index.ts` from the repo root.
 process.chdir(import.meta.dir);
 
+// Bun only loads `.env` from the shell's CWD at invocation, not by walking up
+// to the repo root — so running this from inside examples/rlm-repo-fanout
+// (which has no .env of its own) silently resolves NVIDIA_API_KEY to an empty
+// string. That doesn't fail loudly: the sandbox builds fine, Pi just rejects
+// every prompt with "no API key found," which used to hang forever behind the
+// bridge's heartbeat instead of erroring (fixed separately in pi.ts, but this
+// catches the actual mistake before spending 60s+ building a doomed sandbox).
+if (!process.env.NVIDIA_API_KEY) {
+  throw new Error(
+    "NVIDIA_API_KEY is not set. Run this from the repo root (bun examples/rlm-repo-fanout/index.ts) " +
+      "so Bun loads the root .env — running from inside this directory won't pick it up.",
+  );
+}
+
 process.env.MASTER_AGENT_OPENSANDBOX_DOMAIN ??= "172.17.0.1:8080";
 const SECRET = `rlm-fanout-secret-${randomBytes(8).toString("hex")}`;
 process.env.RLM_FANOUT_SECRET = SECRET;
@@ -73,9 +87,10 @@ try {
         process.stdout.write(ev.text);
         reply += ev.text;
       } else if (ev.type === "tool_start") {
-        console.log(`\n[tool_start] ${ev.toolName} ${JSON.stringify(ev.args).slice(0, 200)}`);
+        console.log(`\n[tool_start] ${ev.toolName} ${JSON.stringify(ev.args).slice(0, 400)}`);
       } else if (ev.type === "tool_end") {
         console.log(`[tool_end]   ${ev.toolName} isError=${ev.isError}`);
+        if (ev.isError) console.log(`  result: ${JSON.stringify(ev.result).slice(0, 500)}`);
       }
     }
   } catch (err) {

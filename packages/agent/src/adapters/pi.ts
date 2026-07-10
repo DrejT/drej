@@ -197,6 +197,21 @@ function handleLine(line) {
     return;
   }
 
+  // A "prompt" command's own ack is not tracked in pendingCmds (only via
+  // state.active) — if Pi rejects it outright (e.g. no API key configured for
+  // the provider), no agent_end will ever follow, and without this the client
+  // would hang forever behind the heartbeat instead of seeing a clean error.
+  if (ev.type === "response" && ev.command === "prompt" && !ev.success) {
+    if (!state.active) return;
+    stopHeartbeat(state.active.heartbeat);
+    log("prompt rejected: " + (ev.error || "unknown"));
+    state.active.res.write("data: " + JSON.stringify({ error: ev.error || "prompt rejected" }) + "\\n\\n");
+    state.active.res.end();
+    state.active = null;
+    flush();
+    return;
+  }
+
   // Resolve a pending command ack.
   // Bash returns output synchronously in ev.data — stream it as SSE then send [DONE].
   // All other commands use JSON response.

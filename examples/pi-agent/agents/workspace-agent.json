@@ -6,7 +6,7 @@
   "author": "drej",
   "cli": "pi",
   "provider": "nvidia",
-  "model": "openai/gpt-oss-20b",
+  "model": "nvidia/nemotron-3-nano-30b-a3b",
   "packages": ["python3"],
   "env": {
     "NVIDIA_API_KEY": "${NVIDIA_API_KEY}"

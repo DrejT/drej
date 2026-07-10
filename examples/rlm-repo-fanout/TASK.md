@@ -5,12 +5,23 @@ folder under ./repo/examples/ should have a README.md describing, in one
 short paragraph, what capability that example demonstrates (base it on the
 index.ts file in that folder).
 
-Some folders are missing one. Find out which ones, decide how to split the
-work among spawned child agents (you have the drejx CLI and a spawn budget
-of 1 -- run "drejx spawn --help" if unsure of exact syntax), and have each
-child write the missing README.md for ONE example inside its own copy of
-the repo (children start from your exact checked-out commit, so their
-edits apply to the same tree).
+The examples missing a README.md are listed, one per line, in
+./MISSING_READMES.txt (already computed for you -- no need to search for
+them). Decide how to split this list among spawned child agents (one child
+per example, or grouped -- your call), and have each child write the
+missing README.md for its assigned example(s) inside its own copy of the
+repo (children start from your exact checked-out commit, so their edits
+apply to the same tree).
+
+To spawn a child, run exactly this (your own session name is
+rlm-fanout-master):
+
+    drejx spawn rlm-fanout-master ./agents/worker.json --prompt "<plain instruction>" --json
+
+Keep each --prompt value plain English, naming the example and the file to
+write. Do not embed literal shell commands or shell operators like && inside
+the --prompt text -- the child will run its own commands once it starts, you
+do not need to script that for it.
 
 Each child should:
 

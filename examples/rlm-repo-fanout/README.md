@@ -17,11 +17,16 @@ See `RUBRIC.md` for the full gate-by-gate evidence packet against the
 bunx drejx init   # starts OpenSandbox in Docker (one-time setup)
 ```
 
-Needs `NVIDIA_API_KEY` in the repo root `.env` (Pi's model provider for both
-the master and its children — NVIDIA NIM's free-tier `openai/gpt-oss-20b`
-model, chosen both to avoid competing with Gemini's separate free-tier quota
-and, after benchmarking several NVIDIA NIM models, for being the fastest and
-most reliable at tool calling — see `RUBRIC.md`'s "Why this model" section).
+Needs `NVIDIA_API_KEY` **in the repo root `.env`** — Bun only loads `.env`
+from the shell's CWD at invocation, not by walking up to the repo root, so
+this must be run as `bun examples/rlm-repo-fanout/index.ts` from the repo
+root, not from inside this directory (the script checks for this and
+refuses with a clear error otherwise). The master uses NVIDIA NIM's
+`nvidia/nemotron-3-super-120b-a12b`, the worker the faster
+`nvidia/nemotron-3-nano-30b-a3b` — both chosen after benchmarking several
+NVIDIA NIM models for speed, tool-calling reliability, and (for the master)
+tenacity across a long multi-turn session — see `RUBRIC.md`'s "Why this
+model" section.
 
 If your OpenSandbox server isn't reachable from inside containers at
 `172.17.0.1:8080` (the default Docker bridge gateway), override it:

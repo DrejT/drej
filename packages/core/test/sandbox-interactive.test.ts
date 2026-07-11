@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { Sandbox } from "../src/sandbox.ts";
-import type { SandboxDeps, PendingInteractiveExec } from "../src/sandbox.ts";
+import { Sandbox } from "../src/sandbox/index.ts";
+import type { SandboxDeps, PendingInteractiveExec } from "../src/sandbox/index.ts";
 import type { IStorageAdapter } from "../src/ledger.ts";
 import type { ExecResult } from "../src/exec-handle.ts";
 
@@ -60,10 +60,10 @@ describe("Sandbox interactive exec", () => {
     const adapter = makeAdapter();
     const sb = new Sandbox("sb-1", "test", makeDeps(adapter));
     const { pty } = makeFakePty();
-    (sb as any)._resolvePtyClient = vi.fn().mockResolvedValue(pty);
+    (sb as any).resolvePtyClient = vi.fn().mockResolvedValue(pty);
 
     sb.exec("bash", { interactive: true });
-    await vi.waitFor(() => expect((sb as any)._openSessionClosers.size).toBe(1));
+    await vi.waitFor(() => expect((sb as any).openSessionClosers.size).toBe(1));
 
     const start = appendedEvents(adapter).find((e) => e.event === "exec_start");
     expect(start?.payload).toMatchObject({ cmd: "bash", interactive: true, seq: 1 });
@@ -73,10 +73,10 @@ describe("Sandbox interactive exec", () => {
     const adapter = makeAdapter();
     const sb = new Sandbox("sb-1", "test", makeDeps(adapter));
     const { pty } = makeFakePty();
-    (sb as any)._resolvePtyClient = vi.fn().mockResolvedValue(pty);
+    (sb as any).resolvePtyClient = vi.fn().mockResolvedValue(pty);
 
     const handle = sb.exec("bash", { interactive: true });
-    await vi.waitFor(() => expect((sb as any)._openSessionClosers.size).toBe(1));
+    await vi.waitFor(() => expect((sb as any).openSessionClosers.size).toBe(1));
 
     handle.write("whoami\n");
     await vi.waitFor(() => expect(pty.write).toHaveBeenCalledWith("whoami\n"));
@@ -91,10 +91,10 @@ describe("Sandbox interactive exec", () => {
     const adapter = makeAdapter();
     const sb = new Sandbox("sb-1", "test", makeDeps(adapter));
     const { pty, emitOutput } = makeFakePty();
-    (sb as any)._resolvePtyClient = vi.fn().mockResolvedValue(pty);
+    (sb as any).resolvePtyClient = vi.fn().mockResolvedValue(pty);
 
     sb.exec("bash", { interactive: true });
-    await vi.waitFor(() => expect((sb as any)._openSessionClosers.size).toBe(1));
+    await vi.waitFor(() => expect((sb as any).openSessionClosers.size).toBe(1));
 
     emitOutput("hello\n");
     await vi.waitFor(() => {
@@ -110,10 +110,10 @@ describe("Sandbox interactive exec", () => {
     const adapter = makeAdapter();
     const sb = new Sandbox("sb-1", "test", makeDeps(adapter));
     const { pty, emitExit } = makeFakePty();
-    (sb as any)._resolvePtyClient = vi.fn().mockResolvedValue(pty);
+    (sb as any).resolvePtyClient = vi.fn().mockResolvedValue(pty);
 
     const handle = sb.exec("bash", { interactive: true, strict: false });
-    await vi.waitFor(() => expect((sb as any)._openSessionClosers.size).toBe(1));
+    await vi.waitFor(() => expect((sb as any).openSessionClosers.size).toBe(1));
 
     emitExit(0);
     const result = await handle;
@@ -126,10 +126,10 @@ describe("Sandbox interactive exec", () => {
     const adapter = makeAdapter();
     const sb = new Sandbox("sb-1", "test", makeDeps(adapter));
     const { pty, emitExit } = makeFakePty();
-    (sb as any)._resolvePtyClient = vi.fn().mockResolvedValue(pty);
+    (sb as any).resolvePtyClient = vi.fn().mockResolvedValue(pty);
 
     const handle = sb.exec("bash", { interactive: true });
-    await vi.waitFor(() => expect((sb as any)._openSessionClosers.size).toBe(1));
+    await vi.waitFor(() => expect((sb as any).openSessionClosers.size).toBe(1));
 
     emitExit(1);
     await expect(handle).rejects.toThrow("Command exited with code 1");
@@ -139,10 +139,10 @@ describe("Sandbox interactive exec", () => {
     const adapter = makeAdapter();
     const sb = new Sandbox("sb-1", "test", makeDeps(adapter));
     const { pty, emitExit } = makeFakePty();
-    (sb as any)._resolvePtyClient = vi.fn().mockResolvedValue(pty);
+    (sb as any).resolvePtyClient = vi.fn().mockResolvedValue(pty);
 
     const handle = sb.exec("bash", { interactive: true, strict: false });
-    await vi.waitFor(() => expect((sb as any)._openSessionClosers.size).toBe(1));
+    await vi.waitFor(() => expect((sb as any).openSessionClosers.size).toBe(1));
 
     emitExit(1);
     const result = await handle;
@@ -154,14 +154,14 @@ describe("Sandbox interactive exec", () => {
     const deps = makeDeps(adapter);
     const sb = new Sandbox("sb-1", "test", deps);
     const { pty } = makeFakePty();
-    (sb as any)._resolvePtyClient = vi.fn().mockResolvedValue(pty);
+    (sb as any).resolvePtyClient = vi.fn().mockResolvedValue(pty);
 
     sb.exec("bash", { interactive: true });
-    await vi.waitFor(() => expect((sb as any)._openSessionClosers.size).toBe(1));
+    await vi.waitFor(() => expect((sb as any).openSessionClosers.size).toBe(1));
 
     await sb.close();
     expect(pty.close).toHaveBeenCalled();
-    expect((sb as any)._openSessionClosers.size).toBe(0);
+    expect((sb as any).openSessionClosers.size).toBe(0);
   });
 
   it("replayed (already-finished) interactive exec resolves instantly without opening a pty", async () => {
@@ -170,7 +170,7 @@ describe("Sandbox interactive exec", () => {
     const replayCache = new Map([[1, cached]]);
     const sb = new Sandbox("sb-1", "test", makeDeps(adapter), replayCache);
     const resolvePty = vi.fn();
-    (sb as any)._resolvePtyClient = resolvePty;
+    (sb as any).resolvePtyClient = resolvePty;
 
     const handle = sb.exec("bash", { interactive: true });
     const result = await handle;
@@ -193,7 +193,7 @@ describe("Sandbox interactive exec", () => {
     ]);
     const sb = new Sandbox("sb-1", "test", makeDeps(adapter), new Map(), pendingInteractive);
     const { pty } = makeFakePty();
-    (sb as any)._resolvePtyClient = vi.fn().mockResolvedValue(pty);
+    (sb as any).resolvePtyClient = vi.fn().mockResolvedValue(pty);
 
     const handle = sb.exec("bash", { interactive: true });
     // Resuming pays a fixed settle delay (see sandbox.ts) before replaying stdin.

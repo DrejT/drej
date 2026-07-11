@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { Sandbox } from "../src/sandbox.ts";
+import { Sandbox } from "../src/sandbox/index.ts";
 import { SandboxError } from "../src/errors.ts";
 import { SnapshotState } from "@drej/opensandbox";
-import type { SandboxDeps } from "../src/sandbox.ts";
+import type { SandboxDeps } from "../src/sandbox/index.ts";
 import type { IStorageAdapter } from "../src/ledger.ts";
 import { LedgerEvent } from "../src/ledger.ts";
 

@@ -1,5 +1,12 @@
 # @drej/workflow
 
+## 1.1.8
+
+### Patch Changes
+
+- Updated dependencies [5a01e36]
+  - drej@0.10.3
+
 ## 1.1.7
 
 ### Patch Changes

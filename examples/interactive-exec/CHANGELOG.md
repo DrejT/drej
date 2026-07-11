@@ -1,5 +1,13 @@
 # drej-example-interactive-exec
 
+## 0.0.5
+
+### Patch Changes
+
+- Updated dependencies [5a01e36]
+  - drej@0.10.3
+  - @drej/sqlite@0.3.7
+
 ## 0.0.4
 
 ### Patch Changes

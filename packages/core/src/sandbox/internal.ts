@@ -7,7 +7,7 @@ import type { SandboxDeps } from "./types";
  * `SandboxCore` — deliberately not exported from the package barrel, so it
  * never becomes public API even though it's a real exported interface within
  * the package. `exec()`/`execCode()`/`createSession()` stay on `SandboxCore`
- * directly since they own `_seq`/`_replayCache` most directly; splitting them
+ * directly since they own `_seq`/`replayCache` most directly; splitting them
  * out would just add indirection without reducing coupling.
  */
 export interface SandboxInternal {

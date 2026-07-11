@@ -30,7 +30,7 @@ description: All drejx commands and their options.
 
 ## Agent — session lifecycle
 
-These wrap `@drej/agent`'s `Agent.load()`/`Agent.resume()`/`Agent.attach()`/`Agent.spawn()` directly. Sessions are always addressed by **sandbox ID**, not name — see [drejx prompt](/docs/drejx/commands/prompt#why-sandbox-id-not-name) for why.
+These wrap `@drej/agent`'s `Agent.load()`/`Agent.resume()`/`Agent.attach()`/`Agent.spawn()` directly. Sessions are usually addressed by **sandbox ID** — `prompt` and `kill` require it (see [drejx prompt](/docs/drejx/commands/prompt#why-sandbox-id-not-name) for why). `fork` and `logs` are addressed by session **name** instead — see their own pages for why. `spawn` starts a fresh session and takes a spec path, not an identifier.
 
 <Cards>
   <Card
@@ -53,11 +53,7 @@ These wrap `@drej/agent`'s `Agent.load()`/`Agent.resume()`/`Agent.attach()`/`Age
     title="agents"
     description="List running agent sessions, cross-checked against the live control plane."
   />
-  <Card
-    href="/docs/drejx/commands/kill"
-    title="kill"
-    description="Stop a sandbox by ID."
-  />
+  <Card href="/docs/drejx/commands/kill" title="kill" description="Stop a sandbox by ID." />
   <Card
     href="/docs/drejx/commands/logs"
     title="logs"

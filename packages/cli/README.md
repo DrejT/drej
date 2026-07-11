@@ -77,7 +77,7 @@ drejx prompt 4af65c3b-24a2-4fd1-999d-918faa9b97fd "What's in /tmp?"
 
 ### `drejx fork <name> <child-spec> [--prompt <msg>] [--depth <n>] [--max <n>] [--json]`
 
-Fork **your own currently-running session's live sandbox** — filesystem, installed packages, everything on disk right now — into a brand-new independent child. Meant to be run by that session's own Pi bash tool: `name` is the *caller's own* running session (used only to resolve its sandbox ID; not the child's).
+Fork **your own currently-running session's live sandbox** — filesystem, installed packages, everything on disk right now — into a brand-new independent child. Meant to be run by that session's own Pi bash tool: `name` is the _caller's own_ running session (used only to resolve its sandbox ID; not the child's).
 
 ```bash
 drejx fork my-session ./agents/worker.json --prompt "Handle the auth module"

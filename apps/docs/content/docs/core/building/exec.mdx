@@ -99,6 +99,8 @@ import { CodeLanguage } from "drej";
 const sb = await client.sandbox({
   image: "opensandbox/code-interpreter",
   resources: { cpu: "500m", memory: "512Mi" },
+  // Required for this image — starts the Jupyter kernel service execCode() depends on.
+  entrypoint: ["/opt/code-interpreter/code-interpreter.sh"],
 });
 ```
 
@@ -120,10 +122,10 @@ print(f"pi = {math.pi:.6f}")
 
 ### Stateful execution
 
-Pass a `context` with a shared `id` to make variables persist across calls:
+Contexts must be created first via `createCodeContext()` — you can't hand-roll one. Pass the returned context to make variables persist across calls:
 
 ```ts
-const ctx = { id: "my-session", language: CodeLanguage.Python };
+const ctx = await sb.createCodeContext(CodeLanguage.Python);
 
 await sb.execCode(`data = [2**i for i in range(8)]`, { context: ctx });
 await sb.execCode(`print(f"sum = {sum(data)}")`, { context: ctx }).pipe(process.stdout);

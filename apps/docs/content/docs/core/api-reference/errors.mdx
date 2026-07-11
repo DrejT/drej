@@ -12,7 +12,7 @@ import { CommandError, SandboxError, ExecConnectionError, WorkflowError, DrejErr
 ```
 Error
 ├── WorkflowError            — base class for Sandbox-level errors
-│   ├── SandboxError        — Sandbox method failed to start, resume, or reach Running
+│   ├── SandboxError        — sandbox lifecycle failure: create/boot/Running, paused, unsupported fork(), or snapshot
 │   ├── ExecConnectionError — execd not ready after retry window
 │   └── CommandError        — non-zero exit code in strict mode
 └── DrejError                — client-level errors from Drej itself (not a WorkflowError)

@@ -62,9 +62,11 @@ There's no `image` field — every spec runs in a fixed `node:22` sandbox — an
 
 ## Validation
 
-Both `drejx add` and `Agent.load()` call the same `validateAgentSpec()`. It only checks two things:
+Both `drejx add` and `Agent.load()` call the same `validateAgentSpec()`. It checks four things:
 
 - `name` is present and is a string.
 - `cli` is exactly `"pi"`.
+- If `spawnDepth` is set, it must be a non-negative integer.
+- If `maxAgents` is set, it must be a non-negative integer.
 
 Every other field is unchecked at validation time — a malformed `resources`, `setup` entry, or `env` value won't be caught until it's actually used (typically inside the sandbox, at load/run time).

@@ -42,22 +42,22 @@ import type {
 
 ## Method reference
 
-| Method                               | Required | Description                                                                                                                     |
-| ------------------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `connect()`                          | No       | Initialize connections. Called lazily, once, the first time the client needs the adapter — not by any method you call yourself. |
-| `close()`                            | No       | Release connections. Called automatically when the process exits.                                                               |
-| `append(entry)`                      | Yes      | Persist a single ledger event. Called during every live exec.                                                                   |
-| `readAll(name, sandboxId)`           | Yes      | Return all events for a session in ascending `ts` order. Used by `resume()`.                                                    |
-| `lastCheckpoint(name, sandboxId)`    | Yes      | Return the most recent `checkpoint_created` entry, or `null`.                                                                   |
-| `listSandboxDetails(name, opts?)`    | Yes      | Return sessions with this name, newest first.                                                                                   |
-| `listAllSandboxDetails(opts?)`       | Yes      | Return all sessions across all names, newest first.                                                                             |
-| `getSandboxDetails(name, sandboxId)` | Yes      | Return a single session, or `null`.                                                                                             |
-| `deleteSandbox(name, sandboxId)`     | Yes      | Delete all events for a session.                                                                                                |
-| `listCheckpoints(name, sandboxId)`   | Yes      | Return all checkpoints for a session, in creation order.                                                                        |
-| `getEnvironment(name)`               | Yes      | Return the cached record for a named environment, or `null` if not built yet.                                                   |
-| `saveEnvironment(record)`            | Yes      | Upsert an environment record after a successful build.                                                                          |
-| `deleteEnvironment(name)`            | Yes      | Remove the record for a named environment. Does not delete the server-side snapshot.                                            |
-| `listEnvironments()`                 | Yes      | Return all environment records, newest first.                                                                                   |
+| Method                               | Required | Description                                                                                                                                                                         |
+| ------------------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `connect()`                          | No       | Initialize connections. Called lazily, once, the first time the client needs the adapter — not by any method you call yourself.                                                     |
+| `close()`                            | No       | Release connections. Called when the event loop drains naturally (`beforeExit`) — long-running servers never reach this, so the pool stays open for the process lifetime by design. |
+| `append(entry)`                      | Yes      | Persist a single ledger event. Called during every live exec.                                                                                                                       |
+| `readAll(name, sandboxId)`           | Yes      | Return all events for a session in ascending `ts` order. Used by `resume()`.                                                                                                        |
+| `lastCheckpoint(name, sandboxId)`    | Yes      | Return the most recent `checkpoint_created` entry, or `null`.                                                                                                                       |
+| `listSandboxDetails(name, opts?)`    | Yes      | Return sessions with this name, newest first.                                                                                                                                       |
+| `listAllSandboxDetails(opts?)`       | Yes      | Return all sessions across all names, newest first.                                                                                                                                 |
+| `getSandboxDetails(name, sandboxId)` | Yes      | Return a single session, or `null`.                                                                                                                                                 |
+| `deleteSandbox(name, sandboxId)`     | Yes      | Delete all events for a session.                                                                                                                                                    |
+| `listCheckpoints(name, sandboxId)`   | Yes      | Return all checkpoints for a session, in creation order.                                                                                                                            |
+| `getEnvironment(name)`               | Yes      | Return the cached record for a named environment, or `null` if not built yet.                                                                                                       |
+| `saveEnvironment(record)`            | Yes      | Upsert an environment record after a successful build.                                                                                                                              |
+| `deleteEnvironment(name)`            | Yes      | Remove the record for a named environment. Does not delete the server-side snapshot.                                                                                                |
+| `listEnvironments()`                 | Yes      | Return all environment records, newest first.                                                                                                                                       |
 
 ## LedgerEntry
 

@@ -45,7 +45,8 @@ sb.when(
 ### Predicate context
 
 ```ts
-interface FlushContext {
+// shape of the predicate's ctx argument (a subset of the internal FlushContext)
+interface WhenPredicateContext {
   stdout: string; // accumulated stdout so far
   exitCode: number; // exit code of the last exec
   vars: Record<string, unknown>; // values captured by readFile(path, as)

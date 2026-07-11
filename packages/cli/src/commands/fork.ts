@@ -12,15 +12,16 @@ import type { CliCommand } from "./types.js";
  * the caller's own running session, not the child's. Uses `Agent.attach()`, not
  * `Agent.resume()`, to avoid killing the very bridge process making this call.
  *
- * Resolves the caller's own sandbox ID from `DREJ_SANDBOX_ID` (written to
- * `/etc/drej-env` by every agent-creation path, so it's already in this
- * process's env since it's a descendant of Pi's own bridge process) rather
- * than looking `name` up in the ledger — the calling agent may have been
- * created via an `IStorageAdapter` this CLI invocation has no access to (e.g.
- * a host-side ledger for an `Agent.load()` call this sandbox's own
- * `drej.config.json` knows nothing about), so a ledger-based lookup can't be
- * relied on to find the caller's own session. `name` is only used to label
- * the resulting `Agent` object.
+ * Resolves the caller's own sandbox ID from `DREJ_SANDBOX_ID` when present
+ * (written to `/etc/drej-env` by every agent-creation path, so it's already
+ * in this process's env since it's a descendant of Pi's own bridge process) —
+ * preferred over a ledger lookup when available, since the calling agent may
+ * have been created via an `IStorageAdapter` this CLI invocation has no
+ * access to (e.g. a host-side ledger for an `Agent.load()` call this
+ * sandbox's own `drej.config.json` knows nothing about). Falls back to
+ * looking `name` up in the ledger of currently-running sessions when
+ * `DREJ_SANDBOX_ID` isn't set (e.g. invoked outside a sandbox). `name` also
+ * always labels the resulting `Agent` object.
  */
 export async function fork(
   name: string,

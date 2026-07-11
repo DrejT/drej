@@ -275,7 +275,7 @@ List all models available to Pi under the current provider configuration.
 async setThinkingLevel(level: ThinkingLevel): Promise<void>
 ```
 
-Set Pi's reasoning level. Only effective on models that support extended thinking. `level` is `"low" | "medium" | "high"`.
+Set Pi's reasoning level. Only effective on models that support extended thinking. `level` is `"none" | "low" | "medium" | "high"`.
 
 ### agent.cycleThinkingLevel()
 
@@ -561,8 +561,8 @@ import type { AgentSpec } from "@drej/agent";
 | `categories`           | `string[]?`                              | Arbitrary category tags.                                                                                                                                                                                                                                                                                        |
 | `metadata`             | `Record<string,string>?`                 | Not read anywhere in `@drej/agent`; has no effect on the sandbox.                                                                                                                                                                                                                                               |
 | `registryDependencies` | `string[]?`                              | Other agent spec URLs. Not read by `@drej/agent` itself — used by `drejx add`, which fetches and saves each one first, depth-first.                                                                                                                                                                             |
-| `spawnDepth`           | `number?`                                | Nesting-depth budget for `agent.spawn()`, force-decremented into each child's env. Non-negative integer. Required (directly or via `--depth`/`opts.spawnDepth`) for `agent.spawn()` to be allowed at all. |
-| `maxAgents`            | `number?`                                | Optional cap on total descendants for this lineage, independent of `spawnDepth`. Non-negative integer. Unset means uncapped — unlike `spawnDepth`, omitting this doesn't disable spawning. |
+| `spawnDepth`           | `number?`                                | Nesting-depth budget for `agent.spawn()`, force-decremented into each child's env. Non-negative integer. Required (directly or via `--depth`/`opts.spawnDepth`) for `agent.spawn()` to be allowed at all.                                                                                                       |
+| `maxAgents`            | `number?`                                | Optional cap on total descendants for this lineage, independent of `spawnDepth`. Non-negative integer. Unset means uncapped — unlike `spawnDepth`, omitting this doesn't disable spawning.                                                                                                                      |
 
 ### Example
 
@@ -734,7 +734,7 @@ Returned by `agent.getCommands()`.
 
 ```json title="drej.config.json"
 {
-  "serverUrl": "http://localhost:8080",
+  "serverUrl": "http://127.0.0.1:8080",
   "apiKey": "",
   "adapterPath": "./.drej/ledger.db",
   "useServerProxy": true,
@@ -747,7 +747,7 @@ Returned by `agent.getCommands()`.
 
 | Field                | Default                           | Description                                                               |
 | -------------------- | --------------------------------- | ------------------------------------------------------------------------- |
-| `serverUrl`          | `http://localhost:8080`           | OpenSandbox server URL                                                    |
+| `serverUrl`          | `http://127.0.0.1:8080`           | OpenSandbox server URL                                                    |
 | `apiKey`             | `""`                              | OpenSandbox API key (empty for local dev)                                 |
 | `adapterPath`        | `./.drej/ledger.db`               | Path to the SQLite ledger database                                        |
 | `useServerProxy`     | `true`                            | Route execd traffic through the server. Required when using `drejx init`. |

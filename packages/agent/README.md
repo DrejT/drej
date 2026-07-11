@@ -49,19 +49,19 @@ try {
 
 The spec JSON controls the agent's environment, model, and workspace setup.
 
-| Field        | Type                     | Description                                                           |
-| ------------ | ------------------------ | --------------------------------------------------------------------- |
-| `name`       | `string`                 | Unique identifier, used as the sandbox session name                   |
-| `cli`        | `"pi"`                   | CLI to run (currently only `"pi"`)                                    |
-| `cliVersion` | `string?`                | Pin to a specific Pi version, e.g. `"0.80.2"`. Defaults to latest.    |
-| `model`      | `string?`                | Model ID passed to Pi via `--model`                                   |
-| `provider`   | `string?`                | AI provider passed via `--provider`. Omit for direct Google API key.  |
-| `packages`   | `string[]?`              | APT packages to install before Pi. e.g. `["git", "python3"]`          |
-| `env`        | `Record<string,string>?` | Env vars in the sandbox. Values may reference host env: `"${MY_KEY}"` |
-| `resources`  | `object?`                | CPU/memory limits: `{ cpu: "1000m", memory: "2Gi" }`                  |
-| `setup`      | `SetupStep[]?`           | Workspace setup steps (see below)                                     |
+| Field        | Type                     | Description                                                                                    |
+| ------------ | ------------------------ | ---------------------------------------------------------------------------------------------- |
+| `name`       | `string`                 | Unique identifier, used as the sandbox session name                                            |
+| `cli`        | `"pi"`                   | CLI to run (currently only `"pi"`)                                                             |
+| `cliVersion` | `string?`                | Pin to a specific Pi version, e.g. `"0.80.2"`. Defaults to latest.                             |
+| `model`      | `string?`                | Model ID passed to Pi via `--model`                                                            |
+| `provider`   | `string?`                | AI provider passed via `--provider`. Omit for direct Google API key.                           |
+| `packages`   | `string[]?`              | APT packages to install before Pi. e.g. `["git", "python3"]`                                   |
+| `env`        | `Record<string,string>?` | Env vars in the sandbox. Values may reference host env: `"${MY_KEY}"`                          |
+| `resources`  | `object?`                | CPU/memory limits: `{ cpu: "1000m", memory: "2Gi" }`                                           |
+| `setup`      | `SetupStep[]?`           | Workspace setup steps (see below)                                                              |
 | `spawnDepth` | `number?`                | Nesting-depth budget for `agent.spawn()` — see [Spawning child agents](#spawning-child-agents) |
-| `maxAgents`  | `number?`                | Optional cap on total descendants for this lineage — see below        |
+| `maxAgents`  | `number?`                | Optional cap on total descendants for this lineage — see below                                 |
 
 ### Setup steps
 

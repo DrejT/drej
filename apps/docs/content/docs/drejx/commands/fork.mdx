@@ -9,23 +9,23 @@ bunx drejx fork <name> <child-spec> [--prompt <msg>] [--depth <n>] [--max <n>] [
 
 ## Arguments
 
-| Argument      | Description                                                                                      |
-| ------------- | ------------------------------------------------------------------------------------------------ |
-| `name`        | The **caller's own** running session — used only to resolve its sandbox ID, not the child's name. Required. |
-| `child-spec`  | Path to the child's agent spec JSON file. Required.                                               |
+| Argument     | Description                                                                                                 |
+| ------------ | ----------------------------------------------------------------------------------------------------------- |
+| `name`       | The **caller's own** running session — used only to resolve its sandbox ID, not the child's name. Required. |
+| `child-spec` | Path to the child's agent spec JSON file. Required.                                                         |
 
 ## Flags
 
-| Flag              | Description                                                                                             |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--prompt <msg>`  | Send one prompt to the child immediately after it's ready, and print the reply before exiting.           |
-| `--depth <n>`     | Override the caller's own `spawnDepth` budget instead of reading `DREJX_SPAWN_DEPTH` from the environment. |
-| `--max <n>`       | Override the caller's own `maxAgents` budget instead of reading `DREJX_MAX_AGENTS` from the environment.   |
-| `--json`          | Print `{ name, sandboxId, reply }` as JSON instead of the default text output.                            |
+| Flag             | Description                                                                                                |
+| ---------------- | ---------------------------------------------------------------------------------------------------------- |
+| `--prompt <msg>` | Send one prompt to the child immediately after it's ready, and print the reply before exiting.             |
+| `--depth <n>`    | Override the caller's own `spawnDepth` budget instead of reading `DREJX_SPAWN_DEPTH` from the environment. |
+| `--max <n>`      | Override the caller's own `maxAgents` budget instead of reading `DREJX_MAX_AGENTS` from the environment.   |
+| `--json`         | Print `{ name, sandboxId, reply }` as JSON instead of the default text output.                             |
 
 ## What it does
 
-`drejx fork` is meant to be run **by a session's own Pi bash tool**, not from a fresh host shell — `name` labels the *caller's own* running session, resolved to a sandbox ID two ways:
+`drejx fork` is meant to be run **by a session's own Pi bash tool**, not from a fresh host shell — `name` labels the _caller's own_ running session, resolved to a sandbox ID two ways:
 
 1. If `DREJ_SANDBOX_ID` is set in this process's own environment (true when running as a descendant of a Pi bridge process inside a drej-managed sandbox — which is exactly the case when a Pi session's bash tool runs `drejx fork`), that's used directly.
 2. Otherwise, `name` is looked up against the ledger's running sessions.
@@ -64,4 +64,4 @@ A spec's `spawnDepth` is a nesting-depth budget, force-decremented (`current - 1
 
 - The forked child's environment is resolved fresh from **its own** spec — nothing is inherited from the caller except the force-computed spawn-depth counter. Every env var the caller's own spec declares is explicitly unset in the shell command that starts the child's bridge, since the forked container's OS-level env otherwise still carries whatever was baked in at snapshot time.
 - No install or setup steps run for the child — it inherits whatever is already installed on the caller's sandbox. If the child needs packages the caller doesn't have, add them to a setup step on the spec the **caller** was loaded from, not the child's.
-- See the [Pi extension](#pi-extension) on the [commands index](/docs/drejx/commands) for how a Pi session gets `drejx fork` syntax injected into its own guidance automatically.
+- See the [Pi extension](/docs/drejx/commands#pi-extension) section on the commands index for how a Pi session gets `drejx fork` syntax injected into its own guidance automatically.

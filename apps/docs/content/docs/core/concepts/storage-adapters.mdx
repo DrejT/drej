@@ -50,7 +50,7 @@ const client = new Drej({
 
 ## Connect and close
 
-`Drej` has no `connect()` or `close()` method to call — the adapter initializes lazily (`CREATE TABLE IF NOT EXISTS` migrations run automatically on first use) and closes itself automatically via a `process.on("beforeExit", ...)` hook. Just construct the client and start using it:
+You never need to call `connect()` or `close()` on the _adapter_ — it initializes lazily (`CREATE TABLE IF NOT EXISTS` migrations run automatically on first use) and closes itself via a `process.on("beforeExit", ...)` hook, which only fires when the event loop drains naturally. Long-running servers never reach `beforeExit`, so the pool stays open for the process lifetime — that's expected, not a leak. (`Drej` itself does have its own `connect()` method, unrelated to the adapter — see [connect()](/docs/core/api-reference/drej-client#connect) — for attaching to an already-running sandbox by ID.) Just construct the client and start using it:
 
 ```ts
 const client = new Drej({ baseUrl: "...", adapter: new PostgresAdapter("...") });

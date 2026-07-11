@@ -24,7 +24,8 @@ const client = new Drej({
 });
 
 // No connect() or close() needed — migrations run automatically on first
-// use, and the connection closes itself when the process exits.
+// use. The pool closes itself only when the event loop drains naturally
+// (beforeExit); long-running servers keep it open for the process lifetime.
 ```
 
 ## Constructor

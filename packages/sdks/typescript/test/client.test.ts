@@ -321,7 +321,7 @@ describe("Drej.restoreSnapshot() fork wiring", () => {
       memory: "256Mi",
     });
 
-    expect(typeof (sb as any)._deps.fork).toBe("function");
+    expect(typeof (sb as any).deps.fork).toBe("function");
   });
 });
 
@@ -333,7 +333,7 @@ describe("Drej.connect() fork wiring", () => {
 
     const sb = await client.connect("sandbox-1", "my-agent");
 
-    expect((sb as any)._deps.fork).toBeUndefined();
+    expect((sb as any).deps.fork).toBeUndefined();
   });
 
   it("wires a working fork() closure when resources are given", async () => {
@@ -345,6 +345,6 @@ describe("Drej.connect() fork wiring", () => {
       resources: { cpu: "500m", memory: "256Mi" },
     });
 
-    expect(typeof (sb as any)._deps.fork).toBe("function");
+    expect(typeof (sb as any).deps.fork).toBe("function");
   });
 });

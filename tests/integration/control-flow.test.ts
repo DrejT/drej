@@ -1,73 +1,57 @@
-import { Drej, workflow } from "drej";
+import { Drej } from "drej";
+import { workflow } from "@drej/workflow";
 import { SQLiteAdapter } from "@drej/sqlite";
-import { beforeAll, afterAll, test, expect } from "bun:test";
+import { test, expect } from "bun:test";
 
-let client: Drej;
-
-beforeAll(async () => {
-  client = new Drej({
-    baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://localhost:8080",
+test("retry, when, and forEach all execute correctly", async () => {
+  const client = new Drej({
+    baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://127.0.0.1:8080",
     apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",
     adapter: new SQLiteAdapter(":memory:"),
   });
-  await client.connect();
-});
 
-afterAll(() => client.close());
-
-test("retry, when, forEach, and parallel all execute correctly", async () => {
-  const run = await client.run(
-    workflow("control-flow-test").sandbox(
-      { image: { uri: "ubuntu:22.04" }, resourceLimits: { cpu: "500m", memory: "512Mi" } },
-      (s) => {
-        s.retry(
+  const { stdout } = await workflow(client)
+    .sandbox(
+      {
+        image: "ubuntu:22.04",
+        resources: { cpu: "500m", memory: "512Mi" },
+        name: "control-flow-test",
+      },
+      (sb) => {
+        sb.retry(
           5,
-          (r) => {
-            r.exec(`
-              R=$((RANDOM % 2))
-              if [ $R -eq 0 ]; then echo "[retry] tails — failing"; exit 1; fi
-              echo "[retry] heads — success"
-            `);
+          (sb) => {
+            sb.exec(
+              'COUNT=$(cat /tmp/attempt 2>/dev/null || echo 0); COUNT=$((COUNT+1)); echo $COUNT > /tmp/attempt; echo "[retry] attempt $COUNT"; [ $COUNT -ge 3 ] && echo "[retry] succeeded" || { echo "[retry] failing"; exit 1; }',
+            );
           },
           { delayMs: 200, backoff: "exponential" },
         );
 
-        s.exec("test -f /etc/hostname");
-        s.when(
-          { op: "eq", field: "exitCode", value: 0 },
-          (s) => { s.exec('echo "[when] then-branch: /etc/hostname exists"'); },
-          (s) => { s.exec('echo "[when] else-branch: /etc/hostname missing"'); },
+        sb.exec("test -f /etc/hostname", { strict: false });
+        sb.when(
+          (ctx) => ctx.exitCode === 0,
+          (sb) => {
+            sb.exec('echo "[when] /etc/hostname exists"');
+          },
+          (sb) => {
+            sb.exec('echo "[when] /etc/hostname missing"');
+          },
         );
 
-        s.forEach(["alpha.txt", "beta.txt", "gamma.txt"], { as: "filename" }, (s, filename) => {
-          s.exec(`echo "[loop] writing /tmp/${filename}" && echo "hello" > /tmp/${filename}`);
+        sb.forEach(["alpha.txt", "beta.txt", "gamma.txt"], (sb, item) => {
+          sb.exec(`echo "[loop] writing /tmp/${item}" && echo hello > /tmp/${item}`);
         });
 
-        s.parallel((p) => {
-          p.branch((b) => { b.exec('sleep 1 && echo "[parallel 0] done"'); });
-          p.branch((b) => { b.exec('sleep 1 && echo "[parallel 1] done"'); });
-        });
-
-        s.exec("ls /tmp/*.txt && echo '[verify] all files present'");
+        sb.exec("ls /tmp/*.txt && echo '[verify] all files present'");
       },
-    ),
-  );
+    )
+    .result();
 
-  let stdout = "";
-  for await (const ev of run) {
-    if (ev.event === "exec_event") {
-      const { text } = ev.payload as { text?: string };
-      if (text) stdout += text;
-    }
-  }
-
-  expect(run.status).toBe("completed");
-  expect(stdout).toContain("[retry] heads — success");
-  expect(stdout).toContain("[when] then-branch");
+  expect(stdout).toContain("[retry] succeeded");
+  expect(stdout).toContain("[when] /etc/hostname exists");
   expect(stdout).toContain("[loop] writing /tmp/alpha.txt");
   expect(stdout).toContain("[loop] writing /tmp/beta.txt");
   expect(stdout).toContain("[loop] writing /tmp/gamma.txt");
-  expect(stdout).toContain("[parallel 0] done");
-  expect(stdout).toContain("[parallel 1] done");
   expect(stdout).toContain("[verify] all files present");
-});
+}, 60_000);

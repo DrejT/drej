@@ -14,6 +14,7 @@ import {
   serverConfigPath,
   serverConfigContent,
 } from "../config.js";
+import type { CliCommand } from "./types.js";
 
 const CONTAINER_NAME = "drejx-opensandbox";
 // 127.0.0.1, not "localhost" — some hosts resolve "localhost" to ::1 first,
@@ -84,3 +85,12 @@ async function ensureProjectConfig(): Promise<void> {
     console.log("Created drej.config.json");
   }
 }
+
+export const initCommand: CliCommand = {
+  name: "init",
+  group: "sdk",
+  variants: [{ usage: "drejx init", summary: "Start OpenSandbox locally via Docker" }],
+  run: async () => {
+    await init();
+  },
+};

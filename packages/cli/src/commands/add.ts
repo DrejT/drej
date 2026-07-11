@@ -3,6 +3,8 @@ import { mkdir } from "fs/promises";
 import { join } from "path";
 import { readConfig } from "../config.js";
 import { validateAgentSpec, type AgentSpec } from "../schema.js";
+import { flag } from "./args.js";
+import type { CliCommand } from "./types.js";
 
 export async function add(
   url: string,
@@ -41,3 +43,15 @@ async function fetchSpec(url: string): Promise<AgentSpec> {
   if (!(await file.exists())) throw new Error(`File not found: ${url}`);
   return validateAgentSpec(await file.json());
 }
+
+export const addCommand: CliCommand = {
+  name: "add",
+  group: "sdk",
+  variants: [
+    { usage: "drejx add <url> [--name <n>]", summary: "Fetch and save an agent spec locally" },
+  ],
+  run: async (argv) => {
+    const url = argv.find((a) => !a.startsWith("--")) ?? "";
+    await add(url, { name: flag(argv, "--name") });
+  },
+};

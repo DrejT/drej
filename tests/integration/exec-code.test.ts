@@ -1,60 +1,40 @@
-import { Drej, workflow } from "drej";
+import { Drej, CodeLanguage } from "drej";
 import { SQLiteAdapter } from "@drej/sqlite";
-import { beforeAll, afterAll, test, expect } from "bun:test";
+import { test, expect } from "bun:test";
 
-let client: Drej;
-
-beforeAll(async () => {
-  client = new Drej({
-    baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://localhost:8080",
+test("isolated and stateful Python execution via createCodeContext/execCode", async () => {
+  const client = new Drej({
+    baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://127.0.0.1:8080",
     apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",
     adapter: new SQLiteAdapter(":memory:"),
   });
-  await client.connect();
-});
 
-afterAll(() => client.close());
+  const sb = await client.sandbox({
+    image: "opensandbox/code-interpreter",
+    entrypoint: ["/opt/code-interpreter/code-interpreter.sh"],
+    resources: { cpu: "500m", memory: "512Mi" },
+    name: "exec-code-test",
+  });
 
-test("stateless and stateful Python execution via code-interpreter", async () => {
-  const run = await client.run(
-    workflow("exec-code-test").sandbox(
-      {
-        image: { uri: "opensandbox/code-interpreter" },
-        entrypoint: ["/opt/code-interpreter/code-interpreter.sh"],
-        resourceLimits: { cpu: "500m", memory: "512Mi" },
-      },
-      (s) => {
-        s.execCode(`
-import sys, math
-print(f"[stateless] Python {sys.version.split()[0]}")
-print(f"[stateless] pi = {math.pi:.6f}")
-        `.trim());
+  try {
+    // Isolated — a fresh context; nothing shared with the stateful pair below.
+    const isolatedCtx = await sb.createCodeContext(CodeLanguage.Python);
+    const { stdout: piOut } = await sb.execCode(
+      ["import sys, math", 'print(f"pi = {math.pi:.6f}")'].join("\n"),
+      { context: isolatedCtx },
+    );
+    expect(piOut).toContain("pi = 3.141593");
 
-        s.execCode(`
-data = [2**i for i in range(8)]
-print(f"[stateful 1] data = {data}")
-        `.trim(), { context: { id: "session", language: "python" } });
-
-        s.execCode(`
-total = sum(data)
-print(f"[stateful 2] sum = {total}")
-print(f"[stateful 2] max = {max(data)}")
-        `.trim(), { context: { id: "session", language: "python" } });
-      },
-    ),
-  );
-
-  let stdout = "";
-  for await (const ev of run) {
-    if (ev.event === "exec_event") {
-      const { text } = ev.payload as { text?: string };
-      if (text) stdout += text;
-    }
+    // Stateful — two calls sharing one context; the second sees the first's variables.
+    const ctx = await sb.createCodeContext(CodeLanguage.Python);
+    await sb.execCode("data = [2**i for i in range(8)]", { context: ctx });
+    const { stdout: sumOut } = await sb.execCode(
+      ["total = sum(data)", 'print(f"sum = {total}")', 'print(f"max = {max(data)}")'].join("\n"),
+      { context: ctx },
+    );
+    expect(sumOut).toContain("sum = 255");
+    expect(sumOut).toContain("max = 128");
+  } finally {
+    await sb.close();
   }
-
-  expect(run.status).toBe("completed");
-  expect(stdout).toContain("pi = 3.141593");
-  expect(stdout).toContain("[stateful 1] data =");
-  expect(stdout).toContain("sum = 255");
-  expect(stdout).toContain("max = 128");
-});
+}, 60_000);

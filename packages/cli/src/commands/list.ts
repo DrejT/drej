@@ -2,6 +2,7 @@ import { readdirSync, existsSync } from "fs";
 import { join } from "path";
 import { readConfig } from "../config.js";
 import type { AgentSpec } from "../schema.js";
+import type { CliCommand } from "./types.js";
 
 export async function list(): Promise<void> {
   const config = await readConfig();
@@ -36,3 +37,12 @@ export async function list(): Promise<void> {
     }
   }
 }
+
+export const listCommand: CliCommand = {
+  name: "list",
+  group: "sdk",
+  variants: [{ usage: "drejx list", summary: "List saved agent specs" }],
+  run: async () => {
+    await list();
+  },
+};

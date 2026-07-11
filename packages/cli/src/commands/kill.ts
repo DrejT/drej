@@ -1,6 +1,7 @@
 import { Drej } from "drej";
 import { SQLiteAdapter } from "@drej/sqlite";
 import { readConfig } from "../config.js";
+import type { CliCommand } from "./types.js";
 
 /**
  * Addressed by sandbox ID, not session name — see prompt.ts for why: names
@@ -24,3 +25,12 @@ export async function kill(sandboxId: string): Promise<void> {
   await sb.close();
   console.log(`Killed sandbox ${sandboxId}`);
 }
+
+export const killCommand: CliCommand = {
+  name: "kill",
+  group: "agent",
+  variants: [{ usage: "drejx kill <sandbox-id>", summary: "Stop a sandbox" }],
+  run: async (argv) => {
+    await kill(argv[0] ?? "");
+  },
+};

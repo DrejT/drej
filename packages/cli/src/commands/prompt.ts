@@ -2,6 +2,8 @@ import { Agent } from "@drej/agent";
 import { SQLiteAdapter } from "@drej/sqlite";
 import { readConfig } from "../config.js";
 import { collectReply } from "../agent-prompt.js";
+import { flag } from "./args.js";
+import type { CliCommand } from "./types.js";
 
 /**
  * Addressed by sandbox ID, not session name — names aren't unique (re-running
@@ -38,3 +40,22 @@ export async function prompt(
   }
   console.log(reply);
 }
+
+export const promptCommand: CliCommand = {
+  name: "prompt",
+  group: "agent",
+  variants: [
+    {
+      usage: "drejx prompt <sandbox-id> <msg>",
+      summary: "Send one prompt to a running sandbox, print the reply",
+    },
+  ],
+  run: async (argv) => {
+    const sandboxId = argv[0] ?? "";
+    const message = argv.slice(1).find((a) => !a.startsWith("--")) ?? "";
+    await prompt(sandboxId, message, {
+      json: argv.includes("--json"),
+      specPath: flag(argv, "--spec"),
+    });
+  },
+};

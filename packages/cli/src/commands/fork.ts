@@ -3,6 +3,8 @@ import { Agent } from "@drej/agent";
 import { SQLiteAdapter } from "@drej/sqlite";
 import { readConfig } from "../config.js";
 import { collectReply } from "../agent-prompt.js";
+import { flag } from "./args.js";
+import type { CliCommand } from "./types.js";
 
 /**
  * Fork a running session's own sandbox into a brand-new independent child, per
@@ -64,3 +66,26 @@ export async function fork(
   console.log(`\n[drejx] forked: ${child.name}  sandbox: ${child.sandboxId}`);
   if (reply !== undefined) console.log(`\n${reply}`);
 }
+
+export const forkCommand: CliCommand = {
+  name: "fork",
+  group: "agent",
+  variants: [
+    {
+      usage: "drejx fork <name> <child-spec>",
+      summary: "Fork a running session's own live sandbox into a new child",
+    },
+  ],
+  run: async (argv) => {
+    const name = argv[0] ?? "";
+    const childSpec = argv.slice(1).find((a) => !a.startsWith("--")) ?? "";
+    const depthFlag = flag(argv, "--depth");
+    const maxFlag = flag(argv, "--max");
+    await fork(name, childSpec, {
+      prompt: flag(argv, "--prompt"),
+      depth: depthFlag !== undefined ? Number(depthFlag) : undefined,
+      max: maxFlag !== undefined ? Number(maxFlag) : undefined,
+      json: argv.includes("--json"),
+    });
+  },
+};

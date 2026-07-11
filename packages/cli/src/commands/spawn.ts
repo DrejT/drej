@@ -2,6 +2,8 @@ import { Agent } from "@drej/agent";
 import { SQLiteAdapter } from "@drej/sqlite";
 import { readConfig } from "../config.js";
 import { collectReply } from "../agent-prompt.js";
+import { flag } from "./args.js";
+import type { CliCommand } from "./types.js";
 
 /**
  * Start a brand-new, independent agent sandbox from a spec's own snapshot —
@@ -38,3 +40,27 @@ export async function spawn(
   console.log(`\n[drejx] session: ${agent.name}  sandbox: ${agent.sandboxId}`);
   if (reply !== undefined) console.log(`\n${reply}`);
 }
+
+export const spawnCommand: CliCommand = {
+  name: "spawn",
+  group: "agent",
+  variants: [
+    { usage: "drejx spawn <spec>", summary: "Start a fresh agent sandbox, print its name, exit" },
+    {
+      usage: "drejx spawn <spec> --prompt <msg>",
+      summary: "Start it, send one prompt, print the reply, exit",
+    },
+  ],
+  run: async (argv) => {
+    const specPath = argv.find((a) => !a.startsWith("--")) ?? "";
+    const depthFlag = flag(argv, "--depth");
+    const maxFlag = flag(argv, "--max");
+    await spawn(specPath, {
+      prompt: flag(argv, "--prompt"),
+      rebuild: argv.includes("--rebuild"),
+      json: argv.includes("--json"),
+      depth: depthFlag !== undefined ? Number(depthFlag) : undefined,
+      max: maxFlag !== undefined ? Number(maxFlag) : undefined,
+    });
+  },
+};

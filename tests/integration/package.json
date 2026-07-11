@@ -1,16 +1,17 @@
 {
   "name": "@drej/integration-tests",
-  "private": true,
   "version": "0.0.8",
+  "private": true,
   "scripts": {
     "test": "bun test --timeout 120000"
   },
   "dependencies": {
     "@drej/agent": "workspace:*",
     "@drej/sqlite": "workspace:*",
+    "@drej/workflow": "workspace:*",
     "drej": "workspace:*"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "1.3.14"
   }
 }

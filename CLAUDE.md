@@ -37,16 +37,12 @@ bun run build
 # Typecheck all packages
 bun run typecheck
 
-# Typecheck packages individually
-bunx tsc --noEmit --strict --project packages/opensandbox/tsconfig.json
-bunx tsc --noEmit --strict --project packages/core/tsconfig.json
-bunx tsc --noEmit --strict --project packages/sdks/typescript/tsconfig.json
-bunx tsc --noEmit --strict --project packages/workflow/tsconfig.json
-bunx tsc --noEmit --strict --project packages/adapters/postgres/tsconfig.json
-bunx tsc --noEmit --strict --project packages/adapters/sqlite/tsconfig.json
-bunx tsc --noEmit --strict --project packages/adapters/otel/tsconfig.json
-bunx tsc --noEmit --strict --project packages/cli/tsconfig.json
-bunx tsc --noEmit --strict --project packages/agent/tsconfig.json
+# `test`/`build`/`typecheck` are driven by scripts/workspace-run.ts, which auto-discovers
+# every package under the root package.json's "workspaces" array (topologically sorted by
+# "workspace:*" dependency edges) — a new package is picked up the moment it's added there
+# and has the relevant tsconfig.json/package.json script, with no second place to register
+# it. To typecheck one package in isolation while iterating:
+bunx tsc --noEmit --strict --project packages/<name>/tsconfig.json
 
 # Changesets (required on every PR touching publishable packages)
 bunx changeset        # add a changeset
@@ -63,15 +59,17 @@ bunx changeset status # verify one exists
 
 **Unit tests** live in `packages/*/test/*.test.ts` and run via `bun test`. They test internal builder logic, control-flow, and adapter behaviour in isolation — no sandbox required.
 
-**Integration tests** live in `examples/<name>/tests/integration.ts` and run with `bun examples/<name>/tests/integration.ts`. They hit a real OpenSandbox sandbox and assert on live stdout and captured state. Every example must have one.
+**Integration tests** live in `tests/integration/<name>.test.ts` (one `@drej/integration-tests` workspace, not co-located with each example) and run via `bun run test:integration` from the repo root, or `cd tests/integration && bun test <name>.test.ts` for one file. They use `bun:test`'s `test()`/`expect()` against a real OpenSandbox sandbox — largely mirroring what the matching `examples/<name>/index.ts` demonstrates, but with real assertions instead of `console.log`. Most (not all) examples have one; `scripts/new-example.ts` scaffolds a stub alongside a new example.
+
+`examples/<name>/index.ts` itself is also directly runnable (`bun examples/<name>/index.ts`) as a human-readable demo — the two are complementary, not duplicates: the example is what a user reads/copies, the test is what CI would assert on.
 
 ### Integration test conventions
 
-- **Run with**: `bun examples/<name>/index.ts` from the repo root (examples are also the integration tests).
+- **Run with**: `bun run test:integration` from the repo root, or `cd tests/integration && bun test` for the whole suite / `bun test <name>.test.ts` for one file.
 - **Requires**: OpenSandbox server running locally — either `drejx init` (Docker-based, recommended) or `uvx opensandbox-server` (manual). If using `drejx init`, pass `useServerProxy: true` to `new Drej(...)` so the SDK routes through the server instead of container-direct IPs.
-- **Client setup**: `new Drej({ baseUrl: ..., adapter: new SQLiteAdapter("./ledger.db") })` — no `connect()` or `close()` needed.
+- **Client setup**: `new Drej({ baseUrl: ..., adapter: new SQLiteAdapter(":memory:") })` — no `connect()` or `close()` needed on the client itself.
 - **Sandbox lifecycle**: always wrap in `try/finally { await sb.close(); }` to avoid container leaks.
-- **Assertion**: `const { stdout } = await sb.exec("cmd")` — assert on the returned value. For error cases, catch `CommandError`.
+- **Assertion**: `const { stdout, exitCode } = await sb.exec("cmd")` — assert on the returned value. For error cases, catch `CommandError`.
 
 ### What to assert
 
@@ -84,7 +82,16 @@ Assert on observable behaviour, not internal structure:
 
 ```
 packages/core/                    — Sandbox primitive (no runtime deps outside opensandbox)
-  src/sandbox.ts                  — Sandbox class, resolveExecClient(), SandboxHooks, SandboxDeps
+  src/sandbox/core.ts             — SandboxCore: private state, exec()/execCode()/createCodeContext()/createSession()
+  src/sandbox/sandbox.ts          — Sandbox class (extends SandboxCore): file/lifecycle/observability delegators
+  src/sandbox/files.ts            — writeFile/readFile/deleteFile/moveFile/listDirectory/searchFiles/...
+  src/sandbox/lifecycle.ts        — pause/resume/checkpoint/fork/close/listCheckpoints
+  src/sandbox/observability.ts    — metrics/watchMetrics/diagnosticLogs/diagnosticEvents/proxy
+  src/sandbox/bash-session.ts     — BashSession class
+  src/sandbox/resolve.ts          — resolveExecClient()
+  src/sandbox/types.ts            — ExecOptions, SandboxHooks, SandboxDeps, PendingInteractiveExec, ExecCodeOptions
+  src/sandbox/internal.ts         — SandboxInternal (package-private facade the split modules operate over)
+  src/sandbox/index.ts            — barrel — re-exported from src/index.ts
   src/exec-handle.ts              — ExecHandle (PromiseLike<ExecResult>), pipe(), stdout(), result()
   src/ledger.ts                   — IStorageAdapter, LedgerEvent, SandboxStatus, SandboxDetails, ListSandboxOptions
   src/errors.ts                   — WorkflowError, SandboxError, ExecConnectionError, CommandError
@@ -115,30 +122,59 @@ packages/adapters/sqlite/         — SQLite storage adapter (published as "@dre
 packages/adapters/otel/           — OpenTelemetry hooks adapter (published as "@drej/otel")
   src/index.ts                    — otelHooks(tracer, opts?) → SandboxHooks
 
+packages/adapters/flue/           — Flue runtime adapter (published as "@drej/flue")
+  src/index.ts                    — SandboxApi/SandboxFactory implementation backing @flue/runtime with a drej Sandbox
+
 packages/agent/                   — Agent SDK (published to npm as "@drej/agent")
-  src/agent.ts                    — Agent class: load(), resume(), prompt(), bash(), steer(), followUp(), abort(),
-                                    newSession(), clone(), fork(), switchSession(), setModel(), cycleModel(),
-                                    getMessages(), getAvailableModels(), setThinkingLevel(), cycleThinkingLevel(),
-                                    setAutoCompaction(), compact(), setEnv(), getLogs(), close()
-  src/adapters/pi.ts              — PiAdapter: BRIDGE_SCRIPT (Node.js CJS HTTP→RPC bridge), install(), configure(),
-                                    startBridge(), waitReady(); bridges all Pi RPC commands; emits AgentEvent SSE
-  src/schema.ts                   — AgentSpec interface + SetupStep interface + validateAgentSpec()
-  src/snapshots.ts                — AgentSnapshotStore, computeSetupHash() (hashes cli+cliVersion+packages+setup)
-  src/config.ts                   — DrejAgentConfig, readProjectConfig() (reads drej.config.json)
-  src/types.ts                    — AgentEvent (text|tool_start|tool_update|tool_end), AgentStream, textOnly(),
-                                    PromptStream (deprecated alias), PiModel, ThinkingLevel, PiMessage, CompactResult
-  src/index.ts                    — barrel exports
+  src/agent/factory.ts            — load()/resume()/attach()/spawn() bodies (snapshot restore, env resolution,
+                                    spawn-depth/max-agents enforcement) — returns constructor args, not an Agent
+                                    directly, since only Agent's own static methods may call its private constructor
+  src/agent/agent.ts               — Agent class: constructor + every public method as a 1-line delegator to the
+                                    modules below
+  src/agent/session-control.ts     — prompt/bash/steer/abort/followUp/newSession/setSteeringMode/...
+  src/agent/model.ts                — setModel/cycleModel/getAvailableModels/setThinkingLevel/cycleThinkingLevel
+  src/agent/introspection.ts        — getState/getMessages/getSessionStats/getForkMessages/getCommands/getLogs
+  src/agent/lifecycle.ts            — fork/clone/switchSession/exportHtml/compact/setEnv/close
+  src/agent/validation.ts           — assertValidSpawnDepth/assertValidMaxAgents/resolveParent{SpawnDepth,MaxAgents}
+  src/agent/internal.ts             — AgentInternal (package-private facade the split modules operate over)
+  src/agent/index.ts                — barrel — re-exported from src/index.ts
+  src/adapters/pi.ts                — PiAdapter: install(), configure(), startBridge(), waitReady(); bridges all
+                                      Pi RPC commands over HTTP/SSE; emits AgentEvent
+  src/adapters/pi-bridge.js         — the actual Node.js CJS HTTP→RPC bridge script, written into the sandbox at
+                                      /drej-bridge.js — a real, lint/format-checked file, read by pi.ts relative to
+                                      its own module location and copied into dist/ by tsdown's `copy` config
+  src/schema.ts                    — AgentSpec interface + SetupStep interface + validateAgentSpec()
+  src/snapshots.ts                 — AgentSnapshotStore, computeSetupHash() (hashes cli+cliVersion+packages+setup)
+  src/config.ts                    — DrejAgentConfig, readProjectConfig() (reads drej.config.json)
+  src/types.ts                     — AgentEvent (text|tool_start|tool_update|tool_end), AgentStream, textOnly(),
+                                      PromptStream (deprecated alias), PiModel, ThinkingLevel, PiMessage, CompactResult
+  src/index.ts                     — barrel exports
 
 packages/cli/                     — drejx CLI (published to npm as "drejx", not part of changeset versioning)
-  src/index.ts                    — CLI entry point (shebang, command dispatch)
-  src/commands/init.ts            — drejx init: starts OpenSandbox in Docker, writes .drej/config.json
-  src/commands/add.ts             — drejx add <url>: fetches registry item, builds sandbox, checkpoints
-  src/commands/list.ts            — drejx list: prints sandboxes from .drej/sandboxes.json
-  src/commands/remove.ts          — drejx remove <name>: deletes sandbox entry
+  src/index.ts                    — CLI entry point (shebang, TTY→TUI launch, dispatch via commands/registry.ts)
+  src/commands/registry.ts        — CliCommand metadata (name/group/usage/summary) for every subcommand, each with
+                                    a run() that dynamically imports its own implementation on demand — both the
+                                    dispatch table and the generated help text are driven off this one list
+  src/commands/types.ts           — CliCommand, CommandVariant interfaces
+  src/commands/args.ts            — flag() argv helper shared by every command file
+  src/commands/init.ts            — drejx init: starts OpenSandbox in Docker, writes drej.config.json
+  src/commands/add.ts             — drejx add <url>: fetches an agent spec, saves it locally
+  src/commands/list.ts            — drejx list: lists saved agent specs
+  src/commands/remove.ts          — drejx remove <name>: deletes a saved agent spec
+  src/commands/spawn.ts           — drejx spawn <spec>: Agent.load() a fresh, independent agent sandbox
+  src/commands/prompt.ts          — drejx prompt <sandbox-id> <msg>: Agent.resume() + send one prompt
+  src/commands/fork.ts            — drejx fork <name> <child-spec>: Agent.attach() + spawn() a child from a live sandbox
+  src/commands/agents.ts          — drejx agents: lists running sessions (ledger cross-checked against the live
+                                    OpenSandbox control plane, not trusted alone — see sessions-data.ts)
+  src/commands/kill.ts            — drejx kill <sandbox-id>: closes a sandbox by ID
+  src/commands/logs.ts            — drejx logs <name>: prints ledger events for a session
   src/schema.ts                   — RegistryItem interface + validateRegistryItem()
   src/config.ts                   — DrejxConfig, readConfig(), writeConfig(), serverConfigContent()
-  src/sandboxes.ts                — SandboxEntry, readSandboxes(), writeSandboxes()
+  src/sessions-data.ts            — getSessions(): ledger "Running" entries cross-checked against a live
+                                    ControlClient query; formatAge()
   src/docker.ts                   — checkDocker(), getContainerState(), startContainer(), runContainer(), pollHealth()
+  pi-extension/drejx.ts           — the Pi extension that bootstraps drejx and injects spawn/fork CLI guidance into
+                                    a Pi session's system prompt — see plans/pi-extension-rlm-flow.md
 ```
 
 ### Key design points

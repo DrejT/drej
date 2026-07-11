@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { Sandbox } from "../src/sandbox.ts";
+import { Sandbox } from "../src/sandbox/index.ts";
 import { LedgerEvent } from "../src/ledger.ts";
-import type { SandboxDeps } from "../src/sandbox.ts";
+import type { SandboxDeps } from "../src/sandbox/index.ts";
 import type { IStorageAdapter, LedgerEntry } from "../src/ledger.ts";
 
 function makeAdapter(): IStorageAdapter {
@@ -25,7 +25,7 @@ function makeDeps(adapter: IStorageAdapter): SandboxDeps {
   return { control: {} as any, adapter };
 }
 
-describe("Sandbox — ledger write ordering (_emit queue)", () => {
+describe("Sandbox — ledger write ordering (emit queue)", () => {
   it("does not invoke a later append() until an earlier, slower one resolves", async () => {
     const adapter = makeAdapter();
     const appendOrder: string[] = [];
@@ -47,8 +47,8 @@ describe("Sandbox — ledger write ordering (_emit queue)", () => {
 
     const sb = new Sandbox("sb-1", "test", makeDeps(adapter));
 
-    const p1 = (sb as any)._emit(LedgerEvent.ExecEvent, -1, { id: "slow" });
-    const p2 = (sb as any)._emit(LedgerEvent.ExecEvent, -1, { id: "fast" });
+    const p1 = (sb as any).emit(LedgerEvent.ExecEvent, -1, { id: "slow" });
+    const p2 = (sb as any).emit(LedgerEvent.ExecEvent, -1, { id: "fast" });
 
     await new Promise((r) => setTimeout(r, 20));
     // The "fast" append must not be invoked before "slow" resolves, even though
@@ -70,8 +70,8 @@ describe("Sandbox — ledger write ordering (_emit queue)", () => {
 
     const sb = new Sandbox("sb-1", "test", makeDeps(adapter));
 
-    await expect((sb as any)._emit(LedgerEvent.ExecEvent, -1, {})).rejects.toThrow("write failed");
-    await expect((sb as any)._emit(LedgerEvent.ExecEvent, -1, {})).resolves.toBeUndefined();
+    await expect((sb as any).emit(LedgerEvent.ExecEvent, -1, {})).rejects.toThrow("write failed");
+    await expect((sb as any).emit(LedgerEvent.ExecEvent, -1, {})).resolves.toBeUndefined();
     expect(adapter.append).toHaveBeenCalledTimes(2);
   });
 
@@ -84,7 +84,7 @@ describe("Sandbox — ledger write ordering (_emit queue)", () => {
 
     const sb = new Sandbox("sb-1", "test", makeDeps(adapter));
     const before = Date.now();
-    void (sb as any)._emit(LedgerEvent.ExecEvent, -1, {});
+    void (sb as any).emit(LedgerEvent.ExecEvent, -1, {});
 
     await vi.waitFor(() => expect(adapter.append).toHaveBeenCalledTimes(1));
     const entryAtCallTime = (adapter.append as ReturnType<typeof vi.fn>).mock

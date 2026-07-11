@@ -24,7 +24,7 @@ export async function agents(opts: { json?: boolean } = {}): Promise<void> {
     );
   }
   if (tracked.length === 0) {
-    console.log("(no running drej-tracked sessions — run 'drejx run <spec>' to start one)");
+    console.log("(no running drej-tracked sessions — run 'drejx spawn <spec>' to start one)");
   }
 
   if (untracked.length > 0) {

@@ -13,6 +13,14 @@ export interface SessionSnapshot {
  * Data layer shared by `drejx ps` and the TUI dashboard: drej-tracked running
  * sessions from the ledger, merged with raw OpenSandbox sandboxes the ledger
  * never recorded.
+ *
+ * The ledger only learns a sandbox stopped when its own `close()` call runs
+ * and emits `sandbox_closed` — an ungraceful death (a crash, OpenSandbox's
+ * own TTL expiring the container, someone deleting it outside drej entirely)
+ * leaves a "Running" ledger row forever, since nothing ever told it
+ * otherwise. Every ledger-"Running" entry is cross-checked here against the
+ * live OpenSandbox control plane — the actual source of truth — and dropped
+ * if the control plane no longer has it Running.
  */
 export async function getSessions(config?: DrejxConfig): Promise<SessionSnapshot> {
   const cfg = config ?? (await readConfig());
@@ -24,17 +32,22 @@ export async function getSessions(config?: DrejxConfig): Promise<SessionSnapshot
     useServerProxy: cfg.useServerProxy,
   });
 
-  const tracked = await client.sandboxes.list({ status: SandboxStatus.Running });
+  const ledgerRunning = await client.sandboxes.list({ status: SandboxStatus.Running });
 
   const control = new ControlClient({ baseUrl: cfg.serverUrl, apiKey: cfg.apiKey });
-  const trackedIds = new Set(tracked.map((s) => s.sandboxId));
-  let untracked: string[] = [];
+  let liveIds: Set<string> | null = null;
   try {
     const raw = await control.listSandboxes({ state: SandboxState.Running });
-    untracked = raw.map((s) => s.id).filter((id) => !trackedIds.has(id));
+    liveIds = new Set(raw.map((s) => s.id));
   } catch {
-    // Control-plane listing is best-effort; ledger data above is always returned.
+    // Control-plane listing is best-effort; fall back to trusting the ledger
+    // rather than showing nothing.
   }
+
+  const tracked = liveIds ? ledgerRunning.filter((s) => liveIds!.has(s.sandboxId)) : ledgerRunning;
+
+  const trackedIds = new Set(tracked.map((s) => s.sandboxId));
+  const untracked = liveIds ? [...liveIds].filter((id) => !trackedIds.has(id)) : [];
 
   return { tracked, untracked };
 }

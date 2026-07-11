@@ -1,9 +1,15 @@
-import { Drej, SandboxStatus } from "drej";
+import { Drej } from "drej";
 import { SQLiteAdapter } from "@drej/sqlite";
 import { readConfig } from "../config.js";
 
-export async function kill(name: string): Promise<void> {
-  if (!name) throw new Error("Usage: drejx kill <name>");
+/**
+ * Addressed by sandbox ID, not session name — see prompt.ts for why: names
+ * aren't unique and a name-based ledger lookup can hand back a sandbox that
+ * already died ungracefully. `client.connect()`'s live control-plane check
+ * is the actual authority on whether it still exists to kill.
+ */
+export async function kill(sandboxId: string): Promise<void> {
+  if (!sandboxId) throw new Error("Usage: drejx kill <sandbox-id>");
 
   const config = await readConfig();
   const adapter = new SQLiteAdapter(config.adapterPath);
@@ -14,13 +20,7 @@ export async function kill(name: string): Promise<void> {
     useServerProxy: config.useServerProxy,
   });
 
-  const sessions = await client.sandboxes.list({ status: SandboxStatus.Running });
-  const session = sessions.find((s) => s.name === name);
-  if (!session) {
-    throw new Error(`No running session named '${name}'. Run 'drejx ps' to see running sessions.`);
-  }
-
-  const sb = await client.connect(session.sandboxId, name);
+  const sb = await client.connect(sandboxId, sandboxId);
   await sb.close();
-  console.log(`Killed session '${name}' (${session.sandboxId})`);
+  console.log(`Killed sandbox ${sandboxId}`);
 }

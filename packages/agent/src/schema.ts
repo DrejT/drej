@@ -87,6 +87,18 @@ export interface AgentSpec {
    * entirely (the default — most agents never need it).
    */
   spawnDepth?: number;
+  /**
+   * Remaining budget for total agents this lineage may spawn — a resource
+   * ceiling, distinct from `spawnDepth`'s nesting-depth limit. Translated by
+   * `Agent.load()`/`Agent.resume()` into the `DREJX_MAX_AGENTS` env var and
+   * force-decremented into each spawned child, the same tamper-resistant
+   * pattern as `spawnDepth`. Unlike `spawnDepth`, omitting this means
+   * "uncapped" for this dimension, not "spawning disabled" — `spawnDepth`
+   * alone still gates whether spawning is allowed at all. Enforced
+   * per-lineage only: sibling branches spawned in parallel don't share or
+   * coordinate this budget with each other.
+   */
+  maxAgents?: number;
 }
 
 export function validateAgentSpec(data: unknown): AgentSpec {
@@ -103,6 +115,12 @@ export function validateAgentSpec(data: unknown): AgentSpec {
       item.spawnDepth < 0)
   ) {
     throw new Error("Agent spec 'spawnDepth' must be a non-negative integer if set");
+  }
+  if (
+    item.maxAgents !== undefined &&
+    (typeof item.maxAgents !== "number" || !Number.isInteger(item.maxAgents) || item.maxAgents < 0)
+  ) {
+    throw new Error("Agent spec 'maxAgents' must be a non-negative integer if set");
   }
   return item as unknown as AgentSpec;
 }

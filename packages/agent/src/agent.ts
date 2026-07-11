@@ -31,9 +31,15 @@ function assertValidSpawnDepth(value: number, context: string): void {
   }
 }
 
+function assertValidMaxAgents(value: number, context: string): void {
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error(`${context}: maxAgents must be a non-negative integer (got ${value})`);
+  }
+}
+
 /**
  * Resolves and validates the spawn-depth budget available to `Agent.spawn()` —
- * `override` (a `--spawn-depth` CLI flag) wins if given, else whatever value was
+ * `override` (a `--depth` CLI flag) wins if given, else whatever value was
  * materialised into `DREJX_SPAWN_DEPTH` by `Agent.load()`/`Agent.resume()`. Throws
  * unless the result is a positive integer: `0` means "no budget left", not "spawn
  * one more time" — spawning stops one level before the counter would go negative.
@@ -44,6 +50,28 @@ export function resolveParentSpawnDepth(envValue: string | undefined, override?:
     throw new Error(
       `Agent.spawn() refused: spawn depth must be a positive integer (got ${envValue ?? "unset"}). ` +
         `Set "spawnDepth" in this agent's spec, or pass { spawnDepth } explicitly.`,
+    );
+  }
+  return raw;
+}
+
+/**
+ * Resolves the max-agents budget for `Agent.spawn()` — same tamper-resistant
+ * env-counter shape as `resolveParentSpawnDepth`, but optional: `undefined`
+ * means "no cap enforced for this dimension," not "spawning refused."
+ * `spawnDepth` alone still gates whether spawning is allowed at all; this is
+ * an independent, additive ceiling on total descendants for THIS lineage —
+ * sibling branches spawned in parallel don't share this budget.
+ */
+export function resolveParentMaxAgents(
+  envValue: string | undefined,
+  override?: number,
+): number | undefined {
+  const raw = override ?? (envValue !== undefined ? Number(envValue) : undefined);
+  if (raw === undefined) return undefined;
+  if (!Number.isInteger(raw) || raw < 0) {
+    throw new Error(
+      `Agent.spawn() refused: maxAgents must be a non-negative integer (got ${raw}).`,
     );
   }
   return raw;
@@ -120,13 +148,14 @@ export class Agent {
    * the spec's `packages` or `cliVersion`).
    *
    * Pass `{ spawnDepth }` to override the spec's own `spawnDepth` (e.g. a
-   * `--spawn-depth` CLI flag) — standard flag-beats-config precedence.
+   * `--depth` CLI flag) — standard flag-beats-config precedence. Same for
+   * `{ maxAgents }` and `--max`.
    *
    * Logs timing for each phase to stdout via `[agent]` prefixed lines.
    */
   static async load(
     specPath: string,
-    opts: { adapter: IStorageAdapter; rebuild?: boolean; spawnDepth?: number },
+    opts: { adapter: IStorageAdapter; rebuild?: boolean; spawnDepth?: number; maxAgents?: number },
   ): Promise<Agent> {
     const t0 = Date.now();
     const spec = validateAgentSpec(await Bun.file(specPath).json());
@@ -136,6 +165,11 @@ export class Agent {
     if (effectiveSpawnDepth !== undefined) {
       assertValidSpawnDepth(effectiveSpawnDepth, "Agent.load()");
       resolvedEnv.DREJX_SPAWN_DEPTH = String(effectiveSpawnDepth);
+    }
+    const effectiveMaxAgents = opts.maxAgents ?? spec.maxAgents;
+    if (effectiveMaxAgents !== undefined) {
+      assertValidMaxAgents(effectiveMaxAgents, "Agent.load()");
+      resolvedEnv.DREJX_MAX_AGENTS = String(effectiveMaxAgents);
     }
     const resources = { ...config.defaults.resources, ...(spec.resources ?? {}) };
 
@@ -276,6 +310,10 @@ export class Agent {
     }
 
     const resolvedEnv = resolveEnv(spec.env ?? {});
+    if (spec.maxAgents !== undefined) {
+      assertValidMaxAgents(spec.maxAgents, "Agent.resume()");
+      resolvedEnv.DREJX_MAX_AGENTS = String(spec.maxAgents);
+    }
     if (spec.spawnDepth !== undefined) {
       assertValidSpawnDepth(spec.spawnDepth, "Agent.resume()");
       resolvedEnv.DREJX_SPAWN_DEPTH = String(spec.spawnDepth);
@@ -388,17 +426,31 @@ export class Agent {
    * integer — `0` means no budget left, `undefined` means spawning was never
    * enabled for this agent.
    *
+   * If `DREJX_MAX_AGENTS` (or `opts.maxAgents`) is set, also refuses once it
+   * hits `0` — a separate, optional ceiling on total descendants for this
+   * lineage, independent of nesting depth. Unset means uncapped for this
+   * dimension; only `spawnDepth` gates whether spawning is allowed at all.
+   * Not coordinated across sibling branches spawned in parallel.
+   *
    * No install/setup steps run — the child inherits Pi (and anything else)
    * already installed on this agent's sandbox. If the child needs packages this
    * agent's own sandbox doesn't have, add them to a setup step on the spec THIS
    * agent was loaded from, not on the child's spec.
    */
-  async spawn(childSpecPath: string, opts: { spawnDepth?: number } = {}): Promise<Agent> {
+  async spawn(
+    childSpecPath: string,
+    opts: { spawnDepth?: number; maxAgents?: number } = {},
+  ): Promise<Agent> {
     const parentDepth = resolveParentSpawnDepth(process.env.DREJX_SPAWN_DEPTH, opts.spawnDepth);
+    const parentMax = resolveParentMaxAgents(process.env.DREJX_MAX_AGENTS, opts.maxAgents);
+    if (parentMax !== undefined && parentMax <= 0) {
+      throw new Error(`Agent.spawn() refused: max-agents budget exhausted (0 remaining).`);
+    }
 
     const childSpec = validateAgentSpec(await Bun.file(childSpecPath).json());
     const childEnv = resolveEnv(childSpec.env ?? {});
     childEnv.DREJX_SPAWN_DEPTH = String(parentDepth - 1);
+    if (parentMax !== undefined) childEnv.DREJX_MAX_AGENTS = String(parentMax - 1);
 
     console.log(`[agent] forking sandbox for spawn (${childSpec.name})...`);
     const t0 = Date.now();
@@ -416,8 +468,9 @@ export class Agent {
     console.log(`[agent] bridge ready    ${elapsed(t1)}`);
 
     // The forked sandbox's actual ledger name (auto-generated by fork, not
-    // childSpec.name) is what `drejx prompt`/`drejx agents`/`drejx kill` look
-    // sessions up by — report that as this Agent's name, not the spec's own.
+    // childSpec.name) is what `drejx agents` displays and what future forks
+    // would derive a `fork-<name>-<id>` label from — report that as this
+    // Agent's name, not the spec's own.
     const namedChildSpec: AgentSpec = { ...childSpec, name: forkedSb.name };
     return new Agent(forkedSb, namedChildSpec, childEnv, adapter, false);
   }

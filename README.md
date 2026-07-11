@@ -37,7 +37,8 @@ await sb.close();
 | [`@drej/sqlite`](packages/adapters/sqlite)     | SQLite storage adapter (local dev, zero infra)              |
 | [`@drej/postgres`](packages/adapters/postgres) | Postgres storage adapter (production)                       |
 | [`@drej/otel`](packages/adapters/otel)         | OpenTelemetry hooks adapter                                 |
-| [`drejx`](packages/cli)                        | CLI — `drejx init`, `drejx add`, sandbox management         |
+| [`@drej/flue`](packages/adapters/flue)         | Flue runtime adapter — run Flue workflows against a drej `Sandbox` |
+| [`drejx`](packages/cli)                        | CLI — local OpenSandbox setup, spec management, agent session lifecycle |
 
 ---
 

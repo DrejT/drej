@@ -56,6 +56,8 @@ The spec JSON controls the agent's environment, model, and workspace setup.
 | `env`        | `Record<string,string>?` | Env vars in the sandbox. Values may reference host env: `"${MY_KEY}"` |
 | `resources`  | `object?`                | CPU/memory limits: `{ cpu: "1000m", memory: "2Gi" }`                  |
 | `setup`      | `SetupStep[]?`           | Workspace setup steps (see below)                                     |
+| `spawnDepth` | `number?`                | Nesting-depth budget for `agent.spawn()` — see [Spawning child agents](#spawning-child-agents) |
+| `maxAgents`  | `number?`                | Optional cap on total descendants for this lineage — see below        |
 
 ### Setup steps
 
@@ -198,9 +200,46 @@ const agent = await Agent.resume(savedSandboxId);
 const agent = await Agent.resume(savedSandboxId, { specPath: "./agents/my-agent.json" });
 ```
 
+#### `Agent.attach(sandboxId, opts)`
+
+Connect to an already-running sandbox **without** touching its Pi bridge — unlike `resume()`, which kills and restarts the bridge process. Use this when you only need `.spawn()`/`.sandbox`, not `.prompt()`/`.bash()` (the returned `Agent` has no bridge, so those throw).
+
+The main caller is `drejx fork`: it runs as a fresh CLI process started BY the very Pi bash-tool call it's attaching to (a session forking a child from inside its own turn) — going through `resume()` there would kill the bridge currently running the call itself.
+
+```ts
+const self = await Agent.attach(process.env.DREJ_SANDBOX_ID!, {
+  adapter,
+  name: "my-session",
+});
+const child = await self.spawn("./agents/worker.json");
+```
+
 #### `agent.close()`
 
 Stop the sandbox container and release all resources. Always call in a `finally` block.
+
+---
+
+### Spawning child agents
+
+#### `agent.spawn(childSpecPath, opts?)`
+
+Fork **this agent's own live sandbox** — filesystem, installed packages, checked-out state, everything currently on disk — into a brand-new independent sandbox running its own Pi bridge. Unlike `Agent.load()` (always starts from a spec's own snapshot) or `fork()`/`clone()` (Pi's own conversation-branching — same container, same bridge, new session branch), this is sandbox-level forking: the child sees exactly what this agent's sandbox sees right now, including uncommitted work. No install/setup steps run — the child inherits whatever is already installed on this agent's sandbox.
+
+```ts
+const child = await agent.spawn("./agents/worker.json", { spawnDepth: 2, maxAgents: 5 });
+try {
+  for await (const chunk of textOnly(child.prompt("Handle the auth module"))) {
+    process.stdout.write(chunk);
+  }
+} finally {
+  await child.close();
+}
+```
+
+Refuses immediately unless this agent's own spawn-depth budget (`spawnDepth` in the spec, or `opts.spawnDepth` to override) is a positive integer — `0` means no budget left, `undefined` means spawning was never enabled. Each spawn force-decrements the budget (`current - 1`) into the child's env, regardless of what the child's own spec says.
+
+`maxAgents` (spec field or `opts.maxAgents`) is a separate, optional ceiling on total descendants for this lineage, independent of nesting depth. Unset means uncapped for this dimension — only `spawnDepth` gates whether spawning is allowed at all. **Not** coordinated across sibling branches spawned in parallel; it's a per-lineage counter.
 
 ---
 

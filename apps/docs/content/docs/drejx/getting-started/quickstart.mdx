@@ -57,8 +57,10 @@ code-reviewer         pi        A Node.js sandbox pre-loaded with TypeScript too
 
 ```ts
 import { Agent, textOnly } from "@drej/agent";
+import { SQLiteAdapter } from "@drej/sqlite";
 
-const agent = await Agent.load("agents/code-reviewer.json");
+const adapter = new SQLiteAdapter("./.drej/ledger.db");
+const agent = await Agent.load("agents/code-reviewer.json", { adapter });
 
 for await (const chunk of textOnly(agent.prompt("Review this repo for obvious bugs."))) {
   process.stdout.write(chunk);
@@ -67,7 +69,7 @@ for await (const chunk of textOnly(agent.prompt("Review this repo for obvious bu
 await agent.close();
 ```
 
-`Agent.load()` reads `drej.config.json` itself for the OpenSandbox server URL and other defaults — the same file `drejx init` wrote in step 1. You don't need to construct a `Drej` client or pass connection details by hand.
+`Agent.load()` reads `drej.config.json` itself for the OpenSandbox server URL and other defaults — the same file `drejx init` wrote in step 1. You don't need to construct a `Drej` client or pass connection details by hand — the one thing you still construct yourself is the storage adapter (`opts.adapter`), since `@drej/agent` doesn't depend on any specific one.
 
 ## 5. Remove a spec
 

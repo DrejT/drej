@@ -81,4 +81,31 @@ describe("validateAgentSpec", () => {
       /spawnDepth/,
     );
   });
+
+  it("accepts a valid maxAgents", () => {
+    const spec = validateAgentSpec({ name: "master", cli: "pi", maxAgents: 5 });
+    expect(spec.maxAgents).toBe(5);
+  });
+
+  it("accepts maxAgents of 0", () => {
+    const spec = validateAgentSpec({ name: "worker", cli: "pi", maxAgents: 0 });
+    expect(spec.maxAgents).toBe(0);
+  });
+
+  it("omits maxAgents when not set", () => {
+    const spec = validateAgentSpec({ name: "plain", cli: "pi" });
+    expect(spec.maxAgents).toBeUndefined();
+  });
+
+  it("throws for a negative maxAgents", () => {
+    expect(() => validateAgentSpec({ name: "x", cli: "pi", maxAgents: -1 })).toThrow(/maxAgents/);
+  });
+
+  it("throws for a non-integer maxAgents", () => {
+    expect(() => validateAgentSpec({ name: "x", cli: "pi", maxAgents: 1.5 })).toThrow(/maxAgents/);
+  });
+
+  it("throws for a non-numeric maxAgents", () => {
+    expect(() => validateAgentSpec({ name: "x", cli: "pi", maxAgents: "1" })).toThrow(/maxAgents/);
+  });
 });

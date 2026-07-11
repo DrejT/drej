@@ -1,6 +1,6 @@
 /**
  * RLM fan-out: a master agent clones a repo, decides how to split a task
- * across it, and spawns child agents (via `drejx spawn`, itself built on
+ * across it, and forks child agents (via `drejx fork`, itself built on
  * `Agent.spawn()`) that each work on one slice from the *exact same*
  * checked-out commit — not a fresh clone each. See TASK.md for the actual
  * goal handed to the master (G2: externalized as a file, not pasted into
@@ -55,10 +55,10 @@ const adapter = new SQLiteAdapter("./.drej/ledger.db");
 const baseUrl = process.env.OPEN_SANDBOX_URL ?? "http://127.0.0.1:8080";
 const apiKey = process.env.OPEN_SANDBOX_API_KEY ?? "";
 
-// `drejx spawn` (run FROM INSIDE the master's own sandbox) opens its own
+// `drejx fork` (run FROM INSIDE the master's own sandbox) opens its own
 // SQLiteAdapter, pointed at a ledger file that lives inside that sandbox's
 // container filesystem — a completely separate file from this host script's
-// own `./.drej/ledger.db`. A spawned child's `sandbox_created` ledger event
+// own `./.drej/ledger.db`. A forked child's `sandbox_created` ledger event
 // lands there, not here, so a ledger-backed `sandboxes.list()` call (which
 // reads THIS host's adapter) can never see it. The OpenSandbox control plane
 // itself, though, genuinely registers every sandbox regardless of which

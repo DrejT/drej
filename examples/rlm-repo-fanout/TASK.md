@@ -13,10 +13,10 @@ missing README.md for its assigned example(s) inside its own copy of the
 repo (children start from your exact checked-out commit, so their edits
 apply to the same tree).
 
-To spawn a child, run exactly this (your own session name is
+To fork a child, run exactly this (your own session name is
 rlm-fanout-master):
 
-    drejx spawn rlm-fanout-master ./agents/worker.json --prompt "<plain instruction>" --json
+    drejx fork rlm-fanout-master ./agents/worker.json --prompt "<plain instruction>" --json
 
 Keep each --prompt value plain English, naming the example and the file to
 write. Do not embed literal shell commands or shell operators like && inside

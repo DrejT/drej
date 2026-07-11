@@ -1,12 +1,11 @@
 # rlm-repo-fanout
 
 The showcase example for `plans/drejx-rlm-substrate.md`: a master agent clones
-a repo, decides how to split a task across it, and spawns child agents — via
-`drejx spawn`, built on the new `Agent.spawn()` — that each work on one slice
-starting from the _exact same checked-out commit_ as the master, not a fresh
-clone. This is the "shared live state" fan-out shape (pattern b in the plan),
-the one that needed new plumbing beyond what `drejx run` already gave for
-free.
+a repo, decides how to split a task across it, and forks child agents — via
+`drejx fork`, built on `Agent.spawn()` — that each work on one slice starting
+from the _exact same checked-out commit_ as the master, not a fresh clone.
+This is the "shared live state" fan-out shape (pattern b in the plan), the
+one that needed new plumbing beyond what `drejx spawn` already gave for free.
 
 See `RUBRIC.md` for the full gate-by-gate evidence packet against the
 [RLM rubric](https://github.com/rawwerks/recursive-coding-agents/blob/main/rlm-rubric/rlm-rubric.md).
@@ -32,7 +31,7 @@ was found that didn't) — see `RUBRIC.md`'s "Why this model" section.
 (the default Docker bridge gateway — the address a container uses to reach
 services running on the host) if unset — this is the address the master's
 own sandbox uses to reach the OpenSandbox server when it calls
-`drejx spawn` on itself. If your OpenSandbox server isn't reachable there
+`drejx fork` on itself. If your OpenSandbox server isn't reachable there
 (a non-standard Docker network, a remote server, etc.), override it:
 
 ```bash
@@ -41,20 +40,21 @@ export MASTER_AGENT_OPENSANDBOX_DOMAIN=<your-routable-host:port>
 
 An unset _and unreachable_ value fails silently rather than loudly — the
 server URL baked into the sandbox becomes the literal broken string
-`"http://"` (no host), and `drejx spawn` fails with "Unable to connect"
+`"http://"` (no host), and `drejx fork` fails with "Unable to connect"
 rather than a clear config error.
 
 See `examples/pi-agent/test-spawn-child.ts` for the two things that have to
 be true for a container to reach the server at all.
 
-**Note on `drejx spawn` itself**: as of this writing, making `drejx spawn`
-work when called from _inside_ the sandbox it's spawning from (rather than
-from a host process) required two fixes in `packages/agent`/`packages/cli`
-— see `RUBRIC.md`'s debugging history, items 12–13. Those fixes aren't in a
-published `drejx`/`@drej/agent` release yet (see
-`.changeset/spawn-self-attach-fix.md`), so a live run of this example won't
-successfully spawn a child until that release ships — the master's setup
-step installs `drejx` from npm, which won't have the fix until then.
+**Note on `drejx fork` itself**: as of this writing, making `drejx fork`
+(named `drejx spawn` before a later CLI rename) work when called from
+_inside_ the sandbox it's forking from (rather than from a host process)
+required two fixes in `packages/agent`/`packages/cli` — see `RUBRIC.md`'s
+debugging history, items 12–13. Those fixes aren't in a published
+`drejx`/`@drej/agent` release yet (see `.changeset/spawn-self-attach-fix.md`),
+so a live run of this example won't successfully fork a child until that
+release ships — the master's setup step installs `drejx` from npm, which
+won't have the fix until then.
 
 ## Run
 
@@ -72,11 +72,11 @@ bun examples/rlm-repo-fanout/index.ts
    itself lives in a file, not in the prompt string (G2 — externalized
    context, not pasted into the root context).
 3. The master is expected to inspect the repo, decide how many children to
-   spawn and how to split the work (G6 — left to the model, not scripted),
-   then loop `drejx spawn rlm-fanout-master ./agents/worker.json --prompt
+   fork and how to split the work (G6 — left to the model, not scripted),
+   then loop `drejx fork rlm-fanout-master ./agents/worker.json --prompt
 "<slice>" --json` once per slice (G5 — code inside the sandbox calling
    sub-agents over constructed slices, not the master verbally asking a tool).
-   Each spawned child starts from the master's exact live filesystem —
+   Each forked child starts from the master's exact live filesystem —
    same commit, same working tree.
 4. Each child writes its one file, runs `git diff`, and reports the diff as
    its own final answer (G7 — the artifact stays as a file; only the diff
@@ -91,7 +91,7 @@ bun examples/rlm-repo-fanout/index.ts
 
 `TASK.md` (baked into the master's sandbox by a setup step — see the file in
 this directory for the exact text): find every `examples/*` folder in the
-cloned repo missing a `README.md`, and have spawned children write the
+cloned repo missing a `README.md`, and have forked children write the
 missing ones, each describing what that example demonstrates based on its
 `index.ts`.
 
@@ -107,7 +107,7 @@ block, whether the run passed or failed.
 
 ## Known limitations
 
-- `drejx spawn`'s two fixes (self-identification via `DREJ_SANDBOX_ID`, and
+- `drejx fork`'s two fixes (self-identification via `DREJ_SANDBOX_ID`, and
   `Agent.attach()`'s self-connect) aren't published to npm yet — see the
   setup note above and `RUBRIC.md`'s debugging history for the full story.
 - Model-driven runs can still fail on ordinary model noise (e.g. a typo like

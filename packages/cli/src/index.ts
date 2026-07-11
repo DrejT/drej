@@ -37,15 +37,17 @@ async function main(): Promise<void> {
       await remove(argv[0] ?? "");
       break;
     }
-    case "run": {
-      const { run } = await import("./commands/run.js");
+    case "spawn": {
+      const { spawn } = await import("./commands/spawn.js");
       const spec = argv.find((a) => !a.startsWith("--")) ?? "";
-      const spawnDepthFlag = flag("--spawn-depth");
-      await run(spec, {
+      const depthFlag = flag("--depth");
+      const maxFlag = flag("--max");
+      await spawn(spec, {
         prompt: flag("--prompt"),
         rebuild: argv.includes("--rebuild"),
         json: argv.includes("--json"),
-        spawnDepth: spawnDepthFlag !== undefined ? Number(spawnDepthFlag) : undefined,
+        depth: depthFlag !== undefined ? Number(depthFlag) : undefined,
+        max: maxFlag !== undefined ? Number(maxFlag) : undefined,
       });
       break;
     }
@@ -56,14 +58,16 @@ async function main(): Promise<void> {
       await prompt(sandboxId, message, { json: argv.includes("--json"), specPath: flag("--spec") });
       break;
     }
-    case "spawn": {
-      const { spawn } = await import("./commands/spawn.js");
+    case "fork": {
+      const { fork } = await import("./commands/fork.js");
       const name = argv[0] ?? "";
       const childSpec = argv.slice(1).find((a) => !a.startsWith("--")) ?? "";
-      const spawnDepthFlag = flag("--spawn-depth");
-      await spawn(name, childSpec, {
+      const depthFlag = flag("--depth");
+      const maxFlag = flag("--max");
+      await fork(name, childSpec, {
         prompt: flag("--prompt"),
-        spawnDepth: spawnDepthFlag !== undefined ? Number(spawnDepthFlag) : undefined,
+        depth: depthFlag !== undefined ? Number(depthFlag) : undefined,
+        max: maxFlag !== undefined ? Number(maxFlag) : undefined,
         json: argv.includes("--json"),
       });
       break;
@@ -95,19 +99,23 @@ SDK — OpenSandbox config and the local spec cache:
   drejx remove <name>               Remove a saved agent spec
 
 Agent — session lifecycle:
-  drejx run <spec>                       Start an agent session, print its name, exit
-  drejx run <spec> --prompt <msg>        Start it, send one prompt, print the reply, exit
+  drejx spawn <spec>                     Start a fresh agent sandbox, print its name, exit
+  drejx spawn <spec> --prompt <msg>      Start it, send one prompt, print the reply, exit
   drejx prompt <sandbox-id> <msg>        Send one prompt to a running sandbox, print the reply
-  drejx spawn <name> <child-spec>        Fork a running session's own sandbox into a new child
+  drejx fork <name> <child-spec>         Fork a running session's own live sandbox into a new child
   drejx agents [--json]                  List running agent sessions
   drejx kill <sandbox-id>                Stop a sandbox
   drejx logs <name> [--json]             Print ledger events for a session
 
-  Add --json to run/prompt/spawn/agents/logs for machine-readable output.
-  Add --spawn-depth <n> to run/spawn to override the spec's "spawnDepth".
+  Add --json to spawn/prompt/fork/agents/logs for machine-readable output.
+  Add --depth <n> to spawn/fork to override the spec's "spawnDepth" — the
+  nesting-depth budget for further forks.
+  Add --max <n> to spawn/fork to override the spec's "maxAgents" — a separate,
+  optional ceiling on total descendants for this lineage (not coordinated
+  across sibling branches spawned in parallel).
   Add --spec <path> to prompt to skip the ledger lookup for the spec file
   (needed when the sandbox's own creation event lives in a different ledger,
-  e.g. a child spawned via 'drejx spawn' from inside another sandbox).
+  e.g. a child spawned via 'drejx fork' from inside another sandbox).
 `);
       if (cmd) process.exit(1);
     }

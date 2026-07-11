@@ -5,8 +5,8 @@ import { collectReply } from "../agent-prompt.js";
 
 /**
  * Addressed by sandbox ID, not session name — names aren't unique (re-running
- * `drejx run` on the same spec produces two sandboxes with the same name) and
- * a name-based ledger lookup can hand back a sandbox that died ungracefully
+ * `drejx spawn` on the same spec produces two sandboxes with the same name)
+ * and a name-based ledger lookup can hand back a sandbox that died ungracefully
  * (crashed before its `close()` ran, expired via OpenSandbox's own TTL) since
  * nothing ever told the ledger it stopped. `Agent.resume()`'s own `connect()`
  * call is the actual authoritative liveness check — addressing by ID means
@@ -15,7 +15,7 @@ import { collectReply } from "../agent-prompt.js";
  * `opts.specPath` lets a caller skip `Agent.resume()`'s own ledger lookup for
  * the spec file entirely — necessary when prompting a sandbox whose
  * `sandbox_created` event lives in a different ledger than this CLI
- * invocation's own (e.g. a child spawned via `drejx spawn` from inside
+ * invocation's own (e.g. a child spawned via `drejx fork` from inside
  * another sandbox).
  */
 export async function prompt(

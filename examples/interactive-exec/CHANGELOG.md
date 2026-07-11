@@ -1,5 +1,12 @@
 # drej-example-interactive-exec
 
+## 0.0.4
+
+### Patch Changes
+
+- @drej/sqlite@0.3.6
+- drej@0.10.2
+
 ## 0.0.3
 
 ### Patch Changes

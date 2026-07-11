@@ -1,5 +1,11 @@
 # @drej/workflow
 
+## 1.1.7
+
+### Patch Changes
+
+- drej@0.10.2
+
 ## 1.1.6
 
 ### Patch Changes

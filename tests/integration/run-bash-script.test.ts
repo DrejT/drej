@@ -1,21 +1,14 @@
-import { Drej, workflow } from "drej";
+import { Drej } from "drej";
 import { SQLiteAdapter } from "@drej/sqlite";
-import { beforeAll, afterAll, test, expect } from "bun:test";
+import { test, expect } from "bun:test";
 
-let client: Drej;
-
-beforeAll(async () => {
-  client = new Drej({
-    baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://localhost:8080",
+test("multi-line bash script executes and produces expected output", async () => {
+  const client = new Drej({
+    baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://127.0.0.1:8080",
     apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",
     adapter: new SQLiteAdapter(":memory:"),
   });
-  await client.connect();
-});
 
-afterAll(() => client.close());
-
-test("multi-line bash script executes and produces expected output", async () => {
   const script = `
 #!/bin/bash
 set -euo pipefail
@@ -27,23 +20,19 @@ cat /tmp/drej-test.txt
 echo "=== done ==="
   `.trim();
 
-  const run = await client.run(
-    workflow("bash-script-test").sandbox(
-      { image: { uri: "ubuntu:22.04" }, resourceLimits: { cpu: "500m", memory: "256Mi" } },
-      (s) => { s.exec(script); },
-    ),
-  );
+  const sb = await client.sandbox({
+    image: "ubuntu:22.04",
+    resources: { cpu: "500m", memory: "256Mi" },
+    name: "bash-script-test",
+  });
 
-  let stdout = "";
-  for await (const ev of run) {
-    if (ev.event === "exec_event") {
-      const { text } = ev.payload as { text?: string };
-      if (text) stdout += text;
-    }
+  try {
+    const { stdout, exitCode } = await sb.exec(script, { shell: "/bin/bash" });
+    expect(stdout).toContain("=== system info ===");
+    expect(stdout).toContain("hello from drej");
+    expect(stdout).toContain("=== done ===");
+    expect(exitCode).toBe(0);
+  } finally {
+    await sb.close();
   }
-
-  expect(stdout).toContain("=== system info ===");
-  expect(stdout).toContain("hello from drej");
-  expect(stdout).toContain("=== done ===");
-  expect(run.status).toBe("completed");
-});
+}, 60_000);

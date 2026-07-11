@@ -1,77 +1,55 @@
-import { Drej, workflow, CommandError } from "drej";
+import { Drej, CommandError } from "drej";
 import { SQLiteAdapter } from "@drej/sqlite";
-import { beforeAll, afterAll, test, expect, describe } from "bun:test";
+import { test, expect, describe } from "bun:test";
 
-let client: Drej;
-
-beforeAll(async () => {
-  client = new Drej({
-    baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://localhost:8080",
+function makeClient(): Drej {
+  return new Drej({
+    baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://127.0.0.1:8080",
     apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",
     adapter: new SQLiteAdapter(":memory:"),
   });
-  await client.connect();
-});
-
-afterAll(() => client.close());
+}
 
 describe("error handling", () => {
-  test("non-strict exec: workflow continues, when() handles the failure", async () => {
-    const run = await client.run(
-      workflow("error-handling-a-test").sandbox(
-        { image: { uri: "ubuntu:22.04" }, resourceLimits: { cpu: "500m", memory: "256Mi" } },
-        (s) => {
-          s.exec("exit 1");
-          s.when(
-            { op: "eq", field: "exitCode", value: 0 },
-            (s) => { s.exec("echo success"); },
-            (s) => { s.exec("echo 'command failed, handled gracefully'"); },
-          );
-        },
-      ),
-    );
+  test("non-strict exec: exitCode reflects failure without throwing", async () => {
+    const client = makeClient();
+    const sb = await client.sandbox({
+      image: "debian:bookworm-slim",
+      resources: { cpu: "500m", memory: "256Mi" },
+      name: "error-handling-a-test",
+    });
 
-    let stdout = "";
-    for await (const ev of run) {
-      if (ev.event === "exec_event") {
-        const { text } = ev.payload as { text?: string };
-        if (text) stdout += text;
-      }
-    }
-
-    expect(run.status).toBe("completed");
-    expect(stdout).toContain("handled gracefully");
-    expect(stdout).not.toContain("success");
-  });
-
-  test("strict exec: CommandError thrown with correct exit code", async () => {
-    const run = await client.run(
-      workflow("error-handling-b-test").sandbox(
-        { image: { uri: "ubuntu:22.04" }, resourceLimits: { cpu: "500m", memory: "256Mi" } },
-        (s) => {
-          s.exec("echo 'about to fail'");
-          s.exec("exit 42", { strict: true });
-          s.exec("echo 'this line never runs'");
-        },
-      ),
-    );
-
-    let caughtError: CommandError | undefined;
-    let stdout = "";
     try {
-      for await (const ev of run) {
-        if (ev.event === "exec_event") {
-          const { text } = ev.payload as { text?: string };
-          if (text) stdout += text;
-        }
-      }
-    } catch (e) {
-      if (e instanceof CommandError) caughtError = e;
-      else throw e;
+      const { exitCode } = await sb.exec("exit 1", { strict: false });
+      expect(exitCode).toBe(1);
+    } finally {
+      await sb.close();
     }
+  }, 60_000);
 
-    expect(caughtError).toBeInstanceOf(CommandError);
-    expect(caughtError?.exitCode).toBe(42);
-    expect(stdout).not.toContain("this line never runs");
-  });
+  test("strict exec (default): CommandError thrown with correct exit code", async () => {
+    const client = makeClient();
+    const sb = await client.sandbox({
+      image: "debian:bookworm-slim",
+      resources: { cpu: "500m", memory: "256Mi" },
+      name: "error-handling-b-test",
+    });
+
+    try {
+      await sb.exec("echo 'about to fail'");
+
+      let caughtError: CommandError | undefined;
+      try {
+        await sb.exec("exit 42");
+      } catch (e) {
+        if (e instanceof CommandError) caughtError = e;
+        else throw e;
+      }
+
+      expect(caughtError).toBeInstanceOf(CommandError);
+      expect(caughtError?.exitCode).toBe(42);
+    } finally {
+      await sb.close();
+    }
+  }, 60_000);
 });

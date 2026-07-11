@@ -59,15 +59,17 @@ bunx changeset status # verify one exists
 
 **Unit tests** live in `packages/*/test/*.test.ts` and run via `bun test`. They test internal builder logic, control-flow, and adapter behaviour in isolation — no sandbox required.
 
-**Integration tests** live in `examples/<name>/tests/integration.ts` and run with `bun examples/<name>/tests/integration.ts`. They hit a real OpenSandbox sandbox and assert on live stdout and captured state. Every example must have one.
+**Integration tests** live in `tests/integration/<name>.test.ts` (one `@drej/integration-tests` workspace, not co-located with each example) and run via `bun run test:integration` from the repo root, or `cd tests/integration && bun test <name>.test.ts` for one file. They use `bun:test`'s `test()`/`expect()` against a real OpenSandbox sandbox — largely mirroring what the matching `examples/<name>/index.ts` demonstrates, but with real assertions instead of `console.log`. Most (not all) examples have one; `scripts/new-example.ts` scaffolds a stub alongside a new example.
+
+`examples/<name>/index.ts` itself is also directly runnable (`bun examples/<name>/index.ts`) as a human-readable demo — the two are complementary, not duplicates: the example is what a user reads/copies, the test is what CI would assert on.
 
 ### Integration test conventions
 
-- **Run with**: `bun examples/<name>/index.ts` from the repo root (examples are also the integration tests).
+- **Run with**: `bun run test:integration` from the repo root, or `cd tests/integration && bun test` for the whole suite / `bun test <name>.test.ts` for one file.
 - **Requires**: OpenSandbox server running locally — either `drejx init` (Docker-based, recommended) or `uvx opensandbox-server` (manual). If using `drejx init`, pass `useServerProxy: true` to `new Drej(...)` so the SDK routes through the server instead of container-direct IPs.
-- **Client setup**: `new Drej({ baseUrl: ..., adapter: new SQLiteAdapter("./ledger.db") })` — no `connect()` or `close()` needed.
+- **Client setup**: `new Drej({ baseUrl: ..., adapter: new SQLiteAdapter(":memory:") })` — no `connect()` or `close()` needed on the client itself.
 - **Sandbox lifecycle**: always wrap in `try/finally { await sb.close(); }` to avoid container leaks.
-- **Assertion**: `const { stdout } = await sb.exec("cmd")` — assert on the returned value. For error cases, catch `CommandError`.
+- **Assertion**: `const { stdout, exitCode } = await sb.exec("cmd")` — assert on the returned value. For error cases, catch `CommandError`.
 
 ### What to assert
 

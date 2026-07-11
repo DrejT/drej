@@ -23,7 +23,6 @@
  *        to be true for that), NVIDIA_API_KEY in .env.
  */
 import { Agent } from "@drej/agent";
-import { Drej, SandboxStatus } from "drej";
 import { SQLiteAdapter } from "@drej/sqlite";
 import { randomBytes } from "crypto";
 
@@ -33,18 +32,51 @@ import { randomBytes } from "crypto";
 // `bun examples/rlm-repo-fanout/index.ts` from the repo root.
 process.chdir(import.meta.dir);
 
+// Bun only loads `.env` from the shell's CWD at invocation, not by walking up
+// to the repo root — so running this from inside examples/rlm-repo-fanout
+// (which has no .env of its own) silently resolves NVIDIA_API_KEY to an empty
+// string. That doesn't fail loudly: the sandbox builds fine, Pi just rejects
+// every prompt with "no API key found," which used to hang forever behind the
+// bridge's heartbeat instead of erroring (fixed separately in pi.ts, but this
+// catches the actual mistake before spending 60s+ building a doomed sandbox).
+if (!process.env.NVIDIA_API_KEY) {
+  throw new Error(
+    "NVIDIA_API_KEY is not set. Run this from the repo root (bun examples/rlm-repo-fanout/index.ts) " +
+      "so Bun loads the root .env — running from inside this directory won't pick it up.",
+  );
+}
+
 process.env.MASTER_AGENT_OPENSANDBOX_DOMAIN ??= "172.17.0.1:8080";
 const SECRET = `rlm-fanout-secret-${randomBytes(8).toString("hex")}`;
 process.env.RLM_FANOUT_SECRET = SECRET;
 
 const MASTER_SPEC = "./agents/master.json";
 const adapter = new SQLiteAdapter("./.drej/ledger.db");
-const client = new Drej({
-  baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://127.0.0.1:8080",
-  apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",
-  adapter,
-  useServerProxy: process.env.USE_SERVER_PROXY !== "false",
-});
+const baseUrl = process.env.OPEN_SANDBOX_URL ?? "http://127.0.0.1:8080";
+const apiKey = process.env.OPEN_SANDBOX_API_KEY ?? "";
+
+// `drejx spawn` (run FROM INSIDE the master's own sandbox) opens its own
+// SQLiteAdapter, pointed at a ledger file that lives inside that sandbox's
+// container filesystem — a completely separate file from this host script's
+// own `./.drej/ledger.db`. A spawned child's `sandbox_created` ledger event
+// lands there, not here, so a ledger-backed `sandboxes.list()` call (which
+// reads THIS host's adapter) can never see it. The OpenSandbox control plane
+// itself, though, genuinely registers every sandbox regardless of which
+// ledger (if any) recorded it — so list raw sandboxes directly via the REST
+// API instead.
+interface RawSandbox {
+  id: string;
+  status: { state: string };
+  createdAt: string;
+}
+async function listRunningSandboxes(): Promise<RawSandbox[]> {
+  const res = await fetch(`${baseUrl}/v1/sandboxes?state=Running`, {
+    headers: { "OPEN-SANDBOX-API-KEY": apiKey },
+  });
+  if (!res.ok) throw new Error(`control-plane list failed: ${res.status}`);
+  const data = (await res.json()) as { items: RawSandbox[] };
+  return data.items;
+}
 
 const checks: { name: string; pass: boolean; detail?: string }[] = [];
 function check(name: string, pass: boolean, detail?: string) {
@@ -54,7 +86,7 @@ function check(name: string, pass: boolean, detail?: string) {
 
 const testStart = Date.now();
 console.log("=== Loading master (spawnDepth: 1) ===\n");
-const master = await Agent.load(MASTER_SPEC, { adapter });
+const master = await Agent.load(MASTER_SPEC, { adapter, rebuild: process.env.REBUILD === "1" });
 console.log(
   `\nmaster: ${master.name}  sandbox: ${master.sandboxId}  fromSnapshot: ${master.fromSnapshot}\n`,
 );
@@ -73,9 +105,10 @@ try {
         process.stdout.write(ev.text);
         reply += ev.text;
       } else if (ev.type === "tool_start") {
-        console.log(`\n[tool_start] ${ev.toolName} ${JSON.stringify(ev.args).slice(0, 200)}`);
+        console.log(`\n[tool_start] ${ev.toolName} ${JSON.stringify(ev.args).slice(0, 400)}`);
       } else if (ev.type === "tool_end") {
         console.log(`[tool_end]   ${ev.toolName} isError=${ev.isError}`);
+        if (ev.isError) console.log(`  result: ${JSON.stringify(ev.result).slice(0, 500)}`);
       }
     }
   } catch (err) {
@@ -97,31 +130,35 @@ try {
   const masterHead = masterHeadOut.trim();
   console.log(`master repo HEAD: ${masterHead}`);
 
-  const { stdout: masterDirtyOut } = await master.sandbox.exec(
-    "cd repo && git rev-parse HEAD && git log --oneline -1",
-  );
+  // A separate exec() call, not a "&&"-chained one — sb.exec() doesn't insert a
+  // newline between chained commands' outputs, so comparing against a second
+  // command's output in the same call is unreliable. Re-running the same
+  // command standalone and comparing HEAD before/after is what "no new commit
+  // was made" actually means anyway.
+  const { stdout: masterHeadAfterOut } = await master.sandbox.exec("cd repo && git rev-parse HEAD");
   check(
     "master never committed to its own repo (report-only)",
-    masterDirtyOut.trim().split("\n")[0] === masterHead,
+    masterHeadAfterOut.trim() === masterHead,
   );
 
-  const allSessions = await client.sandboxes.list({ status: SandboxStatus.Running });
-  const childSessions = allSessions.filter(
-    (s) => s.name.startsWith(`fork-${master.name}-`) && s.startedAt >= testStart,
+  const running = await listRunningSandboxes();
+  const childSandboxes = running.filter(
+    (s) => s.id !== master.sandboxId && new Date(s.createdAt).getTime() >= testStart,
   );
   check(
     "at least one child was spawned",
-    childSessions.length > 0,
-    `found ${childSessions.length}`,
+    childSandboxes.length > 0,
+    `found ${childSandboxes.length}`,
   );
 
-  for (const session of childSessions) {
-    console.log(`\n--- child: ${session.name} (${session.sandboxId}) ---`);
-    const child = await Agent.attach(session.sandboxId, { adapter, name: session.name });
+  for (const raw of childSandboxes) {
+    const name = `child-${raw.id.slice(0, 8)}`;
+    console.log(`\n--- child: ${name} (${raw.id}) ---`);
+    const child = await Agent.attach(raw.id, { adapter, name });
     spawnedChildren.push(child);
 
     const { stdout: childHeadOut } = await child.sandbox.exec("cd repo && git rev-parse HEAD");
-    check(`${session.name}: repo HEAD matches master's`, childHeadOut.trim() === masterHead);
+    check(`${name}: repo HEAD matches master's`, childHeadOut.trim() === masterHead);
 
     let probeOut = "";
     for await (const ev of child.bash(
@@ -130,12 +167,12 @@ try {
       if (ev.type === "text") probeOut += ev.text;
     }
     check(
-      `${session.name}: master's secret is absent`,
+      `${name}: master's secret is absent`,
       probeOut.includes("SECRET=[]") && !probeOut.includes(SECRET),
     );
-    check(`${session.name}: spawn depth is exactly 0`, probeOut.includes("DEPTH=[0]"));
+    check(`${name}: spawn depth is exactly 0`, probeOut.includes("DEPTH=[0]"));
     check(
-      `${session.name}: has no drejx installed (cannot itself spawn)`,
+      `${name}: has no drejx installed (cannot itself spawn)`,
       probeOut.includes("DREJX_FOUND=[1]"),
     );
   }

@@ -11,15 +11,18 @@ full design rationale this example implements.
 
 - **Entry point**: `bun examples/rlm-repo-fanout/index.ts`.
 - **Master spec**: `agents/master.json` — Pi CLI, NVIDIA NIM's
-  `nvidia/nemotron-3-super-120b-a12b:free`, `spawnDepth: 1`. No `drejx_*` Pi
-  tools registered (PR #124's extension is deliberately absent — see "Why no
-  Pi tools" below).
+  `nvidia/nvidia-nemotron-nano-9b-v2` (chosen after benchmarking several
+  NVIDIA NIM models for speed/reliability/tenacity — see "Why this model"
+  below), `spawnDepth: 1`. No `drejx_*` Pi tools registered (PR #124's
+  extension is deliberately absent — see "Why no Pi tools" below).
 - **Master's actual prompt**: one sentence — "Read ./TASK.md in your working
   directory and complete the task described there. Report a summary...". The
   task itself lives in `TASK.md`, written by a setup step baked into the
   snapshot, never pasted into the prompt string.
-- **Worker spec**: `agents/worker.json` — Pi CLI only. No `drejx` install, no
-  `drej.config.json`, no spawn tools of any kind reachable.
+- **Worker spec**: `agents/worker.json` — Pi CLI only, `nvidia/nemotron-3-nano-30b-a3b`
+  (faster than the master's model — a worker's task is a single bounded edit,
+  not multi-step decomposition, so speed matters more than tenacity here). No
+  `drejx` install, no `drej.config.json`, no spawn tools of any kind reachable.
 - **Tools enabled for the master**: Pi's built-in bash tool only. `drejx` is
   a CLI on `$PATH` inside the sandbox, invoked the same way `ls` or `git`
   would be — not a registered tool the model calls by name.
@@ -65,6 +68,65 @@ those tools out of `master.json` entirely means every spawn in a real run of
 this example is provably a bash/script invocation, not a tool call — there's
 nothing else the model _could_ have used.
 
+## Why this model
+
+Benchmarked several NVIDIA NIM models locally first (`pi -p --provider
+nvidia --model <id> ...`, outside any sandbox — a plain text prompt and a
+single bash-tool-calling prompt, timed):
+
+| Model                               | Text        | Tool call                                  | Verdict                                                        |
+| ----------------------------------- | ----------- | ------------------------------------------ | -------------------------------------------------------------- |
+| `openai/gpt-oss-20b`                | 3.5s        | 2.5s (2.1–2.3s over 3 repeats)             | Fastest single-call — but see below                            |
+| `nvidia/nemotron-3-nano-30b-a3b`    | 8.3s        | 3.6s                                       | Clean tool calls, but see below                                |
+| `meta/llama-3.1-8b-instruct`        | 2.8s        | 6.9s                                       | Clean names, malformed `timeout` arg — see below               |
+| `nvidia/nvidia-nemotron-nano-9b-v2` | 4.5s        | 11.7s                                      | Slower per call, but see below — **used for the master**       |
+| `nvidia/nemotron-3-super-120b-a12b` | 5.7s        | 8.6s                                       | Slower per call, corrupted tool calls in real runs — see below |
+| `qwen/qwen3.5-122b-a10b`            | 1.9s        | **error** — "Unexpected end of JSON input" | Broken tool calling through NVIDIA's endpoint — avoid          |
+| `meta/llama-3.3-70b-instruct`       | **timeout** | **timeout**                                | Unreliable — avoid                                             |
+
+That single-call benchmark turned out to be an incomplete signal twice over —
+first for tool-call _correctness_ under Pi's parser, then for task-following
+_tenacity_ across a long multi-tool-call session. Five distinct corruption or
+reliability problems showed up only in real sandboxed multi-turn runs, one
+per model tried, before landing on a model with none of them:
+
+- **`openai/gpt-oss-20b` leaks its own "harmony" chat-template channel
+  tokens into tool names** (`bash<|channel|>commentary`, `bashcommentary`)
+  on roughly half its tool calls when served through NVIDIA — every one of
+  those calls fails before the tool even runs, since the mangled name
+  doesn't match anything registered. Fastest per-call, but unusable for a
+  sustained session. Likely a template mismatch specific to NVIDIA serving
+  an OpenAI-family model, not something wrong with gpt-oss itself.
+- **`nvidia/nemotron-3-nano-30b-a3b`** (a native NVIDIA model, so no
+  cross-vendor template mismatch) had completely clean tool calls, but
+  showed real run-to-run variance in _tenacity_ — some runs explored the
+  repo thoroughly and attempted a real `drejx spawn` call, others gave up
+  after two tool calls without trying. Good for the worker's single bounded
+  edit; not reliable enough for the master's longer decomposition work.
+- **`nvidia/nemotron-3-super-120b-a12b`** showed the most persistent
+  multi-turn behavior of the models tried before it — including
+  self-recovering from a missing `bun` runtime by installing it unprompted
+  — but its own reasoning text and a nested second tool-call attempt
+  repeatedly bled into the _first_ call's command argument string in live
+  runs (`"ls.\n\nWe need to use drejx spawn command...<tool_call>\n<function=bash>\n<parameter=command>\nls -la"`),
+  producing an unparseable shell string and ending the turn early.
+- **`meta/llama-3.1-8b-instruct`** had clean tool _names_ but reliably sent
+  its bash tool's `timeout` argument as the string `"null"` instead of a
+  number or an omitted field, failing Pi's schema validation
+  (`timeout: must be number`) on nearly every call.
+- **`nvidia/nvidia-nemotron-nano-9b-v2`** — initially benchmarked as merely
+  "OK, slower tool calls" and not tried live until every faster option above
+  had a confirmed correctness problem — turned out to have zero structural
+  tool-call corruption across every multi-turn stress test: correct absolute
+  paths, one call at a time (never blind-batched, unlike `llama-3.1-8b`,
+  which fired 5–6 tool calls before any result came back, causing race
+  failures), and it self-corrected a real mistake (a relative path in a
+  generated Python script) using the `edit` tool and re-ran successfully,
+  unprompted. Slower per call than several alternatives, but the only model
+  tried that never corrupted a tool call across many multi-turn runs. Used
+  for the master; the worker keeps `nemotron-3-nano-30b-a3b` since its job
+  is one bounded edit, not open-ended decomposition.
+
 ## Strongest case against
 
 - **G6 is only as honest as the task.** `TASK.md` does say "decide how to
@@ -102,36 +164,178 @@ nothing else the model _could_ have used.
   `plans/drejx-rlm-substrate.md` — deliberately left for exactly this kind of
   observation).
 
-## Known limitation: full live run blocked by an OpenSandbox proxy issue, not a drejx bug
+## Debugging history: every real bug found getting this to run live
 
-While validating this example, `master.prompt(...)` reliably failed with a
-`500` from OpenSandbox's own server proxy (`{"code":"GENERAL::UNKNOWN_ERROR",
-"message":"An internal error occurred in the proxy: "}`, `server: uvicorn`)
-on this environment's OpenSandbox instance. Isolated, not assumed:
+Getting a live run of this example working surfaced a chain of real, distinct
+bugs — worth recording in full since several looked like something else
+entirely until isolated:
 
-- `master.bash(...)` — same sandbox, same SSE-streaming shape, same proxy —
-  succeeds instantly. Only `.prompt()`, which waits on an actual model
-  response before the first streamed byte, fails, and fails consistently
-  (two back-to-back retries, same result). Observed with Gemini during the
-  original testing of this example; the example has since switched to
-  NVIDIA NIM (see below) specifically to avoid Gemini's separate free-tier
-  quota — this failure mode is a proxy-timing issue independent of which
-  provider is behind it.
-- Bypassing the proxy (`useServerProxy: false`, connecting to the container's
-  IP directly, per CLAUDE.md's documented `uvx` setup) doesn't work around
-  it either — it just times out, meaning this particular environment's
-  containers aren't directly reachable from the host at all, only through
-  the proxy.
+1. **Wrong model ID.** The spec originally used
+   `nvidia/nemotron-3-super-120b-a12b:free` — an OpenRouter-style suffix that
+   doesn't exist on NVIDIA's own native API. Found via `pi --list-models
+nvidia` and a working local `pi -p` call with the correct ID (no `:free`).
+2. **Stale published `drejx`.** The setup step's `npm install -g drejx`
+   always installs whatever's currently on npm — it silently ran against
+   `drejx@0.5.0` (pre-`spawn`) until the `chore: version packages` PR merged
+   and `0.6.0` published. (`examples/rlm-repo-fanout/index.ts` has a
+   `REBUILD=1` escape hatch to force past a stale cached snapshot after any
+   future `drejx` release.)
+3. **A genuine OpenSandbox proxy bug.** Confirmed via DeepWiki against
+   `opensandbox-group/OpenSandbox`: the generic `/sandboxes/{id}/proxy/{port}`
+   endpoint (what `sb.proxy()` routes through) proxies via an `httpx` client
+   with no configured read timeout, which falls back to httpx's 5s default.
+   Any gap that long between bytes written to the bridge's SSE response
+   (model thinking time, a slow tool call) got the proxy's connection to the
+   bridge killed — a `500`, or a stream that silently ended early. Fixed in
+   `packages/agent/src/adapters/pi.ts`: the bridge now writes a `: ping` SSE
+   comment (spec-legal, ignored by clients) every 3s while a `/prompt` or
+   `/bash` call is in flight, keeping that idle timer from ever firing.
+4. **The bridge silently dropped a failed prompt.** Even with the heartbeat
+   fix, a run could still hang forever: if Pi rejected a prompt outright
+   (`{"success":false,"error":"..."}`), that ack isn't tracked the way
+   `/bash` results are, so the bridge just... didn't forward it. The client
+   sat behind the heartbeat indefinitely instead of seeing a clean error.
+   Fixed in the same file: a rejected prompt now ends the SSE stream with the
+   real error immediately.
+5. **What #4 was actually masking.** Once errors surfaced instead of hanging,
+   Pi reported `"No API key found for nvidia"` — even though the key was
+   right there in `.env`. Root cause: Bun only loads `.env` from the shell's
+   CWD at invocation, it does not walk up to the repo root — running this
+   example from inside `examples/rlm-repo-fanout` (which has no `.env` of
+   its own) silently resolved `NVIDIA_API_KEY` to an empty string. The
+   example builds a sandbox fine either way; only the _live model call_
+   fails. `index.ts` now checks `NVIDIA_API_KEY` up front and refuses with a
+   clear message instead of building a doomed sandbox.
+6. **Missing `bun` runtime.** `drejx`'s own npm package ships with a
+   `#!/usr/bin/env bun` shebang — the `node:22` base image has no `bun` at
+   all, so `drejx` couldn't run regardless of everything else being correct.
+   `master.json`'s setup now installs bun and symlinks it onto `/usr/local/bin`
+   (already on `$PATH` by default), rather than relying on a per-exec-session
+   `PATH` export that wouldn't persist anyway.
+7. **`openai/gpt-oss-20b` mangles tool names via NVIDIA.** Fastest in
+   single-call benchmarks, but leaks its own "harmony" chat-template channel
+   tokens into tool names (`bash<|channel|>commentary`) on roughly half its
+   calls when served through NVIDIA — every one of those fails before the
+   tool even runs.
+8. **A structural Pi+NVIDIA tool-calling issue, found across three separate
+   models, not fixed.** After #1–7, `index.ts` was updated to log a failed
+   tool call's actual result content (not just `isError`), which is what
+   surfaced this clearly instead of leaving it as an unexplained hang. Three
+   different models, driven the same way through Pi's `openai-completions`
+   API path against NVIDIA, each corrupted tool calls in a _different_
+   shape:
+   - `openai/gpt-oss-20b` — its harmony-format channel tokens leak into the
+     tool _name_ (item 7, above).
+   - `nvidia/nemotron-3-nano-30b-a3b` — occasionally emits a raw
+     `<function=bash><parameter=command>...` XML-ish string as plain text
+     instead of a real tool call.
+   - `nvidia/nemotron-3-super-120b-a12b` — its own reasoning text and a
+     _second_, nested tool-call attempt bled into the _first_ call's command
+     argument (`"ls.\n\nWe need to use drejx spawn command...<tool_call>\n
+<function=bash>\n<parameter=command>\nls -la"`), producing an
+     unparseable shell string and a `127` exit — the master's turn ended
+     right after, without retrying.
 
-This points to the OpenSandbox server's proxy having a first-byte/idle
-timeout shorter than an LLM's real response latency for long-streaming
-`/prompt`-shaped requests — plausibly the same underlying cause behind the
-"empty completions" behavior noted from earlier `@drej/agent` testing in
-this repo's history, manifesting differently here (an explicit 500 instead
-of a silently-empty response). It sits in OpenSandbox's proxy layer, not in
-`Agent.spawn()`, `drejx spawn`, or anything else touched by this change —
-`Agent.spawn()` itself was independently, thoroughly verified live against
-a real sandbox fork (env-leak fix, depth injection, depth-zero refusal, the
-`restoreSnapshot()`/`connect()` fork-wiring bugs this work found and fixed)
-using `.bash()`, which is unaffected. Re-attempt a full live run of this
-example once that OpenSandbox-side issue is resolved or worked around.
+   Three models, three different corruption shapes, through one integration
+   path — that pointed at Pi's streaming tool-call parser for NVIDIA's API
+   specifically, not any one model's competence. Trying more NVIDIA models
+   (below) eventually did find one with zero corruption of this kind, so
+   this turned out not to require an upstream fix or a provider switch — but
+   it took two more models (`meta/llama-3.1-8b-instruct`,
+   `nvidia/nvidia-nemotron-nano-9b-v2`) to find one.
+
+9. **`meta/llama-3.1-8b-instruct` sends a malformed `timeout` argument.**
+   Clean tool _names_, but its bash tool calls set `"timeout":"null"` (the
+   literal string `"null"`, not a number or an omitted field), which fails
+   Pi's schema validation on nearly every call. Also fired 5–6 tool calls in
+   one turn without waiting for results in between, causing order-dependent
+   races (a `wc -l` on a file its own preceding `write` call hadn't actually
+   finished yet). Ruled out.
+10. **`nvidia/nvidia-nemotron-nano-9b-v2` had zero structural tool-call
+    corruption** across every multi-turn stress test, including
+    self-correcting a real mistake via the `edit` tool unprompted (see "Why
+    this model"). Switched the master to this model.
+11. **Missing `mkdir -p .drej` before writing `drej.config.json`.** With a
+    clean model finally reaching a real `drejx spawn` call, the next failure
+    was `Error: unable to open database file` — `drejx`'s own `init`/
+    `writeConfig` always creates the `.drej` directory before writing the
+    config that points `adapterPath` at `.drej/ledger.db`, but this
+    example's setup step hand-writes `drej.config.json` via `printf` and
+    skipped that step, so `SQLiteAdapter` had nowhere to create the file.
+    Fixed by adding `mkdir -p .drej` to the same setup step.
+12. **`drejx spawn`'s session lookup can never find its own caller when the
+    caller wasn't started via `drejx run`.** With the database fixed,
+    `drejx spawn` still failed: `No running session named
+'rlm-fanout-master'`. Root cause: `drejx spawn <name> ...` looks its own
+    session up by name in the local ledger to get a sandbox ID — but the
+    master here was created via `Agent.load()` from a _host_ process, using
+    a _host-side_ `SQLiteAdapter('./ledger.db')`. That `sandbox_created`
+    event lives only in that host file. `drejx spawn`, running _inside_ the
+    sandbox, opens a _different_, freshly-created `SQLiteAdapter` pointed at
+    `.drej/ledger.db` _inside the container_ — an empty file that has never
+    heard of a sandbox named `rlm-fanout-master`, because the two ledgers
+    are different files on different filesystems that were never going to
+    see each other. Fixed by having every agent-creation path
+    (`Agent.load()`, `Agent.resume()`, `Agent.spawn()`) write a
+    `DREJ_SANDBOX_ID` env var to `/etc/drej-env`, and having `drejx spawn`
+    resolve its own sandbox ID from that env var first, falling back to the
+    old ledger lookup only if it's unset (`packages/agent/src/agent.ts`,
+    `packages/cli/src/commands/spawn.ts`).
+13. **`Agent.attach()`'s own self-connect broke immediately after #12's
+    fix.** Once self-identification worked, the very next call —
+    `Agent.attach()` reading `/etc/drej-env` via a network exec call to
+    resolve its _own_ sandbox's endpoint — failed with "Unable to connect.
+    Is the computer able to access the url?". Fixed by reading the file from
+    the local filesystem directly when the target sandbox ID matches this
+    process's own `DREJ_SANDBOX_ID` (`packages/agent/src/agent.ts`), since a
+    process attaching to _itself_ already has the file on disk and never
+    needed the network round-trip. (Bisected via targeted diagnostic
+    `console.error` calls at each step of `Agent.attach()`/`drejx spawn`,
+    surgically patching the two changed compiled files inside an
+    already-`npm install -g`'d `drejx` — the fix wasn't published to npm
+    yet, so the real installed package needed the new code grafted in to
+    test it before a release.)
+14. **A red herring turned up during #13's diagnosis: an unset
+    `MASTER_AGENT_OPENSANDBOX_DOMAIN` produced the exact same "Unable to
+    connect" error, but it was an artifact of the throwaway diagnostic
+    script used to test #12/#13 before they were published, not a bug in
+    the committed `index.ts`.** With `console.error` markers bisecting
+    `Agent.attach()`, `readProjectConfig()`'s return value showed
+    `serverUrl: "http://"` (`resolveEnv()` silently interpolates an unset
+    `${VAR}` to an empty string, not an error). The diagnostic script had
+    copied `index.ts`'s flow by hand but omitted the line `index.ts` already
+    has: `process.env.MASTER_AGENT_OPENSANDBOX_DOMAIN ??= "172.17.0.1:8080"`
+    (line 49) — a default the real example has carried since before this
+    session. Worth recording because it cost real time chasing (and briefly,
+    incorrectly, ruling out two Docker-networking theories — self-referential
+    bridge-IP hairpinning and `useServerProxy` routing — before realizing the
+    var was simply unset in the _script_, not missing from the _example_).
+    `.env` now also documents `MASTER_AGENT_OPENSANDBOX_DOMAIN` explicitly
+    (harmless, and useful for anyone writing their own script against this
+    pattern without `index.ts`'s built-in default), but it wasn't the actual
+    fix for the committed example — #12 and #13 were.
+
+With #1–14 fixed and patched in locally, a live run got `drejx spawn`
+returning a clean success (`isError=false`) for the first time in the entire
+investigation — the master correctly reading `TASK.md`, spawning a real
+child via the exact documented syntax, with no tool-call corruption, no
+database error, no self-lookup failure, and no connection error. The one
+remaining source of run-to-run flakiness is ordinary model noise unrelated
+to any of the above (e.g. typing `trejx` instead of `drejx`), not a
+structural issue.
+
+**Important caveat for anyone re-running this example today**: fixes #12 and
+#13 live in `packages/agent` and `packages/cli` source, not yet in a
+published npm release — `master.json`'s setup step still does
+`npm install -g drejx`, which pulls the last published version without
+these fixes. A live run of the _committed_ example will still fail at the
+`drejx spawn` step until a new `drejx`/`@drej/agent` version is published
+via the normal changeset flow (see `.changeset/spawn-self-attach-fix.md`).
+The confirmation above was done by installing the published package as
+normal, then surgically overwriting the two changed compiled files with
+local builds before prompting — a valid way to verify the fix live, but not
+what a fresh `npm install -g drejx` gets you until that release ships.
+`Agent.spawn()`'s own mechanism (fork, env-leak fix, depth injection,
+depth-zero refusal) remains independently, thoroughly verified via `.bash()`
+and direct SDK calls, unaffected by any of #8–14 above since none of those
+touch the fork/depth/env-scoping logic itself.

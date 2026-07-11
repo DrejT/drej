@@ -1,15 +1,7 @@
-import { Drej } from "drej";
-import { readFileSync } from "node:fs";
 import type { IStorageAdapter, Sandbox } from "@drej/core";
-import { readProjectConfig } from "./config";
-import { validateAgentSpec, type AgentSpec } from "./schema";
-import { PiAdapter, resolveEnv, toShellExports, parseShellExports } from "./adapters/pi";
-import {
-  AgentSnapshotStore,
-  computeSetupHash,
-  snapshotsPath,
-  type AgentSnapshotRecord,
-} from "./snapshots";
+import type { PiAdapter } from "../adapters/pi";
+import type { AgentSpec } from "../schema";
+import type { AgentSnapshotRecord } from "../snapshots";
 import type {
   AgentStream,
   CompactResult,
@@ -19,63 +11,14 @@ import type {
   PiSlashCommand,
   SessionStats,
   ThinkingLevel,
-} from "./types";
+} from "../types";
+import * as factory from "./factory";
+import * as sessionControl from "./session-control";
+import * as model from "./model";
+import * as introspection from "./introspection";
+import * as lifecycle from "./lifecycle";
 
-function elapsed(t: number) {
-  return `${Date.now() - t}ms`;
-}
-
-function assertValidSpawnDepth(value: number, context: string): void {
-  if (!Number.isInteger(value) || value < 0) {
-    throw new Error(`${context}: spawnDepth must be a non-negative integer (got ${value})`);
-  }
-}
-
-function assertValidMaxAgents(value: number, context: string): void {
-  if (!Number.isInteger(value) || value < 0) {
-    throw new Error(`${context}: maxAgents must be a non-negative integer (got ${value})`);
-  }
-}
-
-/**
- * Resolves and validates the spawn-depth budget available to `Agent.spawn()` —
- * `override` (a `--depth` CLI flag) wins if given, else whatever value was
- * materialised into `DREJX_SPAWN_DEPTH` by `Agent.load()`/`Agent.resume()`. Throws
- * unless the result is a positive integer: `0` means "no budget left", not "spawn
- * one more time" — spawning stops one level before the counter would go negative.
- */
-export function resolveParentSpawnDepth(envValue: string | undefined, override?: number): number {
-  const raw = override ?? (envValue !== undefined ? Number(envValue) : undefined);
-  if (raw === undefined || !Number.isInteger(raw) || raw <= 0) {
-    throw new Error(
-      `Agent.spawn() refused: spawn depth must be a positive integer (got ${envValue ?? "unset"}). ` +
-        `Set "spawnDepth" in this agent's spec, or pass { spawnDepth } explicitly.`,
-    );
-  }
-  return raw;
-}
-
-/**
- * Resolves the max-agents budget for `Agent.spawn()` — same tamper-resistant
- * env-counter shape as `resolveParentSpawnDepth`, but optional: `undefined`
- * means "no cap enforced for this dimension," not "spawning refused."
- * `spawnDepth` alone still gates whether spawning is allowed at all; this is
- * an independent, additive ceiling on total descendants for THIS lineage —
- * sibling branches spawned in parallel don't share this budget.
- */
-export function resolveParentMaxAgents(
-  envValue: string | undefined,
-  override?: number,
-): number | undefined {
-  const raw = override ?? (envValue !== undefined ? Number(envValue) : undefined);
-  if (raw === undefined) return undefined;
-  if (!Number.isInteger(raw) || raw < 0) {
-    throw new Error(
-      `Agent.spawn() refused: maxAgents must be a non-negative integer (got ${raw}).`,
-    );
-  }
-  return raw;
-}
+export { resolveParentSpawnDepth, resolveParentMaxAgents } from "./validation";
 
 /**
  * A live AI coding agent running inside an OpenSandbox container.
@@ -118,8 +61,8 @@ export class Agent {
    */
   readonly fromSnapshot: boolean;
 
-  private readonly _adapter: PiAdapter;
-  private _env: Record<string, string>;
+  readonly adapter: PiAdapter;
+  env: Record<string, string>;
 
   private constructor(
     sandbox: Sandbox,
@@ -131,8 +74,8 @@ export class Agent {
     this.sandbox = sandbox;
     this.sandboxId = sandbox.sandboxId;
     this.name = spec.name;
-    this._adapter = adapter;
-    this._env = env;
+    this.adapter = adapter;
+    this.env = env;
     this.fromSnapshot = fromSnapshot;
   }
 
@@ -157,102 +100,8 @@ export class Agent {
     specPath: string,
     opts: { adapter: IStorageAdapter; rebuild?: boolean; spawnDepth?: number; maxAgents?: number },
   ): Promise<Agent> {
-    const t0 = Date.now();
-    const spec = validateAgentSpec(await Bun.file(specPath).json());
-    const config = await readProjectConfig();
-    const resolvedEnv = resolveEnv(spec.env ?? {});
-    const effectiveSpawnDepth = opts.spawnDepth ?? spec.spawnDepth;
-    if (effectiveSpawnDepth !== undefined) {
-      assertValidSpawnDepth(effectiveSpawnDepth, "Agent.load()");
-      resolvedEnv.DREJX_SPAWN_DEPTH = String(effectiveSpawnDepth);
-    }
-    const effectiveMaxAgents = opts.maxAgents ?? spec.maxAgents;
-    if (effectiveMaxAgents !== undefined) {
-      assertValidMaxAgents(effectiveMaxAgents, "Agent.load()");
-      resolvedEnv.DREJX_MAX_AGENTS = String(effectiveMaxAgents);
-    }
-    const resources = { ...config.defaults.resources, ...(spec.resources ?? {}) };
-
-    const client = new Drej({
-      baseUrl: config.serverUrl,
-      apiKey: config.apiKey,
-      adapter: opts.adapter,
-      useServerProxy: config.useServerProxy,
-    });
-
-    const store = new AgentSnapshotStore(snapshotsPath(config.adapterPath));
-    const setupHash = computeSetupHash(spec);
-
-    const adapter = new PiAdapter();
-    let sb: Sandbox;
-    let fromSnapshot = false;
-
-    // ── Snapshot fast path ────────────────────────────────────────────────────
-    if (!opts.rebuild) {
-      const record = await store.get(spec.name, setupHash);
-      if (record) {
-        try {
-          console.log(`[agent] restoring from snapshot...`);
-          const t1 = Date.now();
-          sb = await client.restoreSnapshot(record.snapshotId, spec.name, resources);
-          console.log(`[agent] snapshot ready  ${elapsed(t1)} (${sb.sandboxId})`);
-          fromSnapshot = true;
-        } catch {
-          console.log(`[agent] snapshot stale, rebuilding...`);
-          await store.delete(spec.name);
-        }
-      }
-    }
-
-    // ── Full install path ─────────────────────────────────────────────────────
-    if (!fromSnapshot) {
-      console.log(`[agent] starting sandbox (${spec.name})...`);
-      const t1 = Date.now();
-      sb = await client.sandbox({
-        image: "node:22",
-        resources,
-        name: spec.name,
-        env: resolvedEnv,
-      });
-      console.log(`[agent] sandbox ready   ${elapsed(t1)} (${sb.sandboxId})`);
-
-      console.log(`[agent] installing Pi CLI...`);
-      const t2 = Date.now();
-      await adapter.install(sb!, spec);
-      console.log(`[agent] Pi CLI ready    ${elapsed(t2)}`);
-
-      for (const step of spec.setup ?? []) {
-        console.log(`[agent] setup: ${step.name}...`);
-        const ts = Date.now();
-        const cmd = step.cwd ? `cd ${step.cwd} && ${step.run}` : step.run;
-        await sb!.exec(cmd);
-        console.log(`[agent] setup done      ${elapsed(ts)} (${step.name})`);
-      }
-
-      console.log(`[agent] checkpointing...`);
-      const t3 = Date.now();
-      const snapshotId = await sb!.checkpoint();
-      await store.save({
-        specName: spec.name,
-        setupHash,
-        snapshotId,
-        createdAt: Date.now(),
-      });
-      console.log(`[agent] checkpoint done ${elapsed(t3)}`);
-    }
-
-    // ── Always: write fresh config + start bridge ─────────────────────────────
-    resolvedEnv.DREJ_SANDBOX_ID = sb!.sandboxId;
-    await adapter.configure(sb!, spec, resolvedEnv);
-
-    console.log(`[agent] starting bridge...`);
-    const t4 = Date.now();
-    await adapter.startBridge(sb!);
-    await adapter.waitReady();
-    console.log(`[agent] bridge ready    ${elapsed(t4)}`);
-    console.log(`[agent] total           ${elapsed(t0)}${fromSnapshot ? " (from snapshot)" : ""}`);
-
-    return new Agent(sb!, spec, resolvedEnv, adapter, fromSnapshot);
+    const r = await factory.loadAgent(specPath, opts);
+    return new Agent(r.sandbox, r.spec, r.env, r.adapter, r.fromSnapshot);
   }
 
   /**
@@ -286,61 +135,8 @@ export class Agent {
     sandboxId: string,
     opts: { adapter: IStorageAdapter; specPath?: string },
   ): Promise<Agent> {
-    const t0 = Date.now();
-    const config = await readProjectConfig();
-
-    const client = new Drej({
-      baseUrl: config.serverUrl,
-      apiKey: config.apiKey,
-      adapter: opts.adapter,
-      useServerProxy: config.useServerProxy,
-    });
-
-    let spec: AgentSpec;
-    if (opts.specPath) {
-      spec = validateAgentSpec(await Bun.file(opts.specPath).json());
-    } else {
-      const sessions = await client.sandboxes.list();
-      const session = sessions.find((s) => s.sandboxId === sandboxId);
-      if (!session)
-        throw new Error(
-          `No ledger record for sandbox ${sandboxId} — pass opts.specPath explicitly`,
-        );
-      spec = validateAgentSpec(await Bun.file(`./agents/${session.name}.json`).json());
-    }
-
-    const resolvedEnv = resolveEnv(spec.env ?? {});
-    if (spec.maxAgents !== undefined) {
-      assertValidMaxAgents(spec.maxAgents, "Agent.resume()");
-      resolvedEnv.DREJX_MAX_AGENTS = String(spec.maxAgents);
-    }
-    if (spec.spawnDepth !== undefined) {
-      assertValidSpawnDepth(spec.spawnDepth, "Agent.resume()");
-      resolvedEnv.DREJX_SPAWN_DEPTH = String(spec.spawnDepth);
-    }
-
-    console.log(`[agent] reconnecting to ${sandboxId}...`);
-    const t1 = Date.now();
-    const sb = await client.connect(sandboxId, spec.name);
-    console.log(`[agent] connected       ${elapsed(t1)}`);
-
-    // Kill any stale bridge process before starting a fresh one.
-    await sb.exec("pkill -f 'node /drej-bridge.js' 2>/dev/null; sleep 0.1; true", {
-      strict: false,
-    });
-
-    const adapter = new PiAdapter();
-    resolvedEnv.DREJ_SANDBOX_ID = sandboxId;
-    await adapter.configure(sb, spec, resolvedEnv, { resume: true });
-
-    console.log(`[agent] starting bridge...`);
-    const t2 = Date.now();
-    await adapter.startBridge(sb);
-    await adapter.waitReady();
-    console.log(`[agent] bridge ready    ${elapsed(t2)}`);
-    console.log(`[agent] total           ${elapsed(t0)}`);
-
-    return new Agent(sb, spec, resolvedEnv, adapter, false);
+    const r = await factory.resumeAgent(sandboxId, opts);
+    return new Agent(r.sandbox, r.spec, r.env, r.adapter, r.fromSnapshot);
   }
 
   /**
@@ -381,27 +177,8 @@ export class Agent {
       resources?: { cpu: string; memory: string; gpu?: string };
     },
   ): Promise<Agent> {
-    const config = await readProjectConfig();
-    const client = new Drej({
-      baseUrl: config.serverUrl,
-      apiKey: config.apiKey,
-      adapter: opts.adapter,
-      useServerProxy: config.useServerProxy,
-    });
-    const resources = opts.resources ?? config.defaults.resources;
-    const sb = await client.connect(sandboxId, opts.name, { resources });
-    let envFile: string;
-    try {
-      envFile =
-        sandboxId === process.env.DREJ_SANDBOX_ID
-          ? readFileSync("/etc/drej-env", "utf8")
-          : await sb.readFile("/etc/drej-env");
-    } catch {
-      envFile = "";
-    }
-    const env = parseShellExports(envFile);
-    const stubSpec: AgentSpec = { name: opts.name, cli: "pi" };
-    return new Agent(sb, stubSpec, env, new PiAdapter(), false);
+    const r = await factory.attachAgent(sandboxId, opts);
+    return new Agent(r.sandbox, r.spec, r.env, r.adapter, r.fromSnapshot);
   }
 
   /**
@@ -441,45 +218,15 @@ export class Agent {
     childSpecPath: string,
     opts: { spawnDepth?: number; maxAgents?: number } = {},
   ): Promise<Agent> {
-    const parentDepth = resolveParentSpawnDepth(process.env.DREJX_SPAWN_DEPTH, opts.spawnDepth);
-    const parentMax = resolveParentMaxAgents(process.env.DREJX_MAX_AGENTS, opts.maxAgents);
-    if (parentMax !== undefined && parentMax <= 0) {
-      throw new Error(`Agent.spawn() refused: max-agents budget exhausted (0 remaining).`);
-    }
-
-    const childSpec = validateAgentSpec(await Bun.file(childSpecPath).json());
-    const childEnv = resolveEnv(childSpec.env ?? {});
-    childEnv.DREJX_SPAWN_DEPTH = String(parentDepth - 1);
-    if (parentMax !== undefined) childEnv.DREJX_MAX_AGENTS = String(parentMax - 1);
-
-    console.log(`[agent] forking sandbox for spawn (${childSpec.name})...`);
-    const t0 = Date.now();
-    const forkedSb = await this.sandbox.fork(childSpec.name);
-    console.log(`[agent] fork ready      ${elapsed(t0)} (${forkedSb.sandboxId})`);
-
-    const adapter = new PiAdapter();
-    childEnv.DREJ_SANDBOX_ID = forkedSb.sandboxId;
-    await adapter.configure(forkedSb, childSpec, childEnv);
-
-    console.log(`[agent] starting bridge...`);
-    const t1 = Date.now();
-    await adapter.startBridge(forkedSb, Object.keys(this._env));
-    await adapter.waitReady();
-    console.log(`[agent] bridge ready    ${elapsed(t1)}`);
-
-    // The forked sandbox's actual ledger name (auto-generated by fork, not
-    // childSpec.name) is what `drejx agents` displays and what future forks
-    // would derive a `fork-<name>-<id>` label from — report that as this
-    // Agent's name, not the spec's own.
-    const namedChildSpec: AgentSpec = { ...childSpec, name: forkedSb.name };
-    return new Agent(forkedSb, namedChildSpec, childEnv, adapter, false);
+    const r = await factory.spawnChild(this, childSpecPath, opts);
+    return new Agent(r.sandbox, r.spec, r.env, r.adapter, r.fromSnapshot);
   }
 
   // --- streaming ---
 
   /** Send a prompt to Pi and stream the response. Pi manages its own session context. */
   prompt(message: string, opts?: { streamingBehavior?: "steer" | "followUp" }): AgentStream {
-    return this._adapter.prompt(message, opts);
+    return sessionControl.prompt(this, message, opts);
   }
 
   /**
@@ -488,39 +235,39 @@ export class Agent {
    * arrives as a single `text` event once the command completes.
    */
   bash(command: string): AgentStream {
-    return this._adapter.bash(command);
+    return sessionControl.bash(this, command);
   }
 
   // --- ack-only commands ---
 
   /** Steer Pi's current response mid-flight. Waits for Pi's RPC acknowledgment. */
   async steer(message: string): Promise<void> {
-    return this._adapter.steer(message);
+    return sessionControl.steer(this, message);
   }
 
   /** Abort Pi's current operation. */
   async abort(): Promise<void> {
-    return this._adapter.abort();
+    return sessionControl.abort(this);
   }
 
   /** Queue a message to be sent to Pi after it finishes its current task. */
   async followUp(message: string): Promise<void> {
-    return this._adapter.followUp(message);
+    return sessionControl.followUp(this, message);
   }
 
   /** Start a fresh Pi session, clearing all prior context. */
   async newSession(): Promise<void> {
-    return this._adapter.newSession();
+    return sessionControl.newSession(this);
   }
 
   /** Set Pi's reasoning level (for models that support extended thinking). */
   async setThinkingLevel(level: ThinkingLevel): Promise<void> {
-    return this._adapter.setThinkingLevel(level);
+    return model.setThinkingLevel(this, level);
   }
 
   /** Enable or disable Pi's automatic context compaction. */
   async setAutoCompaction(enabled: boolean): Promise<void> {
-    return this._adapter.setAutoCompaction(enabled);
+    return sessionControl.setAutoCompaction(this, enabled);
   }
 
   /**
@@ -530,7 +277,7 @@ export class Agent {
    * events in the stream.
    */
   async setAutoRetry(enabled: boolean): Promise<void> {
-    return this._adapter.setAutoRetry(enabled);
+    return sessionControl.setAutoRetry(this, enabled);
   }
 
   /**
@@ -538,22 +285,22 @@ export class Agent {
    * operation, emitting `auto_retry_end` with `success: false`.
    */
   async abortRetry(): Promise<void> {
-    return this._adapter.abortRetry();
+    return sessionControl.abortRetry(this);
   }
 
   /** Abort a currently-executing bash command without cancelling the whole prompt. */
   async abortBash(): Promise<void> {
-    return this._adapter.abortBash();
+    return sessionControl.abortBash(this);
   }
 
   /** Retrieve token usage, cost, and message counts for the current session. */
   async getSessionStats(): Promise<SessionStats> {
-    return this._adapter.getSessionStats();
+    return introspection.getSessionStats(this);
   }
 
   /** Retrieve the text of Pi's most recent assistant response. Returns `null` if none yet. */
   async getLastAssistantText(): Promise<string | null> {
-    return this._adapter.getLastAssistantText();
+    return introspection.getLastAssistantText(this);
   }
 
   /**
@@ -561,17 +308,17 @@ export class Agent {
    * Each entry has `entryId` (pass to `fork()`) and `text` (the message at that point).
    */
   async getForkMessages(): Promise<{ entryId: string; text: string }[]> {
-    return this._adapter.getForkMessages();
+    return introspection.getForkMessages(this);
   }
 
   /** List Pi's available slash commands, including extensions, prompt templates, and skills. */
   async getCommands(): Promise<PiSlashCommand[]> {
-    return this._adapter.getCommands();
+    return introspection.getCommands(this);
   }
 
   /** Set a display name for the current Pi session. */
   async setSessionName(name: string): Promise<void> {
-    return this._adapter.setSessionName(name);
+    return sessionControl.setSessionName(this, name);
   }
 
   /**
@@ -579,7 +326,7 @@ export class Agent {
    * `"all"` applies all queued steers at once; `"one-at-a-time"` applies them sequentially.
    */
   async setSteeringMode(mode: "all" | "one-at-a-time"): Promise<void> {
-    return this._adapter.setSteeringMode(mode);
+    return sessionControl.setSteeringMode(this, mode);
   }
 
   /**
@@ -587,7 +334,7 @@ export class Agent {
    * `"all"` sends all queued follow-ups at once; `"one-at-a-time"` sends them sequentially.
    */
   async setFollowUpMode(mode: "all" | "one-at-a-time"): Promise<void> {
-    return this._adapter.setFollowUpMode(mode);
+    return sessionControl.setFollowUpMode(this, mode);
   }
 
   /**
@@ -596,7 +343,7 @@ export class Agent {
    * to retrieve it.
    */
   async exportHtml(outputPath?: string): Promise<{ path: string }> {
-    return this._adapter.exportHtml(outputPath);
+    return lifecycle.exportHtml(this, outputPath);
   }
 
   // --- commands that return data ---
@@ -606,22 +353,22 @@ export class Agent {
    * Returns the text of the forked message and whether the fork was cancelled.
    */
   async fork(entryId: string): Promise<{ text: string; cancelled: boolean }> {
-    return this._adapter.fork(entryId);
+    return lifecycle.fork(this, entryId);
   }
 
   /** Clone the current Pi session into a new branch at the current position. */
   async clone(): Promise<{ cancelled: boolean }> {
-    return this._adapter.clone();
+    return lifecycle.clone(this);
   }
 
   /** Switch Pi to a different session file on disk. */
   async switchSession(sessionPath: string): Promise<{ cancelled: boolean }> {
-    return this._adapter.switchSession(sessionPath);
+    return lifecycle.switchSession(this, sessionPath);
   }
 
   /** Switch Pi to a specific model. Returns the activated model. */
   async setModel(provider: string, modelId: string): Promise<PiModel> {
-    return this._adapter.setModel(provider, modelId);
+    return model.setModel(this, provider, modelId);
   }
 
   /** Cycle Pi to the next available model. Returns null if only one model is configured. */
@@ -630,27 +377,27 @@ export class Agent {
     thinkingLevel: ThinkingLevel;
     isScoped: boolean;
   } | null> {
-    return this._adapter.cycleModel();
+    return model.cycleModel(this);
   }
 
   /** Cycle Pi's thinking level. Returns null if the current model doesn't support thinking. */
   async cycleThinkingLevel(): Promise<{ level: ThinkingLevel } | null> {
-    return this._adapter.cycleThinkingLevel();
+    return model.cycleThinkingLevel(this);
   }
 
   /** Manually trigger Pi's context compaction. */
   async compact(customInstructions?: string): Promise<CompactResult> {
-    return this._adapter.compact(customInstructions);
+    return lifecycle.compact(this, customInstructions);
   }
 
   /** Retrieve Pi's full conversation history for the current session. */
   async getMessages(): Promise<PiMessage[]> {
-    return this._adapter.getMessages();
+    return introspection.getMessages(this);
   }
 
   /** List all models available to Pi under the current provider configuration. */
   async getAvailableModels(): Promise<PiModel[]> {
-    return this._adapter.getAvailableModels();
+    return model.getAvailableModels(this);
   }
 
   /**
@@ -659,7 +406,7 @@ export class Agent {
    * other way to observe the *current* model or thinking level (as opposed to the full list).
    */
   async getState(): Promise<PiSessionState> {
-    return this._adapter.getState();
+    return introspection.getState(this);
   }
 
   // --- env & lifecycle ---
@@ -669,19 +416,17 @@ export class Agent {
    * the Pi subprocess so it picks up the new env. Waits until Pi is ready before returning.
    */
   async setEnv(vars: Record<string, string>): Promise<void> {
-    this._env = { ...this._env, ...vars };
-    await this.sandbox.writeFile("/etc/drej-env", toShellExports(this._env));
-    await this._adapter.reloadEnv(this._env);
+    return lifecycle.setEnv(this, vars);
   }
 
   /** Retrieve recent bridge logs (ring-buffered, last 200 entries). */
   async getLogs(): Promise<string> {
-    return this._adapter.getLogs();
+    return introspection.getLogs(this);
   }
 
   /** Delete the sandbox container and release all resources. Always call in a `finally` block. */
   async close(): Promise<void> {
-    await this.sandbox.close();
+    return lifecycle.close(this);
   }
 }
 

@@ -1,5 +1,77 @@
 # drejx
 
+## 0.7.0
+
+### Minor Changes
+
+- 7bd8e5d: Renamed CLI commands: `drejx run` → `drejx spawn` (start a fresh, independent agent sandbox from a spec), and the previous `drejx spawn` (fork a running session's own live sandbox into a child) → `drejx fork`. "Spawn" now consistently means "create," matching how it reads; "fork" now names the operation that actually forks live state, matching `Agent.spawn()`'s own doc language.
+
+  Renamed `--spawn-depth` to `--depth` on `spawn`/`fork` (POSIX-style, and paired now with the new `--max` flag below).
+
+  Added a `--max` flag (and matching `maxAgents` spec field) — a separate, optional ceiling on total descendants for a lineage, distinct from `--depth`'s nesting-depth limit. Unset means uncapped for this dimension; `--depth` alone still gates whether spawning/forking is allowed at all. Enforced per-lineage only — sibling branches forked in parallel don't share or coordinate this budget with each other. Implemented the same tamper-resistant env-counter pattern as `spawnDepth`/`DREJX_SPAWN_DEPTH`, via a new `DREJX_MAX_AGENTS` env var.
+
+  `drejx prompt`/`drejx kill`'s `--spec`-adjacent internals and the Pi extension's `drejx_run` tool are updated to `drejx_spawn` to match the rename.
+
+  `drejx agents` now cross-checks the ledger's "Running" sandboxes against the live OpenSandbox control plane before listing them — a sandbox that died ungracefully (crashed, expired via OpenSandbox's own TTL, deleted outside drej) previously stayed listed as "Running" forever, since nothing ever told the ledger otherwise.
+
+- 6e6fbfa: Adds `drejx --version`/`-v`/`version`.
+
+  `packages/cli/package.json` now declares a `"pi": { "extensions": [...] }` manifest, so `pi install npm:drejx` resolves `pi-extension/drejx.ts` as the extension entry point (Pi's own package manager reads this field — see `resolveExtensionEntries()` in `@earendil-works/pi-coding-agent`'s `package-manager.js`). This is the intended host-level install path: `pi install npm:drejx` puts the extension at Pi's user/global scope, available in every session afterward, rather than the project-local copy `examples/rlm-repo-fanout` still uses today.
+
+  The Pi extension itself (`packages/cli/pi-extension/drejx.ts`) gained:
+
+  - A `session_start` handler that bootstraps `drejx` (installs it via npm, runs `drejx init`) so a user never has to do either step manually — this extension is meant to be the whole distribution/setup path, not just a tool-wrapper.
+  - A `before_agent_start` handler that injects `drejx` CLI usage guidance into the system prompt every turn — different guidance depending on whether the current session is itself running inside a drej-managed sandbox (`DREJ_SANDBOX_ID` set, so `drejx fork` is meaningful) or is a host-level session (only `drejx spawn` makes sense). Deliberately dynamic per-turn rather than a static prompt blob baked into one spec.
+  - An opt-in RLM-orchestrator mindset prompt, gated on a spec setting `DREJX_RLM_MASTER` in its own `env` (so ordinary one-off coding sessions aren't told "you are an orchestrator" unconditionally), with `DREJX_RLM_SYSTEM_PROMPT` as a full override for specs wanting their own wording.
+
+  Adds `examples/rlm-master` — a reusable, non-task-specific RLM master spec, in contrast to `examples/rlm-repo-fanout`'s README-backfill-specific one.
+
+### Patch Changes
+
+- e343eab: Internal restructure: replace the hand-maintained `switch` + separately
+  hand-written help-text string in `packages/cli/src/index.ts` with a command
+  registry (`packages/cli/src/commands/{types,args,registry}.ts`). Each
+  command file now exports its own `xCommand: CliCommand` (argv parsing,
+  usage, and summary colocated with its logic), and `index.ts` dispatches and
+  generates help text from a single `commands` list — a rename or flag change
+  can no longer leave the help text saying something different from what the
+  command actually does, which happened at least once this session.
+
+  `registry.ts` keeps command metadata (name/group/usage/summary) as plain
+  data with a `run` that dynamically imports each command's implementation
+  only when invoked, preserving the original per-command lazy-loaded chunks —
+  an earlier version of this change statically imported every command
+  up front, which measured ~3x slower for something as trivial as
+  `drejx --version` (every command's own dependencies, e.g. `@drej/agent`,
+  loading eagerly on every invocation). Verified no regression after the fix.
+
+  No behavior change to any command's flags, argument order, or output.
+  Generated help text matches the old hand-written version's content (column
+  widths are now computed per-section instead of hand-tuned).
+
+  Part of the codebase restructure plan (plans/codebase-restructure.md,
+  Phase 5).
+
+- 7bd8e5d: `drejx prompt` and `drejx kill` now take a sandbox ID instead of a session name. Session names aren't unique — running `drejx run` twice on the same spec produces two sandboxes with the same name — and a name-based lookup could hand back a sandbox that already died ungracefully (crashed before its `close()` ran, expired via OpenSandbox's own TTL), since nothing tells the ledger it stopped. Addressing by sandbox ID removes the ledger detour entirely; the live control-plane check inside `connect()`/`resume()` is the only check, not a second opinion after an already-stale one.
+
+  `drejx prompt` also gains `--spec <path>` to skip its own ledger lookup for the spec file, needed when prompting a sandbox whose `sandbox_created` event lives in a different ledger than the CLI's own (e.g. a child spawned via `drejx spawn` from inside another sandbox).
+
+  The Pi extension (`pi-extension/drejx.ts`)'s `drejx_prompt`/`drejx_kill` tools are updated to match.
+
+- e78be8b: Fix `drejx spawn` when run from inside its own sandbox (the actual `Agent.spawn()` use case): it previously looked up the caller's own running session by name in the local ledger, but a session created via `Agent.load()` from a host process has its `sandbox_created` event recorded in a different `IStorageAdapter` than whatever `drejx spawn` opens from `drej.config.json` inside the container — two independent SQLite files that can never see each other. `drejx spawn` now resolves its own sandbox ID from `DREJ_SANDBOX_ID`, an env var every agent-creation path (`Agent.load()`, `Agent.resume()`, `Agent.spawn()`) now writes to `/etc/drej-env`, falling back to the old ledger lookup only when that's unset.
+
+  Also fixes `Agent.attach()` throwing "Unable to connect" on this same self-attach path: it read `/etc/drej-env` via a network exec call to the sandbox's own externally-facing endpoint, which Docker's default bridge network can't hairpin a container back to itself through. When the target sandbox ID matches this process's own `DREJ_SANDBOX_ID`, it now reads the file from the local filesystem directly instead.
+
+- Updated dependencies [7bd8e5d]
+- Updated dependencies [e343eab]
+- Updated dependencies [e78be8b]
+- Updated dependencies [e78be8b]
+- Updated dependencies [e78be8b]
+- Updated dependencies [e343eab]
+  - @drej/agent@0.6.0
+  - @drej/sqlite@0.3.6
+  - drej@0.10.2
+
 ## 0.6.0
 
 ### Minor Changes

@@ -1,5 +1,20 @@
 # @drej/integration-tests
 
+## 0.0.9
+
+### Patch Changes
+
+- Updated dependencies [7bd8e5d]
+- Updated dependencies [e343eab]
+- Updated dependencies [e78be8b]
+- Updated dependencies [e78be8b]
+- Updated dependencies [e78be8b]
+- Updated dependencies [e343eab]
+  - @drej/agent@0.6.0
+  - @drej/sqlite@0.3.6
+  - drej@0.10.2
+  - @drej/workflow@1.1.7
+
 ## 0.0.8
 
 ### Patch Changes

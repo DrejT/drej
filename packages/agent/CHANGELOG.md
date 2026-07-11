@@ -1,5 +1,60 @@
 # @drej/agent
 
+## 0.6.0
+
+### Minor Changes
+
+- 7bd8e5d: Renamed CLI commands: `drejx run` → `drejx spawn` (start a fresh, independent agent sandbox from a spec), and the previous `drejx spawn` (fork a running session's own live sandbox into a child) → `drejx fork`. "Spawn" now consistently means "create," matching how it reads; "fork" now names the operation that actually forks live state, matching `Agent.spawn()`'s own doc language.
+
+  Renamed `--spawn-depth` to `--depth` on `spawn`/`fork` (POSIX-style, and paired now with the new `--max` flag below).
+
+  Added a `--max` flag (and matching `maxAgents` spec field) — a separate, optional ceiling on total descendants for a lineage, distinct from `--depth`'s nesting-depth limit. Unset means uncapped for this dimension; `--depth` alone still gates whether spawning/forking is allowed at all. Enforced per-lineage only — sibling branches forked in parallel don't share or coordinate this budget with each other. Implemented the same tamper-resistant env-counter pattern as `spawnDepth`/`DREJX_SPAWN_DEPTH`, via a new `DREJX_MAX_AGENTS` env var.
+
+  `drejx prompt`/`drejx kill`'s `--spec`-adjacent internals and the Pi extension's `drejx_run` tool are updated to `drejx_spawn` to match the rename.
+
+  `drejx agents` now cross-checks the ledger's "Running" sandboxes against the live OpenSandbox control plane before listing them — a sandbox that died ungracefully (crashed, expired via OpenSandbox's own TTL, deleted outside drej) previously stayed listed as "Running" forever, since nothing ever told the ledger otherwise.
+
+### Patch Changes
+
+- e343eab: Internal restructure: extract the ~540-line Node.js bridge script out of
+  `packages/agent/src/adapters/pi.ts`'s `BRIDGE_SCRIPT` template literal into a
+  real file, `packages/agent/src/adapters/pi-bridge.js` — it now gets actual
+  lint/format coverage instead of living as an opaque string with zero tooling
+  support. Read at runtime relative to its own module location and copied
+  into `dist/` alongside `index.mjs` by tsdown's `copy` config, so resolution
+  works identically in dev and the published package. (Bun's native text
+  import attribute was tried first but isn't understood by rolldown, the
+  bundler this package's publish build actually uses.)
+
+  No behavior change — the bridge script's content is byte-identical, verified
+  by evaluating the original template literal and diffing against the
+  extracted file before making the switch. Part of the codebase restructure
+  plan (plans/codebase-restructure.md, Phase 4).
+
+- e78be8b: Fix the Pi bridge's `/prompt` and `/bash` SSE responses dying on OpenSandbox's generic port-proxy: that endpoint proxies through an httpx client with no configured read timeout (defaults to 5s), so any gap that long between bytes written — model thinking time, a slow tool call — got the proxy's connection killed, surfacing as a 500 or a silently-truncated stream. A periodic `: ping` SSE comment now keeps that idle timer from firing during long-running prompts and bash calls.
+- e78be8b: Fix the Pi bridge silently dropping a rejected `/prompt` call. When Pi rejects a prompt outright (e.g. no API key configured for the provider), its ack isn't tracked the way `/bash` results are, so the bridge previously just discarded it — the client's SSE stream would sit open indefinitely (kept alive by the heartbeat) instead of ever completing. The bridge now forwards the rejection as an error and ends the stream immediately.
+- e78be8b: Fix `drejx spawn` when run from inside its own sandbox (the actual `Agent.spawn()` use case): it previously looked up the caller's own running session by name in the local ledger, but a session created via `Agent.load()` from a host process has its `sandbox_created` event recorded in a different `IStorageAdapter` than whatever `drejx spawn` opens from `drej.config.json` inside the container — two independent SQLite files that can never see each other. `drejx spawn` now resolves its own sandbox ID from `DREJ_SANDBOX_ID`, an env var every agent-creation path (`Agent.load()`, `Agent.resume()`, `Agent.spawn()`) now writes to `/etc/drej-env`, falling back to the old ledger lookup only when that's unset.
+
+  Also fixes `Agent.attach()` throwing "Unable to connect" on this same self-attach path: it read `/etc/drej-env` via a network exec call to the sandbox's own externally-facing endpoint, which Docker's default bridge network can't hairpin a container back to itself through. When the target sandbox ID matches this process's own `DREJ_SANDBOX_ID`, it now reads the file from the local filesystem directly instead.
+
+- e343eab: Internal restructure: split `packages/agent/src/agent.ts` (688 lines, one
+  class with ~30 methods) into `packages/agent/src/agent/` — `validation.ts`
+  (spawn-depth/max-agents helpers, moved verbatim), `internal.ts` (a
+  package-private `AgentInternal` facade), `factory.ts` (the `load`/`resume`/
+  `attach`/`spawn` bodies, which own nearly all of the real complexity —
+  snapshot restore, env resolution, spawn-depth/max-agents enforcement),
+  `session-control.ts`, `model.ts`, `introspection.ts`, `lifecycle.ts` (the
+  ~20 thin `_adapter` delegator methods, grouped by concern), and a thin
+  `agent.ts` composing them.
+
+  No public API change — `Agent`'s method signatures, return types, and
+  behavior are identical. Part of the codebase restructure plan
+  (plans/codebase-restructure.md, Phase 3).
+
+- Updated dependencies [e343eab]
+  - @drej/core@0.6.1
+  - drej@0.10.2
+
 ## 0.5.0
 
 ### Minor Changes

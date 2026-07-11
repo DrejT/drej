@@ -1,5 +1,12 @@
 # drej-example-ports
 
+## 0.0.9
+
+### Patch Changes
+
+- @drej/sqlite@0.3.6
+- drej@0.10.2
+
 ## 0.0.8
 
 ### Patch Changes

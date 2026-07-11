@@ -1,5 +1,12 @@
 # @drej/sqlite
 
+## 0.3.7
+
+### Patch Changes
+
+- Updated dependencies [5a01e36]
+  - @drej/core@0.6.2
+
 ## 0.3.6
 
 ### Patch Changes

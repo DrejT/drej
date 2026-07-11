@@ -1,5 +1,13 @@
 # drej-example-error-handling
 
+## 0.0.10
+
+### Patch Changes
+
+- Updated dependencies [5a01e36]
+  - drej@0.10.3
+  - @drej/sqlite@0.3.7
+
 ## 0.0.9
 
 ### Patch Changes

@@ -16,6 +16,13 @@ async function main(): Promise<void> {
   }
 
   switch (cmd) {
+    case "--version":
+    case "-v":
+    case "version": {
+      const { version } = await import("../package.json");
+      console.log(version);
+      break;
+    }
     case "init": {
       const { init } = await import("./commands/init.js");
       await init();
@@ -91,6 +98,7 @@ async function main(): Promise<void> {
       console.log(`drejx — drej agent registry CLI
 
   drejx                              Launch the interactive TUI (in a terminal)
+  drejx --version                   Print the installed version
 
 SDK — OpenSandbox config and the local spec cache:
   drejx init                        Start OpenSandbox locally via Docker

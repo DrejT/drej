@@ -23,6 +23,11 @@ write. Do not embed literal shell commands or shell operators like && inside
 the --prompt text -- the child will run its own commands once it starts, you
 do not need to script that for it.
 
+Do not write any README.md file yourself directly -- every missing README
+must be written by a spawned child, even if there is only one missing file.
+Your own job is to read MISSING_READMES.txt, decide the split, spawn one or
+more children to do the writing, and collect their results.
+
 Each child should:
 
 - Write repo/examples/<name>/README.md (a short paragraph, no more).

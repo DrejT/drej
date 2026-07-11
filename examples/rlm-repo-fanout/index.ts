@@ -23,7 +23,6 @@
  *        to be true for that), NVIDIA_API_KEY in .env.
  */
 import { Agent } from "@drej/agent";
-import { Drej, SandboxStatus } from "drej";
 import { SQLiteAdapter } from "@drej/sqlite";
 import { randomBytes } from "crypto";
 
@@ -53,12 +52,31 @@ process.env.RLM_FANOUT_SECRET = SECRET;
 
 const MASTER_SPEC = "./agents/master.json";
 const adapter = new SQLiteAdapter("./.drej/ledger.db");
-const client = new Drej({
-  baseUrl: process.env.OPEN_SANDBOX_URL ?? "http://127.0.0.1:8080",
-  apiKey: process.env.OPEN_SANDBOX_API_KEY ?? "",
-  adapter,
-  useServerProxy: process.env.USE_SERVER_PROXY !== "false",
-});
+const baseUrl = process.env.OPEN_SANDBOX_URL ?? "http://127.0.0.1:8080";
+const apiKey = process.env.OPEN_SANDBOX_API_KEY ?? "";
+
+// `drejx spawn` (run FROM INSIDE the master's own sandbox) opens its own
+// SQLiteAdapter, pointed at a ledger file that lives inside that sandbox's
+// container filesystem — a completely separate file from this host script's
+// own `./.drej/ledger.db`. A spawned child's `sandbox_created` ledger event
+// lands there, not here, so a ledger-backed `sandboxes.list()` call (which
+// reads THIS host's adapter) can never see it. The OpenSandbox control plane
+// itself, though, genuinely registers every sandbox regardless of which
+// ledger (if any) recorded it — so list raw sandboxes directly via the REST
+// API instead.
+interface RawSandbox {
+  id: string;
+  status: { state: string };
+  createdAt: string;
+}
+async function listRunningSandboxes(): Promise<RawSandbox[]> {
+  const res = await fetch(`${baseUrl}/v1/sandboxes?state=Running`, {
+    headers: { "OPEN-SANDBOX-API-KEY": apiKey },
+  });
+  if (!res.ok) throw new Error(`control-plane list failed: ${res.status}`);
+  const data = (await res.json()) as { items: RawSandbox[] };
+  return data.items;
+}
 
 const checks: { name: string; pass: boolean; detail?: string }[] = [];
 function check(name: string, pass: boolean, detail?: string) {
@@ -123,23 +141,24 @@ try {
     masterHeadAfterOut.trim() === masterHead,
   );
 
-  const allSessions = await client.sandboxes.list({ status: SandboxStatus.Running });
-  const childSessions = allSessions.filter(
-    (s) => s.name.startsWith(`fork-${master.name}-`) && s.startedAt >= testStart,
+  const running = await listRunningSandboxes();
+  const childSandboxes = running.filter(
+    (s) => s.id !== master.sandboxId && new Date(s.createdAt).getTime() >= testStart,
   );
   check(
     "at least one child was spawned",
-    childSessions.length > 0,
-    `found ${childSessions.length}`,
+    childSandboxes.length > 0,
+    `found ${childSandboxes.length}`,
   );
 
-  for (const session of childSessions) {
-    console.log(`\n--- child: ${session.name} (${session.sandboxId}) ---`);
-    const child = await Agent.attach(session.sandboxId, { adapter, name: session.name });
+  for (const raw of childSandboxes) {
+    const name = `child-${raw.id.slice(0, 8)}`;
+    console.log(`\n--- child: ${name} (${raw.id}) ---`);
+    const child = await Agent.attach(raw.id, { adapter, name });
     spawnedChildren.push(child);
 
     const { stdout: childHeadOut } = await child.sandbox.exec("cd repo && git rev-parse HEAD");
-    check(`${session.name}: repo HEAD matches master's`, childHeadOut.trim() === masterHead);
+    check(`${name}: repo HEAD matches master's`, childHeadOut.trim() === masterHead);
 
     let probeOut = "";
     for await (const ev of child.bash(
@@ -148,12 +167,12 @@ try {
       if (ev.type === "text") probeOut += ev.text;
     }
     check(
-      `${session.name}: master's secret is absent`,
+      `${name}: master's secret is absent`,
       probeOut.includes("SECRET=[]") && !probeOut.includes(SECRET),
     );
-    check(`${session.name}: spawn depth is exactly 0`, probeOut.includes("DEPTH=[0]"));
+    check(`${name}: spawn depth is exactly 0`, probeOut.includes("DEPTH=[0]"));
     check(
-      `${session.name}: has no drejx installed (cannot itself spawn)`,
+      `${name}: has no drejx installed (cannot itself spawn)`,
       probeOut.includes("DREJX_FOUND=[1]"),
     );
   }

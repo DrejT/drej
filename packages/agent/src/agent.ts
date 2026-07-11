@@ -1,4 +1,5 @@
 import { Drej } from "drej";
+import { readFileSync } from "node:fs";
 import type { IStorageAdapter, Sandbox } from "@drej/core";
 import { readProjectConfig } from "./config";
 import { validateAgentSpec, type AgentSpec } from "./schema";
@@ -207,6 +208,7 @@ export class Agent {
     }
 
     // ── Always: write fresh config + start bridge ─────────────────────────────
+    resolvedEnv.DREJ_SANDBOX_ID = sb!.sandboxId;
     await adapter.configure(sb!, spec, resolvedEnv);
 
     console.log(`[agent] starting bridge...`);
@@ -290,6 +292,7 @@ export class Agent {
     });
 
     const adapter = new PiAdapter();
+    resolvedEnv.DREJ_SANDBOX_ID = sandboxId;
     await adapter.configure(sb, spec, resolvedEnv, { resume: true });
 
     console.log(`[agent] starting bridge...`);
@@ -317,6 +320,15 @@ export class Agent {
    * truth for what's actually running there) rather than re-derived from a spec
    * file, which may not even exist inside this particular sandbox.
    *
+   * When `sandboxId` matches `DREJ_SANDBOX_ID` in this process's own env (true
+   * self-attach, e.g. `drejx spawn` running from inside its own container),
+   * `/etc/drej-env` is read straight off the local filesystem instead of via
+   * `sb.readFile()`. A self-referential exec call would need this sandbox to
+   * reach itself through its own externally-facing bridge IP, which Docker's
+   * default bridge network generally can't hairpin back to the originating
+   * container — sibling-to-sibling traffic works fine, only this exact
+   * self-connect case doesn't, and the caller already has the file locally.
+   *
    * `opts.resources` sizes a subsequent `.spawn()`'s forked container — the
    * control API doesn't echo back a running sandbox's own resource limits, so
    * there's no way to discover this agent's *actual* footprint here. Defaults to
@@ -340,7 +352,15 @@ export class Agent {
     });
     const resources = opts.resources ?? config.defaults.resources;
     const sb = await client.connect(sandboxId, opts.name, { resources });
-    const envFile = await sb.readFile("/etc/drej-env").catch(() => "");
+    let envFile: string;
+    try {
+      envFile =
+        sandboxId === process.env.DREJ_SANDBOX_ID
+          ? readFileSync("/etc/drej-env", "utf8")
+          : await sb.readFile("/etc/drej-env");
+    } catch {
+      envFile = "";
+    }
     const env = parseShellExports(envFile);
     const stubSpec: AgentSpec = { name: opts.name, cli: "pi" };
     return new Agent(sb, stubSpec, env, new PiAdapter(), false);
@@ -386,6 +406,7 @@ export class Agent {
     console.log(`[agent] fork ready      ${elapsed(t0)} (${forkedSb.sandboxId})`);
 
     const adapter = new PiAdapter();
+    childEnv.DREJ_SANDBOX_ID = forkedSb.sandboxId;
     await adapter.configure(forkedSb, childSpec, childEnv);
 
     console.log(`[agent] starting bridge...`);

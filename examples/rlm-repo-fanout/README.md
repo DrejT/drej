@@ -22,21 +22,39 @@ from the shell's CWD at invocation, not by walking up to the repo root, so
 this must be run as `bun examples/rlm-repo-fanout/index.ts` from the repo
 root, not from inside this directory (the script checks for this and
 refuses with a clear error otherwise). The master uses NVIDIA NIM's
-`nvidia/nemotron-3-super-120b-a12b`, the worker the faster
+`nvidia/nvidia-nemotron-nano-9b-v2`, the worker the faster
 `nvidia/nemotron-3-nano-30b-a3b` — both chosen after benchmarking several
-NVIDIA NIM models for speed, tool-calling reliability, and (for the master)
-tenacity across a long multi-turn session — see `RUBRIC.md`'s "Why this
-model" section.
+NVIDIA NIM models for speed and, critically, tool-calling correctness (five
+different models each corrupted tool calls in a different way before one
+was found that didn't) — see `RUBRIC.md`'s "Why this model" section.
 
-If your OpenSandbox server isn't reachable from inside containers at
-`172.17.0.1:8080` (the default Docker bridge gateway), override it:
+`index.ts` defaults `MASTER_AGENT_OPENSANDBOX_DOMAIN` to `172.17.0.1:8080`
+(the default Docker bridge gateway — the address a container uses to reach
+services running on the host) if unset — this is the address the master's
+own sandbox uses to reach the OpenSandbox server when it calls
+`drejx spawn` on itself. If your OpenSandbox server isn't reachable there
+(a non-standard Docker network, a remote server, etc.), override it:
 
 ```bash
 export MASTER_AGENT_OPENSANDBOX_DOMAIN=<your-routable-host:port>
 ```
 
+An unset _and unreachable_ value fails silently rather than loudly — the
+server URL baked into the sandbox becomes the literal broken string
+`"http://"` (no host), and `drejx spawn` fails with "Unable to connect"
+rather than a clear config error.
+
 See `examples/pi-agent/test-spawn-child.ts` for the two things that have to
 be true for a container to reach the server at all.
+
+**Note on `drejx spawn` itself**: as of this writing, making `drejx spawn`
+work when called from _inside_ the sandbox it's spawning from (rather than
+from a host process) required two fixes in `packages/agent`/`packages/cli`
+— see `RUBRIC.md`'s debugging history, items 12–13. Those fixes aren't in a
+published `drejx`/`@drej/agent` release yet (see
+`.changeset/spawn-self-attach-fix.md`), so a live run of this example won't
+successfully spawn a child until that release ships — the master's setup
+step installs `drejx` from npm, which won't have the fix until then.
 
 ## Run
 
@@ -87,11 +105,17 @@ exactly what's needed to observe G6 honestly.
 The script closes the master and every child sandbox it finds in a `finally`
 block, whether the run passed or failed.
 
-## Known limitation
+## Known limitations
 
-On some OpenSandbox setups, `master.prompt(...)` can fail with a `500` from
-the server's own proxy — an OpenSandbox-side issue unrelated to `Agent.spawn()`
-itself, isolated and documented in `RUBRIC.md`'s "Known limitation" section.
-`Agent.spawn()`'s own mechanism (fork, env-leak fix, depth injection) is
-independently verified live in `plans/drejx-rlm-substrate.md`'s test notes
-via `.bash()`, which doesn't hit this proxy issue.
+- `drejx spawn`'s two fixes (self-identification via `DREJ_SANDBOX_ID`, and
+  `Agent.attach()`'s self-connect) aren't published to npm yet — see the
+  setup note above and `RUBRIC.md`'s debugging history for the full story.
+- Model-driven runs can still fail on ordinary model noise (e.g. a typo like
+  `trejx` instead of `drejx`) unrelated to any of the fixes above — that's
+  expected variance, not a structural issue.
+
+`Agent.spawn()`'s own mechanism (fork, env-leak fix, depth injection,
+depth-zero refusal) is independently, thoroughly verified via `.bash()` and
+direct SDK calls — see `plans/drejx-rlm-substrate.md`'s test notes and
+`RUBRIC.md`'s "Debugging history" section for the complete chain of bugs
+found and fixed getting a live run working end to end.

@@ -51,9 +51,9 @@ async function main(): Promise<void> {
     }
     case "prompt": {
       const { prompt } = await import("./commands/prompt.js");
-      const name = argv[0] ?? "";
+      const sandboxId = argv[0] ?? "";
       const message = argv.slice(1).find((a) => !a.startsWith("--")) ?? "";
-      await prompt(name, message, { json: argv.includes("--json") });
+      await prompt(sandboxId, message, { json: argv.includes("--json"), specPath: flag("--spec") });
       break;
     }
     case "spawn": {
@@ -95,16 +95,19 @@ SDK — OpenSandbox config and the local spec cache:
   drejx remove <name>               Remove a saved agent spec
 
 Agent — session lifecycle:
-  drejx run <spec>                  Start an agent session, print its name, exit
-  drejx run <spec> --prompt <msg>   Start it, send one prompt, print the reply, exit
-  drejx prompt <name> <msg>         Send one prompt to a running session, print the reply
-  drejx spawn <name> <child-spec>   Fork a running session's own sandbox into a new child
-  drejx agents [--json]             List running agent sessions
-  drejx kill <name>                 Stop a session and delete its sandbox
-  drejx logs <name> [--json]        Print ledger events for a session
+  drejx run <spec>                       Start an agent session, print its name, exit
+  drejx run <spec> --prompt <msg>        Start it, send one prompt, print the reply, exit
+  drejx prompt <sandbox-id> <msg>        Send one prompt to a running sandbox, print the reply
+  drejx spawn <name> <child-spec>        Fork a running session's own sandbox into a new child
+  drejx agents [--json]                  List running agent sessions
+  drejx kill <sandbox-id>                Stop a sandbox
+  drejx logs <name> [--json]             Print ledger events for a session
 
   Add --json to run/prompt/spawn/agents/logs for machine-readable output.
   Add --spawn-depth <n> to run/spawn to override the spec's "spawnDepth".
+  Add --spec <path> to prompt to skip the ledger lookup for the spec file
+  (needed when the sandbox's own creation event lives in a different ledger,
+  e.g. a child spawned via 'drejx spawn' from inside another sandbox).
 `);
       if (cmd) process.exit(1);
     }

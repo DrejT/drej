@@ -36,15 +36,17 @@ export default function (pi: ExtensionAPI) {
 
   pi.registerTool({
     name: "drejx_prompt",
-    label: "Message a running drejx session",
-    description: "Sends one message to an already-running agent session and returns its reply.",
-    promptSnippet: "drejx_prompt — send a message to a running child agent session",
+    label: "Message a running drejx sandbox",
+    description: "Sends one message to an already-running agent sandbox and returns its reply.",
+    promptSnippet: "drejx_prompt — send a message to a running child agent sandbox",
     parameters: Type.Object({
-      name: Type.String({ description: "Session name, as returned by drejx_run or drejx_agents" }),
+      sandboxId: Type.String({
+        description: "Sandbox ID, as returned by drejx_run or drejx_agents",
+      }),
       message: Type.String(),
     }),
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const res = await pi.exec("drejx", ["prompt", params.name, params.message], {
+      const res = await pi.exec("drejx", ["prompt", params.sandboxId, params.message], {
         cwd: ctx.cwd,
         signal,
       });
@@ -68,14 +70,16 @@ export default function (pi: ExtensionAPI) {
 
   pi.registerTool({
     name: "drejx_kill",
-    label: "Stop a drejx session",
-    description: "Stops a running agent session and deletes its sandbox.",
-    promptSnippet: "drejx_kill — stop a running child agent session",
+    label: "Stop a drejx sandbox",
+    description: "Stops a running agent sandbox.",
+    promptSnippet: "drejx_kill — stop a running child agent sandbox",
     parameters: Type.Object({
-      name: Type.String({ description: "Session name, as returned by drejx_run or drejx_agents" }),
+      sandboxId: Type.String({
+        description: "Sandbox ID, as returned by drejx_run or drejx_agents",
+      }),
     }),
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const res = await pi.exec("drejx", ["kill", params.name], { cwd: ctx.cwd, signal });
+      const res = await pi.exec("drejx", ["kill", params.sandboxId], { cwd: ctx.cwd, signal });
       if (res.code !== 0) throw new Error(res.stderr || `drejx kill exited ${res.code}`);
       return { content: [{ type: "text", text: res.stdout }], details: {} };
     },

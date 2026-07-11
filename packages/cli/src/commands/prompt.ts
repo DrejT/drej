@@ -1,37 +1,34 @@
-import { Drej, SandboxStatus } from "drej";
 import { Agent } from "@drej/agent";
 import { SQLiteAdapter } from "@drej/sqlite";
 import { readConfig } from "../config.js";
 import { collectReply } from "../agent-prompt.js";
 
+/**
+ * Addressed by sandbox ID, not session name — names aren't unique (re-running
+ * `drejx run` on the same spec produces two sandboxes with the same name) and
+ * a name-based ledger lookup can hand back a sandbox that died ungracefully
+ * (crashed before its `close()` ran, expired via OpenSandbox's own TTL) since
+ * nothing ever told the ledger it stopped. `Agent.resume()`'s own `connect()`
+ * call is the actual authoritative liveness check — addressing by ID means
+ * that's the ONLY check, not a second opinion after an already-stale one.
+ *
+ * `opts.specPath` lets a caller skip `Agent.resume()`'s own ledger lookup for
+ * the spec file entirely — necessary when prompting a sandbox whose
+ * `sandbox_created` event lives in a different ledger than this CLI
+ * invocation's own (e.g. a child spawned via `drejx spawn` from inside
+ * another sandbox).
+ */
 export async function prompt(
-  name: string,
+  sandboxId: string,
   message: string,
-  opts: { json?: boolean } = {},
+  opts: { json?: boolean; specPath?: string } = {},
 ): Promise<void> {
-  if (!name || !message) throw new Error("Usage: drejx prompt <name> <message> [--json]");
+  if (!sandboxId || !message)
+    throw new Error("Usage: drejx prompt <sandbox-id> <message> [--spec <path>] [--json]");
 
   const config = await readConfig();
   const adapter = new SQLiteAdapter(config.adapterPath);
-  const client = new Drej({
-    baseUrl: config.serverUrl,
-    apiKey: config.apiKey,
-    adapter,
-    useServerProxy: config.useServerProxy,
-  });
-
-  const sessions = await client.sandboxes.list({ status: SandboxStatus.Running });
-  const session = sessions.find((s) => s.name === name);
-  if (!session) {
-    throw new Error(
-      `No running session named '${name}'. Run 'drejx agents' to see running sessions.`,
-    );
-  }
-
-  const agent = await Agent.resume(session.sandboxId, {
-    adapter,
-    specPath: `${config.agentsDir}/${name}.json`,
-  });
+  const agent = await Agent.resume(sandboxId, { adapter, specPath: opts.specPath });
 
   const reply = await collectReply(agent, message);
 

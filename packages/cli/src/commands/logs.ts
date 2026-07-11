@@ -1,6 +1,7 @@
 import { Drej } from "drej";
 import { SQLiteAdapter } from "@drej/sqlite";
 import { readConfig } from "../config.js";
+import type { CliCommand } from "./types.js";
 
 export async function logs(name: string, opts: { json?: boolean } = {}): Promise<void> {
   if (!name) throw new Error("Usage: drejx logs <name> [--json]");
@@ -40,3 +41,12 @@ export async function logs(name: string, opts: { json?: boolean } = {}): Promise
     }
   }
 }
+
+export const logsCommand: CliCommand = {
+  name: "logs",
+  group: "agent",
+  variants: [{ usage: "drejx logs <name> [--json]", summary: "Print ledger events for a session" }],
+  run: async (argv) => {
+    await logs(argv[0] ?? "", { json: argv.includes("--json") });
+  },
+};

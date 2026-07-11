@@ -1,9 +1,42 @@
 #!/usr/bin/env bun
+import { commands } from "./commands/registry.js";
+import type { CliCommand } from "./commands/types.js";
+
 const [, , cmd, ...argv] = process.argv;
 
-function flag(name: string): string | undefined {
-  const i = argv.indexOf(name);
-  return i !== -1 ? argv[i + 1] : undefined;
+const HELP_NOTES = `  Add --json to spawn/prompt/fork/agents/logs for machine-readable output.
+  Add --depth <n> to spawn/fork to override the spec's "spawnDepth" — the
+  nesting-depth budget for further forks.
+  Add --max <n> to spawn/fork to override the spec's "maxAgents" — a separate,
+  optional ceiling on total descendants for this lineage (not coordinated
+  across sibling branches spawned in parallel).
+  Add --spec <path> to prompt to skip the ledger lookup for the spec file
+  (needed when the sandbox's own creation event lives in a different ledger,
+  e.g. a child spawned via 'drejx fork' from inside another sandbox).`;
+
+const GROUPS: { key: CliCommand["group"]; label: string }[] = [
+  { key: "sdk", label: "SDK — OpenSandbox config and the local spec cache:" },
+  { key: "agent", label: "Agent — session lifecycle:" },
+];
+
+function printHelp(): void {
+  console.log(`drejx — drej agent registry CLI\n`);
+  console.log(`  drejx                              Launch the interactive TUI (in a terminal)`);
+  console.log(`  drejx --version                    Print the installed version`);
+
+  for (const { key, label } of GROUPS) {
+    const groupCommands = commands.filter((c) => c.group === key);
+    const width =
+      Math.max(...groupCommands.flatMap((c) => c.variants.map((v) => v.usage.length))) + 2;
+    console.log(`\n${label}`);
+    for (const c of groupCommands) {
+      for (const v of c.variants) {
+        console.log(`  ${v.usage.padEnd(width)}${v.summary}`);
+      }
+    }
+  }
+
+  console.log(`\n${HELP_NOTES}`);
 }
 
 async function main(): Promise<void> {
@@ -15,119 +48,20 @@ async function main(): Promise<void> {
     return;
   }
 
-  switch (cmd) {
-    case "--version":
-    case "-v":
-    case "version": {
-      const { version } = await import("../package.json");
-      console.log(version);
-      break;
-    }
-    case "init": {
-      const { init } = await import("./commands/init.js");
-      await init();
-      break;
-    }
-    case "add": {
-      const { add } = await import("./commands/add.js");
-      const url = argv.find((a) => !a.startsWith("--")) ?? "";
-      await add(url, { name: flag("--name") });
-      break;
-    }
-    case "list": {
-      const { list } = await import("./commands/list.js");
-      await list();
-      break;
-    }
-    case "remove": {
-      const { remove } = await import("./commands/remove.js");
-      await remove(argv[0] ?? "");
-      break;
-    }
-    case "spawn": {
-      const { spawn } = await import("./commands/spawn.js");
-      const spec = argv.find((a) => !a.startsWith("--")) ?? "";
-      const depthFlag = flag("--depth");
-      const maxFlag = flag("--max");
-      await spawn(spec, {
-        prompt: flag("--prompt"),
-        rebuild: argv.includes("--rebuild"),
-        json: argv.includes("--json"),
-        depth: depthFlag !== undefined ? Number(depthFlag) : undefined,
-        max: maxFlag !== undefined ? Number(maxFlag) : undefined,
-      });
-      break;
-    }
-    case "prompt": {
-      const { prompt } = await import("./commands/prompt.js");
-      const sandboxId = argv[0] ?? "";
-      const message = argv.slice(1).find((a) => !a.startsWith("--")) ?? "";
-      await prompt(sandboxId, message, { json: argv.includes("--json"), specPath: flag("--spec") });
-      break;
-    }
-    case "fork": {
-      const { fork } = await import("./commands/fork.js");
-      const name = argv[0] ?? "";
-      const childSpec = argv.slice(1).find((a) => !a.startsWith("--")) ?? "";
-      const depthFlag = flag("--depth");
-      const maxFlag = flag("--max");
-      await fork(name, childSpec, {
-        prompt: flag("--prompt"),
-        depth: depthFlag !== undefined ? Number(depthFlag) : undefined,
-        max: maxFlag !== undefined ? Number(maxFlag) : undefined,
-        json: argv.includes("--json"),
-      });
-      break;
-    }
-    case "agents": {
-      const { agents } = await import("./commands/agents.js");
-      await agents({ json: argv.includes("--json") });
-      break;
-    }
-    case "kill": {
-      const { kill } = await import("./commands/kill.js");
-      await kill(argv[0] ?? "");
-      break;
-    }
-    case "logs": {
-      const { logs } = await import("./commands/logs.js");
-      await logs(argv[0] ?? "", { json: argv.includes("--json") });
-      break;
-    }
-    default: {
-      console.log(`drejx — drej agent registry CLI
-
-  drejx                              Launch the interactive TUI (in a terminal)
-  drejx --version                   Print the installed version
-
-SDK — OpenSandbox config and the local spec cache:
-  drejx init                        Start OpenSandbox locally via Docker
-  drejx add <url> [--name <n>]      Fetch and save an agent spec locally
-  drejx list                        List saved agent specs
-  drejx remove <name>               Remove a saved agent spec
-
-Agent — session lifecycle:
-  drejx spawn <spec>                     Start a fresh agent sandbox, print its name, exit
-  drejx spawn <spec> --prompt <msg>      Start it, send one prompt, print the reply, exit
-  drejx prompt <sandbox-id> <msg>        Send one prompt to a running sandbox, print the reply
-  drejx fork <name> <child-spec>         Fork a running session's own live sandbox into a new child
-  drejx agents [--json]                  List running agent sessions
-  drejx kill <sandbox-id>                Stop a sandbox
-  drejx logs <name> [--json]             Print ledger events for a session
-
-  Add --json to spawn/prompt/fork/agents/logs for machine-readable output.
-  Add --depth <n> to spawn/fork to override the spec's "spawnDepth" — the
-  nesting-depth budget for further forks.
-  Add --max <n> to spawn/fork to override the spec's "maxAgents" — a separate,
-  optional ceiling on total descendants for this lineage (not coordinated
-  across sibling branches spawned in parallel).
-  Add --spec <path> to prompt to skip the ledger lookup for the spec file
-  (needed when the sandbox's own creation event lives in a different ledger,
-  e.g. a child spawned via 'drejx fork' from inside another sandbox).
-`);
-      if (cmd) process.exit(1);
-    }
+  if (cmd === "--version" || cmd === "-v" || cmd === "version") {
+    const { version } = await import("../package.json");
+    console.log(version);
+    return;
   }
+
+  const found = commands.find((c) => c.name === cmd);
+  if (found) {
+    await found.run(argv);
+    return;
+  }
+
+  printHelp();
+  if (cmd) process.exit(1);
 }
 
 main().catch((err) => {

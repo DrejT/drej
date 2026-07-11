@@ -2,6 +2,7 @@ import { existsSync } from "fs";
 import { unlink } from "fs/promises";
 import { join } from "path";
 import { readConfig } from "../config.js";
+import type { CliCommand } from "./types.js";
 
 export async function remove(name: string): Promise<void> {
   if (!name) throw new Error("Usage: drejx remove <name>");
@@ -18,3 +19,12 @@ export async function remove(name: string): Promise<void> {
   await unlink(dest);
   console.log(`Removed agent spec '${name}'`);
 }
+
+export const removeCommand: CliCommand = {
+  name: "remove",
+  group: "sdk",
+  variants: [{ usage: "drejx remove <name>", summary: "Remove a saved agent spec" }],
+  run: async (argv) => {
+    await remove(argv[0] ?? "");
+  },
+};

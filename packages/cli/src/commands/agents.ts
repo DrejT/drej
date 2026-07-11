@@ -1,4 +1,5 @@
 import { getSessions, formatAge } from "../sessions-data.js";
+import type { CliCommand } from "./types.js";
 
 export async function agents(opts: { json?: boolean } = {}): Promise<void> {
   const { tracked, untracked } = await getSessions();
@@ -32,3 +33,12 @@ export async function agents(opts: { json?: boolean } = {}): Promise<void> {
     for (const id of untracked) console.log(`  ${id}`);
   }
 }
+
+export const agentsCommand: CliCommand = {
+  name: "agents",
+  group: "agent",
+  variants: [{ usage: "drejx agents [--json]", summary: "List running agent sessions" }],
+  run: async (argv) => {
+    await agents({ json: argv.includes("--json") });
+  },
+};

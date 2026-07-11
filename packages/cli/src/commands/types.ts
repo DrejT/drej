@@ -5,9 +5,10 @@ export interface CommandVariant {
 }
 
 /**
- * A CLI subcommand: its own argv parsing, usage text, and summary live together in one
- * file, so a rename or flag change can't drift the dispatch table out of sync with the
- * help text the way the old hand-maintained switch + free-floating help string could.
+ * A CLI subcommand's own argv parsing plus its own copy of usage text/summary,
+ * checked against `commands/registry.ts`'s duplicate entry when adding a command.
+ * Dispatch and generated help text are driven entirely from the `commands` list
+ * in `registry.ts`, not from this file's own `variants`.
  */
 export interface CliCommand {
   name: string;

@@ -1,4 +1,16 @@
 {
   "title": "Commands",
-  "pages": ["index", "init", "add", "list", "remove"]
+  "pages": [
+    "index",
+    "init",
+    "add",
+    "list",
+    "remove",
+    "spawn",
+    "prompt",
+    "fork",
+    "agents",
+    "kill",
+    "logs"
+  ]
 }

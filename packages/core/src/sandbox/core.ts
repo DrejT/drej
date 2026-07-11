@@ -167,7 +167,7 @@ export class SandboxCore implements SandboxInternal {
    *
    * Pass `{ interactive: true }` to open a live, bidirectional PTY session
    * instead — `cmd` is the program to launch (e.g. `"bash"`), and the returned
-   * `InteractiveExecHandle` adds `write()`/`resize()`/`signal()`/`attach()`.
+   * `InteractiveExecHandle` adds `write()`/`resize()`/`signal()`/`close()`/`attach()`.
    * If the session was still open at the last checkpoint, resuming replays
    * its recorded stdin for real against the freshly restored filesystem
    * before handing control back live.

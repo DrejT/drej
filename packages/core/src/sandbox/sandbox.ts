@@ -182,7 +182,7 @@ export class Sandbox extends SandboxCore {
    * Snapshot the current sandbox and return a new independent `Sandbox` from that state.
    *
    * The original sandbox keeps running. Both operate on separate containers restored
-   * from the same snapshot. Equivalent to `checkpoint()` followed by `Drej.resume()`
+   * from the same snapshot. Equivalent to `checkpoint()` followed by `Drej.restoreSnapshot()`
    * into a new sandbox, but without closing the original.
    *
    * @example

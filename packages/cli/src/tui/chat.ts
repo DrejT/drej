@@ -14,10 +14,12 @@ export interface ChatView {
 }
 
 /**
- * Renders the same `AgentEvent` vocabulary the web dashboard's `agentChat.ts`
- * handles, into a scrollbox instead of the DOM. Pressing Escape returns to the
- * dashboard without calling `agent.close()` — the sandbox and Pi session keep
- * running, same detach semantics as the scriptable `run`/`attach` commands.
+ * Renders a subset of the `AgentEvent` vocabulary (text, tool_start, tool_end,
+ * extension_error) that the web dashboard's `agentChat.ts` also handles, into a
+ * scrollbox instead of the DOM — other event types are currently ignored.
+ * Pressing Escape returns to the dashboard without calling `agent.close()` —
+ * the sandbox and Pi session keep running, same detach semantics as the
+ * `spawn`/`prompt` commands.
  */
 export function createChatView(renderer: CliRenderer, agent: Agent, onBack: () => void): ChatView {
   const box = new BoxRenderable(renderer, {

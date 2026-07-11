@@ -6,7 +6,11 @@ export class WorkflowError extends Error {
   }
 }
 
-/** Thrown when a sandbox fails to create, boot, or reach `Running` state. */
+/**
+ * Thrown for sandbox lifecycle failures — failing to create, boot, or reach
+ * `Running` state; being paused when an operation requires a live sandbox;
+ * `fork()` being unsupported on this sandbox; or a snapshot operation failing.
+ */
 export class SandboxError extends WorkflowError {
   constructor(
     message: string,
@@ -49,8 +53,9 @@ export class CommandError extends WorkflowError {
 }
 
 /**
- * Thrown when a step exceeds its `timeoutMs` limit (either set per-step or
- * via `RunOptions.stepTimeoutMs`). The workflow will roll back after this error.
+ * Reserved for a per-step timeout mechanism — not currently thrown anywhere
+ * in this codebase. `SandboxOptions.timeout`/`step.timeout` in `@drej/workflow`
+ * bound sandbox container lifetime, which is a related but distinct concept.
  */
 export class StepTimeoutError extends WorkflowError {
   constructor(

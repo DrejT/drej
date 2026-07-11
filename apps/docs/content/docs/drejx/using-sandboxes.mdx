@@ -1,22 +1,24 @@
 ---
 title: Running an agent spec
-description: Load an agent spec saved by drejx add with @drej/agent's Agent.load() — drejx never creates a sandbox itself.
+description: Load an agent spec saved by drejx add with @drej/agent's Agent.load() — drejx add itself never creates a sandbox.
 ---
 
-`drejx add` only fetches and saves an `AgentSpec` JSON file — it never creates a sandbox, runs setup, or checkpoints anything. To actually run the agent, load the spec with [`@drej/agent`](/docs/agent)'s `Agent.load()`.
+`drejx add` only fetches and saves an `AgentSpec` JSON file — it never creates a sandbox, runs setup, or checkpoints anything. To actually run the agent programmatically, load the spec with [`@drej/agent`](/docs/agent)'s `Agent.load()`, as shown below. If you just want to run it from the shell without writing TypeScript, use [`drejx spawn`](/docs/drejx/commands/spawn) instead — it wraps the same `Agent.load()` call.
 
 ## Setup
 
 ```bash
-bun add @drej/agent
+bun add @drej/agent @drej/sqlite
 ```
 
 ## Loading and prompting
 
 ```ts
 import { Agent, textOnly } from "@drej/agent";
+import { SQLiteAdapter } from "@drej/sqlite";
 
-const agent = await Agent.load("agents/node-toolchain.json");
+const adapter = new SQLiteAdapter("./.drej/ledger.db");
+const agent = await Agent.load("agents/node-toolchain.json", { adapter });
 
 for await (const chunk of textOnly(agent.prompt("What Node version is installed?"))) {
   process.stdout.write(chunk);
@@ -25,13 +27,13 @@ for await (const chunk of textOnly(agent.prompt("What Node version is installed?
 await agent.close();
 ```
 
-`Agent.load()` reads `drej.config.json` itself — the same file `drejx init` writes — for the OpenSandbox server URL, `useServerProxy`, and default resource limits. You don't construct a `Drej` client or pass connection details by hand.
+`Agent.load()` reads `drej.config.json` itself — the same file `drejx init` writes — for the OpenSandbox server URL, `useServerProxy`, and default resource limits. You don't construct a `Drej` client or pass connection details by hand — the one thing you still construct yourself is the storage adapter (`opts.adapter`), since `@drej/agent` doesn't depend on any specific one (`SQLiteAdapter` for local dev, `PostgresAdapter` for production).
 
 ## What happens on load
 
 - **First load for a spec**: spins up a `node:22` sandbox, installs the Pi CLI and any `setup` steps from the spec, then checkpoints the sandbox. This is the slow path.
 - **Subsequent loads**: restore from that checkpoint, skipping the install entirely — much faster. The snapshot is keyed on a hash of `cli`, `cliVersion`, `packages`, and `setup`, so changing any of those forces a fresh install on the next load.
-- Pass `{ rebuild: true }` to force a full reinstall regardless of the cache: `Agent.load(specPath, { rebuild: true })`.
+- Pass `{ rebuild: true }` to force a full reinstall regardless of the cache: `Agent.load(specPath, { adapter, rebuild: true })`.
 
 See [Snapshotting](/docs/agent/getting-started/snapshotting) for the full details.
 
@@ -40,7 +42,7 @@ See [Snapshotting](/docs/agent/getting-started/snapshotting) for the full detail
 `agent.sandbox` is the live `Sandbox` from `@drej/core` — use it for anything not covered by the `Agent` API, like reading files or exposing a port:
 
 ```ts
-const agent = await Agent.load("agents/web-service.json");
+const agent = await Agent.load("agents/web-service.json", { adapter });
 
 await agent.sandbox.exec("node server.js &");
 const { url, headers } = await agent.sandbox.proxy(3000);
@@ -56,8 +58,8 @@ Each `Agent.load()` call for the same spec restores an independent sandbox from 
 
 ```ts
 const [a1, a2] = await Promise.all([
-  Agent.load("agents/reviewer.json"),
-  Agent.load("agents/reviewer.json"),
+  Agent.load("agents/reviewer.json", { adapter }),
+  Agent.load("agents/reviewer.json", { adapter }),
 ]);
 
 await Promise.all([

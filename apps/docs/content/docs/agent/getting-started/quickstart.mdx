@@ -45,8 +45,10 @@ Create `agents/hello-agent.json`:
 
 ```ts title="run.ts"
 import { Agent, textOnly } from "@drej/agent";
+import { SQLiteAdapter } from "@drej/sqlite";
 
-const agent = await Agent.load("./agents/hello-agent.json");
+const adapter = new SQLiteAdapter("./.drej/ledger.db");
+const agent = await Agent.load("./agents/hello-agent.json", { adapter });
 console.log(`Sandbox: ${agent.sandboxId}  fromSnapshot=${agent.fromSnapshot}`);
 
 try {

@@ -28,8 +28,10 @@ Create an agent spec (`agents/my-agent.json`):
 
 ```ts
 import { Agent, textOnly } from "@drej/agent";
+import { SQLiteAdapter } from "@drej/sqlite";
 
-const agent = await Agent.load("./agents/my-agent.json");
+const adapter = new SQLiteAdapter("./.drej/ledger.db");
+const agent = await Agent.load("./agents/my-agent.json", { adapter });
 try {
   for await (const chunk of textOnly(agent.prompt("Write and run a Python hello world script."))) {
     process.stdout.write(chunk);
@@ -39,23 +41,27 @@ try {
 }
 ```
 
+`opts.adapter` is required — `@drej/agent` has no storage-adapter dependency of its own, so you choose: `new SQLiteAdapter(path)` from `@drej/sqlite` for local dev, or `new PostgresAdapter(connectionString)` from `@drej/postgres` for production.
+
 ---
 
 ## Agent spec
 
 The spec JSON controls the agent's environment, model, and workspace setup.
 
-| Field        | Type                     | Description                                                           |
-| ------------ | ------------------------ | --------------------------------------------------------------------- |
-| `name`       | `string`                 | Unique identifier, used as the sandbox session name                   |
-| `cli`        | `"pi"`                   | CLI to run (currently only `"pi"`)                                    |
-| `cliVersion` | `string?`                | Pin to a specific Pi version, e.g. `"0.80.2"`. Defaults to latest.    |
-| `model`      | `string?`                | Model ID passed to Pi via `--model`                                   |
-| `provider`   | `string?`                | AI provider passed via `--provider`. Omit for direct Google API key.  |
-| `packages`   | `string[]?`              | APT packages to install before Pi. e.g. `["git", "python3"]`          |
-| `env`        | `Record<string,string>?` | Env vars in the sandbox. Values may reference host env: `"${MY_KEY}"` |
-| `resources`  | `object?`                | CPU/memory limits: `{ cpu: "1000m", memory: "2Gi" }`                  |
-| `setup`      | `SetupStep[]?`           | Workspace setup steps (see below)                                     |
+| Field        | Type                     | Description                                                                                    |
+| ------------ | ------------------------ | ---------------------------------------------------------------------------------------------- |
+| `name`       | `string`                 | Unique identifier, used as the sandbox session name                                            |
+| `cli`        | `"pi"`                   | CLI to run (currently only `"pi"`)                                                             |
+| `cliVersion` | `string?`                | Pin to a specific Pi version, e.g. `"0.80.2"`. Defaults to latest.                             |
+| `model`      | `string?`                | Model ID passed to Pi via `--model`                                                            |
+| `provider`   | `string?`                | AI provider passed via `--provider`. Omit for direct Google API key.                           |
+| `packages`   | `string[]?`              | APT packages to install before Pi. e.g. `["git", "python3"]`                                   |
+| `env`        | `Record<string,string>?` | Env vars in the sandbox. Values may reference host env: `"${MY_KEY}"`                          |
+| `resources`  | `object?`                | CPU/memory limits: `{ cpu: "1000m", memory: "2Gi" }`                                           |
+| `setup`      | `SetupStep[]?`           | Workspace setup steps (see below)                                                              |
+| `spawnDepth` | `number?`                | Nesting-depth budget for `agent.spawn()` — see [Spawning child agents](#spawning-child-agents) |
+| `maxAgents`  | `number?`                | Optional cap on total descendants for this lineage — see below                                 |
 
 ### Setup steps
 
@@ -95,11 +101,12 @@ Load 2 (warm):   snapshot restore → bridge                                   ~
 The snapshot is invalidated automatically when `cli`, `cliVersion`, `packages`, or `setup` change.
 
 ```ts
-const agent = await Agent.load("./agents/my-agent.json");
+// adapter: an IStorageAdapter — SQLiteAdapter or PostgresAdapter, see Quickstart
+const agent = await Agent.load("./agents/my-agent.json", { adapter });
 console.log(agent.fromSnapshot); // false on first load, true after
 
 // Force a full reinstall:
-const agent = await Agent.load("./agents/my-agent.json", { rebuild: true });
+const agent = await Agent.load("./agents/my-agent.json", { adapter, rebuild: true });
 ```
 
 ---
@@ -178,29 +185,66 @@ for await (const ev of agent.prompt("Run /workspace/script.py with python3.")) {
 
 ### Loading and lifecycle
 
-#### `Agent.load(specPath, opts?)`
+#### `Agent.load(specPath, opts)`
 
-Load a spec, spin up a sandbox, install Pi, run setup steps, and return a ready `Agent`. Restores from snapshot on subsequent calls.
+Load a spec, spin up a sandbox, install Pi, run setup steps, and return a ready `Agent`. Restores from snapshot on subsequent calls. `opts.adapter` is required (see [Quickstart](#quickstart)).
 
 ```ts
-const agent = await Agent.load("./agents/my-agent.json");
-const agent = await Agent.load("./agents/my-agent.json", { rebuild: true });
+const agent = await Agent.load("./agents/my-agent.json", { adapter });
+const agent = await Agent.load("./agents/my-agent.json", { adapter, rebuild: true });
 ```
 
-#### `Agent.resume(sandboxId, opts?)`
+#### `Agent.resume(sandboxId, opts)`
 
-Reconnect to an existing sandbox after the host process has exited. Only restarts the bridge — Pi and the workspace are untouched.
+Reconnect to an existing sandbox after the host process has exited. Only restarts the bridge — Pi and the workspace are untouched. `opts.adapter` is required.
 
 ```ts
 // Original process saved agent.sandboxId somewhere...
-const agent = await Agent.resume(savedSandboxId);
+const agent = await Agent.resume(savedSandboxId, { adapter });
 // Or provide the spec explicitly:
-const agent = await Agent.resume(savedSandboxId, { specPath: "./agents/my-agent.json" });
+const agent = await Agent.resume(savedSandboxId, { adapter, specPath: "./agents/my-agent.json" });
+```
+
+#### `Agent.attach(sandboxId, opts)`
+
+Connect to an already-running sandbox **without** touching its Pi bridge — unlike `resume()`, which kills and restarts the bridge process. Use this when you only need `.spawn()`/`.sandbox`, not `.prompt()`/`.bash()` (the returned `Agent` has no bridge, so those throw).
+
+The main caller is `drejx fork`: it runs as a fresh CLI process started BY the very Pi bash-tool call it's attaching to (a session forking a child from inside its own turn) — going through `resume()` there would kill the bridge currently running the call itself.
+
+```ts
+const self = await Agent.attach(process.env.DREJ_SANDBOX_ID!, {
+  adapter,
+  name: "my-session",
+});
+const child = await self.spawn("./agents/worker.json");
 ```
 
 #### `agent.close()`
 
 Stop the sandbox container and release all resources. Always call in a `finally` block.
+
+---
+
+### Spawning child agents
+
+#### `agent.spawn(childSpecPath, opts?)`
+
+Fork **this agent's own live sandbox** — filesystem, installed packages, checked-out state, everything currently on disk — into a brand-new independent sandbox running its own Pi bridge. Unlike `Agent.load()` (always starts from a spec's own snapshot) or `fork()`/`clone()` (Pi's own conversation-branching — same container, same bridge, new session branch), this is sandbox-level forking: the child sees exactly what this agent's sandbox sees right now, including uncommitted work. No install/setup steps run — the child inherits whatever is already installed on this agent's sandbox.
+
+```ts
+const child = await agent.spawn("./agents/worker.json", { spawnDepth: 2, maxAgents: 5 });
+try {
+  for await (const chunk of textOnly(child.prompt("Handle the auth module"))) {
+    process.stdout.write(chunk);
+  }
+} finally {
+  await child.close();
+}
+```
+
+Refuses immediately unless this agent's own spawn-depth budget (`spawnDepth` in the spec, or `opts.spawnDepth` to override) is a positive integer — `0` means no budget left, `undefined` means spawning was never enabled. Each spawn force-decrements the budget (`current - 1`) into the child's env, regardless of what the child's own spec says.
+
+`maxAgents` (spec field or `opts.maxAgents`) is a separate, optional ceiling on total descendants for this lineage, independent of nesting depth. Unset means uncapped for this dimension — only `spawnDepth` gates whether spawning is allowed at all. **Not** coordinated across sibling branches spawned in parallel; it's a per-lineage counter.
 
 ---
 

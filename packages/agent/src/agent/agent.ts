@@ -35,7 +35,7 @@ export { resolveParentSpawnDepth, resolveParentMaxAgents } from "./validation";
  * ```ts
  * import { Agent } from "@drej/agent";
  *
- * const agent = await Agent.load("./agents/my-agent.json");
+ * const agent = await Agent.load("./agents/my-agent.json", { adapter });
  * try {
  *   for await (const chunk of agent.prompt("Explain this codebase")) {
  *     process.stdout.write(chunk);
@@ -144,7 +144,7 @@ export class Agent {
    * `resume()`, which kills and restarts the bridge process. Use this when you only
    * need `.spawn()`/`.sandbox`, not `.prompt()`/`.bash()`.
    *
-   * The main caller is `drejx spawn`: it runs as a fresh CLI process started BY the
+   * The main caller is `drejx fork`: it runs as a fresh CLI process started BY the
    * very Pi bash-tool call it's attaching to (a master agent spawning a child from
    * inside its own turn). Going through `resume()` there would `pkill` the bridge
    * that's currently running the Pi process making the call — self-destructive.
@@ -155,7 +155,7 @@ export class Agent {
    * file, which may not even exist inside this particular sandbox.
    *
    * When `sandboxId` matches `DREJ_SANDBOX_ID` in this process's own env (true
-   * self-attach, e.g. `drejx spawn` running from inside its own container),
+   * self-attach, e.g. `drejx fork` running from inside its own container),
    * `/etc/drej-env` is read straight off the local filesystem instead of via
    * `sb.readFile()`. A self-referential exec call would need this sandbox to
    * reach itself through its own externally-facing bridge IP, which Docker's
@@ -185,7 +185,7 @@ export class Agent {
    * Fork this agent's live sandbox — filesystem, installed packages, checked-out
    * state, everything currently on disk — into a brand-new independent sandbox
    * running its own Pi bridge, per `childSpecPath`. Unlike `Agent.load()` (always
-   * starts from a spec's own snapshot) or `fork()`/`clone()` above (Pi's own
+   * starts from a spec's own snapshot) or `fork()`/`clone()` below (Pi's own
    * conversation-branching — same container, same bridge, new session branch),
    * this is sandbox-level forking: the child sees exactly what this agent's
    * sandbox sees right now, including any uncommitted work.

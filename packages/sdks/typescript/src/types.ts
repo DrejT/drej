@@ -69,7 +69,7 @@ export interface SandboxOptions {
   metadata?: Record<string, string>;
   /**
    * User-provided name for this sandbox run. Used as the ledger key.
-   * Defaults to `"sandbox-<shortRunId>"` if omitted.
+   * Defaults to `"sandbox-<first 8 chars of sandboxId>"` if omitted.
    */
   name?: string;
   /** Sandbox lifetime in seconds. Defaults to the OpenSandbox server default. */

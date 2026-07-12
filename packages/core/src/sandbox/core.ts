@@ -108,6 +108,9 @@ export class SandboxCore implements SandboxInternal {
 
   async waitForRunning(timeoutMs = 120_000): Promise<void> {
     const deadline = Date.now() + timeoutMs;
+    // Starts fast and backs off to 1s — most containers are Running well under
+    // one fixed-interval tick, so a flat 1s poll was pure waste in the common case.
+    let delay = 100;
     while (Date.now() < deadline) {
       const s = await this.deps.control.getSandbox(this.sandboxId);
       if (s.status.state === SandboxState.Running) return;
@@ -117,20 +120,24 @@ export class SandboxCore implements SandboxInternal {
           this.sandboxId,
         );
       }
-      await new Promise<void>((r) => setTimeout(r, 1_000));
+      await new Promise<void>((r) => setTimeout(r, delay));
+      delay = Math.min(delay * 1.5, 1_000);
     }
     throw new SandboxError(`Sandbox did not reach Running within ${timeoutMs}ms`, this.sandboxId);
   }
 
   async waitForSnapshot(snapshotId: string, timeoutMs = 120_000): Promise<void> {
     const deadline = Date.now() + timeoutMs;
+    // See waitForRunning — same rationale, capped at the original 2s interval.
+    let delay = 100;
     while (Date.now() < deadline) {
       const snap = await this.deps.control.getSnapshot(snapshotId);
       if (snap.state === SnapshotState.Ready) return;
       if (snap.state === SnapshotState.Failed) {
         throw new SandboxError(`Snapshot ${snapshotId} failed`, this.sandboxId);
       }
-      await new Promise<void>((r) => setTimeout(r, 2_000));
+      await new Promise<void>((r) => setTimeout(r, delay));
+      delay = Math.min(delay * 1.5, 2_000);
     }
     throw new SandboxError(
       `Snapshot ${snapshotId} did not become ready within ${timeoutMs}ms`,

@@ -13,7 +13,18 @@ import type {
   CreateSessionResponse,
 } from "./types";
 
-async function* parseSSE(stream: ReadableStream<Uint8Array>): AsyncGenerator<SSEEvent> {
+/**
+ * `isTerminal` lets one-shot command/code streams cancel the underlying
+ * connection as soon as their terminal event arrives, instead of reading to
+ * EOF: execd holds the HTTP stream open for a fixed interval after the last
+ * event is sent (a server-side post-completion sleep), so waiting for `done`
+ * tacks that delay onto every exec. Long-lived streams (metrics watch) pass
+ * no predicate and read until the server actually closes the connection.
+ */
+async function* parseSSE(
+  stream: ReadableStream<Uint8Array>,
+  isTerminal?: (event: SSEEvent) => boolean,
+): AsyncGenerator<SSEEvent> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -28,12 +39,13 @@ async function* parseSSE(stream: ReadableStream<Uint8Array>): AsyncGenerator<SSE
       for (const block of blocks) {
         const trimmed = block.trim();
         if (!trimmed) continue;
+        let event: SSEEvent | undefined;
         if (trimmed.startsWith("{")) {
           // execd sends raw JSON lines, not data:-prefixed SSE
           try {
-            yield JSON.parse(trimmed) as SSEEvent;
+            event = JSON.parse(trimmed) as SSEEvent;
           } catch {
-            /* skip malformed */
+            continue; // skip malformed
           }
         } else {
           let type: string | undefined;
@@ -43,14 +55,29 @@ async function* parseSSE(stream: ReadableStream<Uint8Array>): AsyncGenerator<SSE
             else if (line.startsWith("data:")) data = line.slice(5).trim();
           }
           if (data !== undefined) {
-            yield { type: (type ?? SSEEventType.Message) as SSEEventType, ...JSON.parse(data) };
+            event = { type: (type ?? SSEEventType.Message) as SSEEventType, ...JSON.parse(data) };
           }
+        }
+        if (!event) continue;
+        yield event;
+        if (isTerminal?.(event)) {
+          // Deliberately don't reader.cancel() here — that aborts the connection
+          // immediately, and some server-side proxies (e.g. OpenSandbox's Python
+          // control server relaying execd's response via httpx) treat a mid-stream
+          // client abort as a broken upstream read and throw. Just stop reading:
+          // we resolve now either way, and the server closes the connection on
+          // its own terms shortly after (see the comment on parseSSE above).
+          return;
         }
       }
     }
   } finally {
     reader.releaseLock();
   }
+}
+
+function isExecTerminal(event: SSEEvent): boolean {
+  return event.type === SSEEventType.ExecutionComplete || event.type === SSEEventType.Error;
 }
 
 export class ExecClient {
@@ -95,6 +122,7 @@ export class ExecClient {
     method: string,
     path: string,
     body?: unknown,
+    isTerminal?: (event: SSEEvent) => boolean,
   ): AsyncGenerator<SSEEvent> {
     const res = await fetch(`${this.baseUrl}${path}`, {
       method,
@@ -110,7 +138,7 @@ export class ExecClient {
       throw new Error(text || `execd error ${res.status}`);
     }
     if (!res.body) return;
-    yield* parseSSE(res.body);
+    yield* parseSSE(res.body, isTerminal);
   }
 
   ping(): Promise<{ status: string }> {
@@ -136,7 +164,7 @@ export class ExecClient {
   }
 
   async *executeCode(options: ExecuteCodeOptions): AsyncGenerator<SSEEvent> {
-    yield* this.streamRequest("POST", "/code", options);
+    yield* this.streamRequest("POST", "/code", options, isExecTerminal);
   }
 
   interruptCode(): Promise<void> {
@@ -144,7 +172,7 @@ export class ExecClient {
   }
 
   async *executeCommand(options: ExecuteCommandOptions): AsyncGenerator<SSEEvent> {
-    yield* this.streamRequest("POST", "/command", options);
+    yield* this.streamRequest("POST", "/command", options, isExecTerminal);
   }
 
   interruptCommand(): Promise<void> {
@@ -253,7 +281,7 @@ export class ExecClient {
   }
 
   async *runInSession(sessionId: string, opts: RunInSessionRequest): AsyncGenerator<SSEEvent> {
-    yield* this.streamRequest("POST", `/session/${sessionId}/run`, opts);
+    yield* this.streamRequest("POST", `/session/${sessionId}/run`, opts, isExecTerminal);
   }
 
   deleteSession(sessionId: string): Promise<void> {

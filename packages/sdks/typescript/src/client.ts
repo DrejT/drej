@@ -677,6 +677,9 @@ export class Drej {
 
   private async _waitForRunning(sandboxId: string, timeoutMs = 120_000): Promise<void> {
     const deadline = Date.now() + timeoutMs;
+    // Starts fast and backs off to 1s — most containers are Running well under
+    // one fixed-interval tick, so a flat 1s poll was pure waste in the common case.
+    let delay = 100;
     while (Date.now() < deadline) {
       const s = await this._control.getSandbox(sandboxId);
       if (s.status.state === SandboxState.Running) return;
@@ -686,7 +689,8 @@ export class Drej {
           500,
         );
       }
-      await new Promise<void>((r) => setTimeout(r, 1_000));
+      await new Promise<void>((r) => setTimeout(r, delay));
+      delay = Math.min(delay * 1.5, 1_000);
     }
     throw new DrejError(`Sandbox ${sandboxId} did not reach Running within ${timeoutMs}ms`, 408);
   }

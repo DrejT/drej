@@ -1,5 +1,15 @@
 # drejx
 
+## 0.7.2
+
+### Patch Changes
+
+- Updated dependencies [cc5059a]
+  - @drej/opensandbox@0.3.1
+  - drej@0.10.4
+  - @drej/sqlite@0.3.8
+  - @drej/agent@0.6.2
+
 ## 0.7.1
 
 ### Patch Changes

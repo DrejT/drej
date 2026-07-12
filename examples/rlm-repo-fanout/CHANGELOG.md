@@ -1,5 +1,14 @@
 # drej-example-rlm-repo-fanout
 
+## 0.0.5
+
+### Patch Changes
+
+- Updated dependencies [cc5059a]
+  - drej@0.10.4
+  - @drej/sqlite@0.3.8
+  - @drej/agent@0.6.2
+
 ## 0.0.4
 
 ### Patch Changes

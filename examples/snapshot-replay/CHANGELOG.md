@@ -1,5 +1,13 @@
 # drej-example-snapshot-replay
 
+## 0.0.11
+
+### Patch Changes
+
+- Updated dependencies [cc5059a]
+  - drej@0.10.4
+  - @drej/sqlite@0.3.8
+
 ## 0.0.10
 
 ### Patch Changes

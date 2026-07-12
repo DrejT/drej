@@ -1,5 +1,13 @@
 # @drej/agent
 
+## 0.6.2
+
+### Patch Changes
+
+- Updated dependencies [cc5059a]
+  - @drej/core@0.6.3
+  - drej@0.10.4
+
 ## 0.6.1
 
 ### Patch Changes

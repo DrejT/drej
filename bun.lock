@@ -85,9 +85,17 @@
         "tailwindcss": "^4.3.2",
       },
     },
+    "examples/benchmark": {
+      "name": "drej-example-benchmark",
+      "version": "0.0.1",
+      "dependencies": {
+        "@drej/sqlite": "workspace:*",
+        "drej": "workspace:*",
+      },
+    },
     "examples/cancellation": {
       "name": "drej-example-cancellation",
-      "version": "0.0.8",
+      "version": "0.0.10",
       "dependencies": {
         "@drej/sqlite": "workspace:*",
         "drej": "workspace:*",
@@ -95,7 +103,7 @@
     },
     "examples/capture": {
       "name": "drej-example-capture",
-      "version": "0.0.8",
+      "version": "0.0.10",
       "dependencies": {
         "@drej/sqlite": "workspace:*",
         "drej": "workspace:*",
@@ -103,7 +111,7 @@
     },
     "examples/control-flow": {
       "name": "drej-example-control-flow",
-      "version": "0.0.8",
+      "version": "0.0.10",
       "dependencies": {
         "@drej/sqlite": "workspace:*",
         "@drej/workflow": "workspace:*",
@@ -112,7 +120,7 @@
     },
     "examples/environments": {
       "name": "drej-example-environments",
-      "version": "0.0.8",
+      "version": "0.0.10",
       "dependencies": {
         "@drej/sqlite": "workspace:*",
         "drej": "workspace:*",
@@ -120,7 +128,7 @@
     },
     "examples/error-handling": {
       "name": "drej-example-error-handling",
-      "version": "0.0.8",
+      "version": "0.0.10",
       "dependencies": {
         "@drej/sqlite": "workspace:*",
         "drej": "workspace:*",
@@ -128,7 +136,7 @@
     },
     "examples/exec-code": {
       "name": "drej-example-exec-code",
-      "version": "0.0.8",
+      "version": "0.0.10",
       "dependencies": {
         "@drej/sqlite": "workspace:*",
         "drej": "workspace:*",
@@ -136,7 +144,7 @@
     },
     "examples/file-ops": {
       "name": "drej-example-file-ops",
-      "version": "0.0.8",
+      "version": "0.0.10",
       "dependencies": {
         "@drej/sqlite": "workspace:*",
         "drej": "workspace:*",
@@ -144,7 +152,7 @@
     },
     "examples/hello-world": {
       "name": "drej-example-hello-world",
-      "version": "0.0.8",
+      "version": "0.0.10",
       "dependencies": {
         "@drej/sqlite": "workspace:*",
         "drej": "workspace:*",
@@ -152,7 +160,7 @@
     },
     "examples/interactive-exec": {
       "name": "drej-example-interactive-exec",
-      "version": "0.0.3",
+      "version": "0.0.5",
       "dependencies": {
         "@drej/sqlite": "workspace:*",
         "drej": "workspace:*",
@@ -160,7 +168,7 @@
     },
     "examples/pi-agent": {
       "name": "drej-example-pi-agent",
-      "version": "0.0.8",
+      "version": "0.0.10",
       "dependencies": {
         "@drej/agent": "workspace:*",
         "@drej/opensandbox": "workspace:*",
@@ -170,7 +178,7 @@
     },
     "examples/ports": {
       "name": "drej-example-ports",
-      "version": "0.0.8",
+      "version": "0.0.10",
       "dependencies": {
         "@drej/sqlite": "workspace:*",
         "drej": "workspace:*",
@@ -178,7 +186,7 @@
     },
     "examples/read-file": {
       "name": "drej-example-read-file",
-      "version": "0.0.8",
+      "version": "0.0.10",
       "dependencies": {
         "@drej/sqlite": "workspace:*",
         "drej": "workspace:*",
@@ -186,7 +194,7 @@
     },
     "examples/rlm-repo-fanout": {
       "name": "drej-example-rlm-repo-fanout",
-      "version": "0.0.2",
+      "version": "0.0.4",
       "dependencies": {
         "@drej/agent": "workspace:*",
         "@drej/sqlite": "workspace:*",
@@ -195,7 +203,7 @@
     },
     "examples/run-bash-script": {
       "name": "drej-example-run-bash-script",
-      "version": "0.0.8",
+      "version": "0.0.10",
       "dependencies": {
         "@drej/sqlite": "workspace:*",
         "drej": "workspace:*",
@@ -203,7 +211,7 @@
     },
     "examples/sandbox-extensions": {
       "name": "drej-example-sandbox-extensions",
-      "version": "0.0.7",
+      "version": "0.0.9",
       "dependencies": {
         "@drej/agent": "workspace:*",
         "@drej/sqlite": "workspace:*",
@@ -212,7 +220,7 @@
     },
     "examples/sandbox-fork": {
       "name": "drej-example-sandbox-fork",
-      "version": "0.0.8",
+      "version": "0.0.10",
       "dependencies": {
         "@drej/sqlite": "workspace:*",
         "drej": "workspace:*",
@@ -220,7 +228,7 @@
     },
     "examples/snapshot-replay": {
       "name": "drej-example-snapshot-replay",
-      "version": "0.0.8",
+      "version": "0.0.10",
       "dependencies": {
         "@drej/sqlite": "workspace:*",
         "drej": "workspace:*",
@@ -238,12 +246,12 @@
       },
       "peerDependencies": {
         "@flue/runtime": ">=1.0.0-beta",
-        "drej": ">=0.10.1",
+        "drej": ">=0.10.3",
       },
     },
     "packages/adapters/otel": {
       "name": "@drej/otel",
-      "version": "0.2.5",
+      "version": "0.2.7",
       "dependencies": {
         "@drej/core": "workspace:*",
       },
@@ -259,7 +267,7 @@
     },
     "packages/adapters/postgres": {
       "name": "@drej/postgres",
-      "version": "0.3.5",
+      "version": "0.3.7",
       "dependencies": {
         "@drej/core": "workspace:*",
         "postgres": "3.4.9",
@@ -272,7 +280,7 @@
     },
     "packages/adapters/sqlite": {
       "name": "@drej/sqlite",
-      "version": "0.3.5",
+      "version": "0.3.7",
       "dependencies": {
         "@drej/core": "workspace:*",
       },
@@ -284,7 +292,7 @@
     },
     "packages/agent": {
       "name": "@drej/agent",
-      "version": "0.5.0",
+      "version": "0.6.1",
       "dependencies": {
         "@drej/core": "workspace:*",
         "drej": "workspace:*",
@@ -297,7 +305,7 @@
     },
     "packages/cli": {
       "name": "drejx",
-      "version": "0.6.0",
+      "version": "0.7.1",
       "bin": {
         "drejx": "./dist/index.mjs",
       },
@@ -318,7 +326,7 @@
     },
     "packages/core": {
       "name": "@drej/core",
-      "version": "0.6.0",
+      "version": "0.6.2",
       "dependencies": {
         "@drej/opensandbox": "workspace:*",
       },
@@ -341,7 +349,7 @@
     },
     "packages/sdks/typescript": {
       "name": "drej",
-      "version": "0.10.1",
+      "version": "0.10.3",
       "dependencies": {
         "@drej/core": "workspace:*",
         "@drej/opensandbox": "workspace:*",
@@ -355,7 +363,7 @@
     },
     "packages/workflow": {
       "name": "@drej/workflow",
-      "version": "1.1.6",
+      "version": "1.1.8",
       "dependencies": {
         "drej": "workspace:*",
       },
@@ -368,7 +376,7 @@
     },
     "tests/integration": {
       "name": "@drej/integration-tests",
-      "version": "0.0.8",
+      "version": "0.0.10",
       "dependencies": {
         "@drej/agent": "workspace:*",
         "@drej/sqlite": "workspace:*",
@@ -1606,6 +1614,8 @@
     "domutils": ["domutils@3.2.2", "", { "dependencies": { "dom-serializer": "^2.0.0", "domelementtype": "^2.3.0", "domhandler": "^5.0.3" } }, "sha512-6kZKyUajlDuqlHKVX1w7gyslj9MPIXzIFiz/rGu35uC1wMi+kMhQwGhl4lt9unC9Vb9INnY9Z3/ZA3+FhASLaw=="],
 
     "drej": ["drej@workspace:packages/sdks/typescript"],
+
+    "drej-example-benchmark": ["drej-example-benchmark@workspace:examples/benchmark"],
 
     "drej-example-cancellation": ["drej-example-cancellation@workspace:examples/cancellation"],
 

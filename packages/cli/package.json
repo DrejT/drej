@@ -36,11 +36,11 @@
     "drej": "workspace:*"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "^0.80.3",
+    "@earendil-works/pi-coding-agent": "^0.81.1",
     "bun-types": "1.3.14",
-    "tsdown": "0.22.3",
+    "tsdown": "0.22.13",
     "typebox": "^1.3.5",
-    "typescript": "6.0.3"
+    "typescript": "7.0.2"
   },
   "pi": {
     "extensions": [
